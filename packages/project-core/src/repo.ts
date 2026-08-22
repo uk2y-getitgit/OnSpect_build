@@ -1,0 +1,86 @@
+/**
+ * 저장소 인터페이스 — S1 스펙 §2-12.
+ *
+ * **선언만 있다. 구현은 어댑터가 제공한다.**
+ * 웹은 IndexedDB(`apps/web/src/data/idb/repo.ts`), RN 은 SQLite 로 갈아끼운다.
+ * Phase 5 서버 동기화가 붙을 지점도 이 이음매 한 곳이다 (§2-9-e).
+ *
+ * 경계 규칙 9: 여기에 `IDBDatabase`·`File`·`Blob`·`URL` 이 등장하지 않는다.
+ * Blob 은 `blobKey: string` 이라는 불투명 문자열로만 오간다.
+ * Blob 자체를 받는 메서드(도면 등록)는 **어댑터 인터페이스**의 몫이다.
+ */
+import type { Building, Drawing, Floor, Project } from './types.js';
+
+/** P1 목록 행이 필요로 하는 집계. 건수는 인덱스 count 이고 **출력번호와 무관하다**(불변식 2) */
+export type ProjectSummary = {
+  project: Project;
+  buildingCount: number;
+  floorCount: number;
+  drawingCount: number;
+  defectCount: number;
+  /** 도면 Blob 합계. `도면 9장 · 약 48MB` 표시용 (§2-9-d) */
+  byteSize: number;
+};
+
+/** 구조 복사 결과 — 토스트 문구에 숫자를 그대로 넣는다 (§2-13) */
+export type CopyStructureResult = {
+  buildings: number;
+  floors: number;
+  drawings: number;
+};
+
+/**
+ * `TDefect` 로 결함 타입을 주입받는다.
+ * `project-core` 는 `canvas-core` 를 import 하지 않는다(경계 규칙 8) —
+ * 두 코어를 잇는 것은 `apps/web` 의 책임이다.
+ */
+export interface ProjectRepo<TDefect = unknown, TMemo = unknown> {
+  // ── 용역 ────────────────────────────────────────────────────────────────
+  /** 삭제되지 않은 용역만. `lastOpenedAt DESC` */
+  listProjects(): Promise<Project[]>;
+  listProjectSummaries(): Promise<ProjectSummary[]>;
+  getProject(id: string): Promise<Project | null>;
+  putProject(p: Project): Promise<void>;
+  /** `lastOpenedAt` 갱신 (P1 → P3 진입, §2-3) */
+  touchProject(id: string, now: number): Promise<void>;
+  /** 소프트 삭제 (§2-11) */
+  softDeleteProject(id: string, now: number): Promise<void>;
+  /** 되돌리기 토스트 */
+  restoreProject(id: string): Promise<void>;
+
+  // ── 동 ──────────────────────────────────────────────────────────────────
+  listBuildings(projectId: string): Promise<Building[]>;
+  putBuildings(items: readonly Building[]): Promise<void>;
+  /** 하드 삭제. 하위 층·도면·결함·Blob 참조까지 한 트랜잭션에서 정리한다 */
+  deleteBuilding(buildingId: string): Promise<void>;
+
+  // ── 층 ──────────────────────────────────────────────────────────────────
+  listFloors(projectId: string): Promise<Floor[]>;
+  putFloors(items: readonly Floor[]): Promise<void>;
+  deleteFloor(floorId: string): Promise<void>;
+
+  // ── 도면 ────────────────────────────────────────────────────────────────
+  listDrawings(projectId: string): Promise<Drawing[]>;
+  putDrawing(d: Drawing): Promise<void>;
+  /** Blob refCount 를 낮추고 0 이 되면 실제로 지운다 (§2-9-d) */
+  deleteDrawing(drawingId: string): Promise<void>;
+
+  // ── 결함 ────────────────────────────────────────────────────────────────
+  listDefects(projectId: string): Promise<TDefect[]>;
+  /** **레코드 단위 upsert.** 결함 500건을 매번 통째로 직렬화하지 않는다 (§2-9-e) */
+  upsertDefects(items: readonly TDefect[]): Promise<void>;
+  deleteDefects(ids: readonly string[]): Promise<void>;
+
+  // ── 메모 (S2a) ──────────────────────────────────────────────────────────
+  /**
+   * 메모는 **결함이 아니다.** 결함 리스트·결함 집계에 섞이지 않는다 (상세기획 §2).
+   * 그래서 저장소에서도 별도 스토어를 쓴다.
+   */
+  listMemos(projectId: string): Promise<TMemo[]>;
+  upsertMemos(items: readonly TMemo[]): Promise<void>;
+  deleteMemos(ids: readonly string[]): Promise<void>;
+
+  // ── 구조 복사 (§2-13) ───────────────────────────────────────────────────
+  /** 동·층·도면만 복사한다. **결함은 복사하지 않는다.** Blob 은 같은 키를 참조(refCount++) */
+  copyStructure(fromProjectId: string, toProjectId: string): Promise<CopyStructureResult>;
+}

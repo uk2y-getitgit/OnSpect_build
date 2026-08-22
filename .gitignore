@@ -1,0 +1,28 @@
+# 의존성 · 빌드 산출물
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 도구 캐시
+.playwright-mcp/
+.serena/
+_tmp-upload-test/
+
+# 검증 스크린샷 (재생성 가능)
+_workspace/screenshots/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 로컬 환경
+.env
+.env.local
+*.log
+
+# 외부·현장 자료 — 공개 저장소에 올리지 않는다
+# (실제 현장 도면·사진, 경쟁사 화면 캡처, 타인 저장소)
+샘플도면/
+샘플사진/
+벤치마킹 스크린샷/
+ai-ui-design-atlas-github-pages-main/

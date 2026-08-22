@@ -1,0 +1,15 @@
+{
+  "name": "onspect",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @onspect/web",
+    "build": "npm run build -w @onspect/web",
+    "test": "npm run test -w @onspect/canvas-core && npm run test -w @onspect/project-core",
+    "typecheck": "npm run typecheck -w @onspect/canvas-core && npm run typecheck -w @onspect/project-core && npm run typecheck -w @onspect/web"
+  }
+}

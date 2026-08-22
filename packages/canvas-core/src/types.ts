@@ -1,0 +1,421 @@
+/**
+ * 캔버스 코어 타입 — 스펙 §2-1 / §2-3.
+ *
+ * 경계 규칙: 이 패키지는 window · document · Image · requestAnimationFrame ·
+ * performance · React 를 참조하지 않는다. 시간·난수·이미지는 전부 인자로 받는다.
+ */
+
+// ── 좌표계 (§2-2) ──────────────────────────────────────────────────────────
+/** N — 정규화 좌표 0~1. **저장 형식.** DB·동기화·출력에 나가는 유일한 형식 */
+export type NPoint = { x: number; y: number };
+/** I — 이미지 픽셀. N↔S 중계용 */
+export type IPoint = { x: number; y: number };
+/** S — 스크린 CSS px. **모든 기하 판정(히트·거리·각도·스냅)의 기준** */
+export type SPoint = { x: number; y: number };
+
+/** 등방 스케일, 회전 없음. 등방성은 불변식이다 — 깨지 않는다 */
+export type Viewport = { zoom: number; tx: number; ty: number };
+
+export type Size = { w: number; h: number };
+
+// ── 도메인 (§2-1) ──────────────────────────────────────────────────────────
+export type MarkType = 'POINT' | 'ARROW' | 'AREA_RECT' | 'AREA_ELLIPSE';
+
+/**
+ * 알 수 없는 k 를 만나면 렌더러는 무시하고 건너뛴다(throw 금지) — 스펙 §2-0.
+ *
+ * ⚠️ **전부 0~1 정규화다** (불변식 #1). 이미지 px 이나 스크린 px 이 들어오면 안 된다.
+ * 크기(w·h)도 정규화 비율이다 — 도면 해상도가 바뀌어도 같은 자리에 같은 비율로 남는다.
+ *
+ * 형식은 S2a 스펙 §S2a-1 에서 확정했다:
+ *   ARROW        = 꼬리(from) → 머리(to)
+ *   AREA_RECT    = 좌상단 + 크기
+ *   AREA_ELLIPSE = **외접 사각형** 기준 (중심·반지름이 아니다 — 사각/타원 편집 코드를 공유한다)
+ */
+export type MarkGeometry =
+  | { k: 'POINT'; x: number; y: number }
+  | { k: 'ARROW'; from: NPoint; to: NPoint }
+  | { k: 'AREA_RECT'; x: number; y: number; w: number; h: number }
+  | { k: 'AREA_ELLIPSE'; x: number; y: number; w: number; h: number };
+
+export type Mark = {
+  id: string;
+  defectId: string;
+  type: MarkType;
+  geometry: MarkGeometry;
+  /** Defect 내 마크 순서. marks[0] 이 기본 앵커 */
+  sortOrder: number;
+};
+
+/**
+ * 자유그리기 한 획 (§S2a-1).
+ * **마크가 아니다.** 결함에 종속된 스케치이므로 번호 라벨·리더선이 붙지 않는다.
+ */
+export type SketchPath = {
+  id: string;
+  /** 정규화 좌표 열. 2점 미만이면 무시한다 */
+  points: NPoint[];
+  /** 선 굵기 — **이미지 px**. 줌하면 함께 커진다 (A3 WYSIWYG) */
+  width: number;
+};
+
+/**
+ * 메모 — **결함이 아니다** (§S2a-1 · 상세기획 §2).
+ *
+ * 결함 리스트에 나타나지 않고, 결함 상태색(빨강·보라·회색)을 쓰지 않는다.
+ * `canvas-core` 는 `project-core` 를 import 하지 않으므로 RecordBase 를 여기 펼쳐 둔다.
+ */
+export type Memo = {
+  id: string;
+  projectId: string;
+  drawingId: string;
+  floorId: string;
+  /** 메모 상자의 **좌상단** 앵커. 정규화 좌표 */
+  pos: NPoint;
+  text: string;
+  /** null = 기본 메모 스타일 상속 */
+  style: MemoStyle | null;
+  createdAt: number;
+  updatedAt: number;
+  deviceId: string;
+  createdBy: string | null;
+};
+
+export type MemoStyle = {
+  color?: string;
+  background?: string;
+  border?: string;
+  /** 기본 글자 크기 배수 */
+  fontScale?: number;
+};
+
+export type Label = {
+  defectId: string;
+  /** 번호 풍선의 **중심**, 정규화 좌표. 0~1 을 벗어날 수 있다 (§2-1-a) */
+  x: number;
+  y: number;
+  /** 리더선이 붙는 마크. null = 마크 집합의 중심(centroid) */
+  anchorMarkId: string | null;
+  /** false = 자동 배치 상태, true = 사용자가 한 번이라도 옮김 */
+  placed: boolean;
+};
+
+export type DefectStatus = 'CURRENT' | 'PREV_PENDING' | 'REPAIRED';
+
+/**
+ * 개별 스타일 오버라이드. 크기 단위는 **이미지 px**.
+ * ⚠️ 위치(라벨 좌표)는 여기 들어오지 않는다 — 위치는 geometry 다 (§2-1-c, 함정 #5).
+ */
+/** 영역 테두리 모양 (상세기획 §3-5) */
+export type AreaShape = 'SOLID' | 'DASH' | 'CLOUD';
+/** 영역 채우기 (상세기획 §3-5). HATCH = 45° 해치 */
+export type AreaFill = 'NONE' | 'HATCH';
+
+export type StyleOverride = {
+  color?: string;
+  opacity?: number;
+  markRadius?: number;
+  markStroke?: number;
+  balloonRadius?: number;
+  balloonStroke?: number;
+  leaderWidth?: number;
+  // ── S2a — 방향 · 영역 · 자유그리기 ──
+  /** 화살촉 길이 — 이미지 px */
+  arrowHead?: number;
+  areaShape?: AreaShape;
+  areaFill?: AreaFill;
+  /** 자유그리기 기본 굵기 — 이미지 px */
+  sketchWidth?: number;
+};
+
+export type GlobalStyle = {
+  markRadius: number;
+  markStroke: number;
+  balloonRadius: number;
+  balloonStroke: number;
+  leaderWidth: number;
+  fontFactor: number;
+  haloFactor: number;
+  arrowHead: number;
+  areaShape: AreaShape;
+  areaFill: AreaFill;
+  sketchWidth: number;
+  statusColor: Record<DefectStatus, string>;
+  statusOpacity: Record<DefectStatus, number>;
+};
+
+export type ResolvedStyle = {
+  color: string;
+  opacity: number;
+  markRadius: number;
+  markStroke: number;
+  balloonRadius: number;
+  balloonStroke: number;
+  leaderWidth: number;
+  fontSize: number;
+  haloWidth: number;
+  arrowHead: number;
+  areaShape: AreaShape;
+  areaFill: AreaFill;
+  sketchWidth: number;
+};
+
+/**
+ * 결함. Phase 3 캔버스가 읽는 최소 형태.
+ * ⚠️ 출력 결함번호·사진번호 필드는 **없다.** 저장하지 않고 출력 시점에 계산한다(불변식 2).
+ * 캔버스가 그리는 숫자는 `displayNumber` 로 **주입받는다** (§2-1-b).
+ */
+export type Defect = {
+  id: string;
+  /**
+   * 소속 용역. 캔버스는 해석하지 않는 **불투명 문자열**이다 (이미 있는 floorId 와 성격이 같다).
+   * 저장소가 "이 용역의 결함 전부" 를 인덱스로 뽑으려면 필요하다 — 상세기획 §3-3.
+   */
+  projectId: string;
+  drawingId: string;
+  floorId: string;
+  /** 층 내 입력순번. z-order 와 히트 동률 판정의 기준 */
+  seq: number;
+  status: DefectStatus;
+  marks: Mark[];
+  label: Label;
+  /**
+   * 자유그리기 (§S2a-1). 결함번호와 연동되지만 번호 라벨·리더선은 붙지 않는다.
+   * 옛 레코드에는 이 필드가 없다 — 읽는 쪽에서 `?? []` 로 받는다.
+   */
+  sketch: SketchPath[];
+  /** null = 전역 스타일 상속. 위치 이동은 이 값을 절대 건드리지 않는다 */
+  style: StyleOverride | null;
+
+  // 결함 속성 — 미완성 판정(D3)과 우측 패널 표시에 쓴다. Phase 3 에서는 읽기 전용
+  memberName: string | null;
+  defectTypeName: string | null;
+  widthMm: number | null;
+  lengthMm: number | null;
+  areaM2: number | null;
+  countEa: number | null;
+  memo: string | null;
+};
+
+export type DrawingRef = { id: string; imageWidth: number; imageHeight: number };
+
+// ── 캔버스 상태 (§2-3) ─────────────────────────────────────────────────────
+export type Tool =
+  | 'SELECT'
+  | 'POINT'
+  | 'ARROW'
+  | 'AREA_RECT'
+  | 'AREA_ELLIPSE'
+  | 'SKETCH'
+  | 'MEMO';
+
+/** 도구가 만드는 마크 타입. SELECT·SKETCH·MEMO 는 마크를 만들지 않는다 */
+export const TOOL_MARK_TYPE: Partial<Record<Tool, MarkType>> = {
+  POINT: 'POINT',
+  ARROW: 'ARROW',
+  AREA_RECT: 'AREA_RECT',
+  AREA_ELLIPSE: 'AREA_ELLIPSE',
+};
+
+export type Part = 'MARK' | 'LABEL' | 'LEADER' | 'HANDLE' | 'SKETCH' | 'MEMO';
+
+/**
+ * 편집 핸들.
+ *   NW…W = 영역 8방향 리사이즈
+ *   FROM · TO = 화살표 꼬리 · 머리
+ */
+export type Handle = 'NW' | 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'FROM' | 'TO';
+
+export const AREA_HANDLES: readonly Handle[] = ['NW', 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W'];
+
+/**
+ * ⚠️ `memoId` 가 채워지면 `defectId` 는 null 이다. 메모는 결함이 아니다.
+ * `pathId` · `handle` 은 해당 part 일 때만 채워진다.
+ */
+export type Selection = {
+  defectId: string | null;
+  part: Part | null;
+  markId: string | null;
+  pathId?: string | null;
+  memoId?: string | null;
+  handle?: Handle | null;
+};
+
+export type HoverTarget = {
+  defectId: string | null;
+  part: Part;
+  markId: string | null;
+  pathId?: string | null;
+  memoId?: string | null;
+  handle?: Handle | null;
+};
+
+export type Keys = { space: boolean; alt: boolean; shift: boolean; ctrl: boolean };
+
+export type AlignCand = { v: number; id: string };
+export type AlignHit = { v: number; id: string; d: number };
+export type AngleHit = { angle: number; point: SPoint; r: number };
+
+export type AlignSnapshot = {
+  xs: AlignCand[];
+  ys: AlignCand[];
+  /** 후보 라벨의 드래그 시작 시점 스크린 좌표 (가이드선 길이 계산용) */
+  byId: Record<string, SPoint>;
+};
+
+export type Guide =
+  | { k: 'ALIGN_X'; x: number; y1: number; y2: number; ids: string[] }
+  | { k: 'ALIGN_Y'; y: number; x1: number; x2: number; ids: string[] }
+  | { k: 'ANGLE'; anchor: SPoint; end: SPoint; angle: number };
+
+export type DragKind =
+  | 'PAN'
+  | 'MOVE_MARK'
+  | 'MOVE_LABEL'
+  /** 방향 · 영역 생성 드래그 (누른 곳 → 뗀 곳) */
+  | 'CREATE_SHAPE'
+  /** 자유그리기 — 점을 모으다가 뗄 때 한 Path 확정 */
+  | 'CREATE_SKETCH'
+  /** ARROW · AREA_* 마크 전체 이동 */
+  | 'MOVE_SHAPE'
+  /** 영역 8방향 리사이즈 · 화살표 끝점 이동 */
+  | 'RESIZE_SHAPE'
+  /** 자유그리기 한 획 전체 이동 (점 단위 편집은 범위 밖) */
+  | 'MOVE_SKETCH'
+  | 'MOVE_MEMO';
+
+export type DragState = {
+  kind: DragKind;
+  pointerId: number;
+  startScreen: SPoint;
+  startViewport: Viewport;
+  /** (요소 중심 − 포인터). 잡은 지점 유지용 */
+  grabOffsetScreen: SPoint;
+  /** Esc 취소 시 복귀 지점 */
+  originNorm: NPoint;
+  originPlaced: boolean;
+  defectId: string | null;
+  markId: string | null;
+  /** MOVE_MARK 일 때 라벨이 따라오도록 (A2) */
+  labelOriginNorm: NPoint | null;
+  /** 드래그 중 미리보기 위치. 커밋(POINTER_UP) 전까지 문서는 건드리지 않는다 */
+  previewNorm: NPoint;
+  labelPreviewNorm: NPoint | null;
+  /** MOVE_LABEL 일 때 앵커의 스크린 좌표. 드래그 중 뷰포트가 고정이므로 유효 */
+  anchorScreen: SPoint | null;
+  align: AlignSnapshot | null;
+  snapState: { x: AlignHit | null; y: AlignHit | null; angle: AngleHit | null };
+  /** CLICK_SLOP_PX 초과 여부. 클릭/드래그 구분 */
+  moved: boolean;
+  /** POINT 도구로 빈 도면을 눌렀는가 (UP 에서 생성 판단) */
+  pointToolCandidate: boolean;
+
+  // ── S2a ──────────────────────────────────────────────────────────────────
+  /** 생성 드래그 시작점 (정규화). 방향의 꼬리 · 영역의 한 모서리 */
+  createStart: NPoint | null;
+  /** 생성 중인 마크 타입 */
+  createType: MarkType | null;
+  /** 편집/생성 중인 기하 미리보기. 커밋 전까지 문서는 건드리지 않는다 */
+  geomPreview: MarkGeometry | null;
+  /** Esc·Undo 복귀용 원본 기하 */
+  geomOrigin: MarkGeometry | null;
+  /** RESIZE_SHAPE 일 때 잡은 핸들 */
+  handle: Handle | null;
+  /** 자유그리기 대상 */
+  pathId: string | null;
+  pathOrigin: NPoint[] | null;
+  pathPreview: NPoint[] | null;
+  memoId: string | null;
+};
+
+export type Cursor =
+  | 'default'
+  | 'crosshair'
+  | 'grab'
+  | 'grabbing'
+  | 'move'
+  | 'pointer'
+  | 'not-allowed'
+  | 'wait'
+  /** 메모 도구 — 클릭하면 글을 쓴다 */
+  | 'text'
+  // 영역 8방향 리사이즈
+  | 'ns-resize'
+  | 'ew-resize'
+  | 'nwse-resize'
+  | 'nesw-resize';
+
+/**
+ * 캔버스 요소 위에 **떠 있는 UI** 가 잡아먹는 가장자리 (S1 스펙 §2-10-a).
+ * 우측 툴 팔레트 폭, 하단 도움말 줄 높이 등. 웹 어댑터가 실측해 넣는다.
+ *
+ * 이 값이 없으면 "선택한 대상은 항상 화면 안에 있어야 한다" 를 판정할 수 없다 —
+ * 캔버스가 요소 전체 크기를 뷰포트로 착각해 선택한 번호 풍선이 패널 뒤에 숨는다.
+ */
+export type SafeInsets = { top: number; right: number; bottom: number; left: number };
+
+export type CanvasState = {
+  drawing: DrawingRef | null;
+  canvas: Size;
+  /** 기본 전부 0. `SET_SAFE_INSETS` 로 갱신 */
+  safeInsets: SafeInsets;
+  viewport: Viewport;
+  /** 도면(층)마다 뷰포트를 따로 기억한다 (B10) */
+  viewports: Record<string, Viewport>;
+  tool: Tool;
+  selection: Selection;
+  hover: HoverTarget | null;
+  drag: DragState | null;
+  /** 드래그 중에만 채워지는 파생값. undo·저장 어디에도 들어가지 않는다 */
+  guides: Guide[];
+  keys: Keys;
+  cursor: Cursor;
+  /** 도면 로딩 중이면 커서 wait + 입력 무시 */
+  busy: boolean;
+};
+
+// ── 입력 이벤트 (경계 규칙 6) ──────────────────────────────────────────────
+export type InputEvent =
+  | { k: 'POINTER_DOWN'; pointerId: number; screen: SPoint; button: number; keys: Keys }
+  | { k: 'POINTER_MOVE'; pointerId: number; screen: SPoint; keys: Keys }
+  | { k: 'POINTER_UP'; pointerId: number; screen: SPoint; keys: Keys }
+  | { k: 'POINTER_CANCEL'; pointerId: number }
+  | { k: 'POINTER_LEAVE' }
+  | { k: 'WHEEL'; screen: SPoint; deltaY: number; keys: Keys }
+  | { k: 'DOUBLE_CLICK'; screen: SPoint; keys: Keys }
+  | { k: 'CONTEXT_MENU'; screen: SPoint }
+  | { k: 'KEY_DOWN'; key: string; keys: Keys }
+  | { k: 'KEY_UP'; key: string; keys: Keys }
+  | { k: 'RESIZE'; size: Size }
+  | { k: 'SET_SAFE_INSETS'; insets: SafeInsets }
+  | { k: 'SET_TOOL'; tool: Tool }
+  | { k: 'SET_DRAWING'; drawing: DrawingRef | null }
+  | { k: 'SET_BUSY'; busy: boolean }
+  | { k: 'SELECT_DEFECT'; defectId: string | null; reveal: boolean }
+  | { k: 'FIT' }
+  | { k: 'ZOOM_BUTTON'; factor: number }
+  | { k: 'RESET_LABEL'; defectId: string }
+  | { k: 'DELETE_SELECTION' }
+  | { k: 'CONFIRM_DELETE_DEFECT'; defectId: string }
+  // ── S2a ──────────────────────────────────────────────────────────────────
+  | { k: 'SELECT_MEMO'; memoId: string | null; reveal: boolean }
+  /** 메모 텍스트 확정. 빈 문자열이면 메모를 지운다 */
+  | { k: 'COMMIT_MEMO_TEXT'; memoId: string; text: string }
+  /** 선택된 영역의 테두리 모양 · 채우기. 개별 변경은 전역 상속에서 분리된다 */
+  | { k: 'SET_AREA_STYLE'; defectId: string; shape?: AreaShape; fill?: AreaFill }
+  /** null 이면 상태색(전역 상속)으로 되돌린다 */
+  | { k: 'SET_MARK_COLOR'; defectId: string; color: string | null }
+  /** 개별 스타일 전체를 버리고 전역 상속으로 복귀 (§S2a-5 [초기화]) */
+  | { k: 'RESET_STYLE'; defectId: string };
+
+/** 코어가 어댑터에게 요청하는 부수효과. 코어는 직접 수행하지 않는다 */
+export type Effect =
+  | { k: 'FOCUS_PANEL'; defectId: string }
+  | { k: 'CONTEXT_MENU'; screen: SPoint; defectId: string }
+  | { k: 'CONFIRM_DELETE_DEFECT'; defectId: string; reason: 'LAST_MARK' | 'EXPLICIT' }
+  | { k: 'TOAST'; kind: 'info' | 'warn'; text: string; undoable?: boolean }
+  | { k: 'REVEAL_DEFECT'; defectId: string }
+  | { k: 'UNDO' }
+  | { k: 'REDO' }
+  /** 메모 텍스트 편집기를 띄워 달라. 코어는 DOM 을 모른다 */
+  | { k: 'EDIT_MEMO'; memoId: string };
