@@ -4,6 +4,7 @@ dist/
 *.tsbuildinfo
 
 # 도구 캐시
+.vite/
 .playwright-mcp/
 .serena/
 _tmp-upload-test/
