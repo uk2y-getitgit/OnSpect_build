@@ -35,6 +35,7 @@ import { ContextToolbar } from '../canvas/ContextToolbar';
 import { MemoEditor } from '../canvas/MemoEditor';
 import { ToolPalette } from '../canvas/ToolPalette';
 import { revokeAll } from '../canvas/imageLoader';
+import { titleBlockConfigFor } from '../canvas/pageDecor';
 import {
   cachedCompositeUrl,
   clearCompositeCache,
@@ -298,6 +299,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
 
   const displayNumbers = useMemo(() => displayNumbersOf(defects), [defects]);
 
+  // F5-1 도곽 — 저장 형태(project-core) → 렌더 형태(canvas-core) 로 잇는다 (D13)
+  const titleBlock = useMemo(
+    () => titleBlockConfigFor(currentDrawing, project),
+    [currentDrawing, project],
+  );
+
   const selected = useMemo(
     () => defects.find((d) => d.id === state.canvas.selection.defectId) ?? null,
     [defects, state.canvas.selection.defectId],
@@ -513,6 +520,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             memoScreens={memoScreens}
             ghost={ghost}
             displayNumbers={displayNumbers}
+            titleBlock={titleBlock}
             send={send}
             drawingUrl={drawingUrl}
             onUploadDrawing={() => resolvedFloor && goUpload(resolvedFloor.id)}

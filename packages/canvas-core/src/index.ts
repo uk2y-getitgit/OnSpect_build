@@ -28,5 +28,6 @@ export * from './snapAlign.js';
 export * from './snapAngle.js';
 export * from './snapResolve.js';
 export * from './commands.js';
+export * from './titleBlock.js';
 export * from './renderModel.js';
 export * from './interaction.js';

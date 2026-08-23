@@ -101,6 +101,30 @@ export type DrawingSource =
   | { kind: 'IMAGE'; fileName: string; mime: string; byteSize: number }
   | { kind: 'PDF_PAGE'; fileName: string; byteSize: number; pageIndex: number; pageCount: number };
 
+/**
+ * F5-1 도곽(TitleBlock) 설정 — **저장 형태**.
+ *
+ * ⚠️ `canvas-core` 의 `TitleBlockConfig` 와 **구조가 같지만 다른 타입**이다.
+ * 두 코어는 서로를 import 하지 않는다(D13) — 잇는 것은 `apps/web` 의 책임이다.
+ * 여기서 `null` 은 "자동"(용역명·도면명을 그대로 쓴다)이라는 뜻이다.
+ */
+export type DrawingTitleBlock = {
+  /** 화면에 그릴지. **출력 ON/OFF 는 Phase 4 의 별개 옵션이다** */
+  enabled: boolean;
+  /** null = 용역명 자동 */
+  projectTitle: string | null;
+  /** null = 도면명 자동 */
+  drawingName: string | null;
+  /** 축척 문자열. 기본 'NONE' */
+  scale: string;
+  /** 도곽 전체 비례 배율 */
+  tbScale: number;
+  col0: number;
+  col1: number;
+  labelFontSz: number;
+  valueFontSz: number;
+};
+
 export type Drawing = RecordBase & {
   id: string;
   projectId: string;
@@ -134,6 +158,11 @@ export type Drawing = RecordBase & {
    * 합성된 이미지는 저장하지 않는다 — `apps/web` 의 **런타임 캐시**에만 둔다.
    */
   imgScale: number | null;
+  /**
+   * F5-1 도곽 설정. `null` = 도곽을 쓰지 않는다(기존 도면 전부).
+   * 값이 있으면 캔버스 배경에 A4 지면 전체를 두르는 도곽을 그린다.
+   */
+  titleBlock: DrawingTitleBlock | null;
 };
 
 // ── 표시 라벨 ──────────────────────────────────────────────────────────────
@@ -170,3 +199,18 @@ export const DEFAULT_BUILDING_NAME = '본관';
 export function defaultDrawingName(floorName: string): string {
   return `${floorName} 결함조사 위치도`;
 }
+
+
+// ── F5-1 도곽 기본값 ───────────────────────────────────────────────────────
+/** Numdraw 실측 기준값 (`_workspace/12_수정사항_S3중간.md` §F5-1) */
+export const DEFAULT_DRAWING_TITLE_BLOCK: DrawingTitleBlock = {
+  enabled: true,
+  projectTitle: null,
+  drawingName: null,
+  scale: 'NONE',
+  tbScale: 1,
+  col0: 0.42,
+  col1: 0.46,
+  labelFontSz: 10,
+  valueFontSz: 14,
+};

@@ -48,6 +48,7 @@ import {
   type SRect,
 } from './shapes.js';
 import { resolveStyle } from './style.js';
+import { titleBlockOps, type TitleBlockConfig } from './titleBlock.js';
 import type {
   Defect,
   DrawingRef,
@@ -160,6 +161,8 @@ export type RenderInput = {
   memos?: readonly MemoScreen[];
   /** 생성 드래그 중인 도형 미리보기 (아직 문서에 없다) */
   ghost?: GhostShape | null;
+  /** F5-1 도곽. `null` = 그리지 않는다. **배경 레이어에서만 쓴다** */
+  titleBlock?: TitleBlockConfig | null;
 };
 
 /** 아직 커밋되지 않은 생성 미리보기. 문서에 없으므로 DefectScreen 이 아니다 */
@@ -174,18 +177,25 @@ export type GhostShape =
     }
   | { k: 'SKETCH'; points: SPoint[]; color: string; width: number };
 
-/** 배경 레이어 — 뷰포트가 바뀔 때만 다시 그린다 (§2-9-d) */
+/**
+ * 배경 레이어 — 뷰포트가 바뀔 때만 다시 그린다 (§2-9-d).
+ * 도면 이미지 → 도곽(F5-1) → 범례(F5-2) 순서로 얹는다. 셋 다 도면 좌표계라
+ * 줌·팬을 그대로 따라간다(A3 WYSIWYG).
+ */
 export function buildBackground(input: RenderInput): DrawOp[] {
   const { drawing, viewport: vp } = input;
-  return [
+  const size = { w: drawing.imageWidth, h: drawing.imageHeight };
+  const ops: DrawOp[] = [
     {
       k: 'image',
       src: 'drawing',
       at: { x: vp.tx, y: vp.ty },
-      w: drawing.imageWidth * vp.zoom,
-      h: drawing.imageHeight * vp.zoom,
+      w: size.w * vp.zoom,
+      h: size.h * vp.zoom,
     },
   ];
+  if (input.titleBlock) ops.push(...titleBlockOps(input.titleBlock, size, vp));
+  return ops;
 }
 
 /** 결함들의 스크린 기하를 z-order 오름차순으로 계산. 히트 테스트와 **같은 배열**을 쓴다 */

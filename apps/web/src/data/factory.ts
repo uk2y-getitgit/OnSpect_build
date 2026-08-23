@@ -121,6 +121,8 @@ export function makeDrawing(
     sortOrder: 0, // S1 은 층당 1장 (Q15 A안)
     imgLayout: args.imgLayout ?? null,
     imgScale: args.imgScale ?? null,
+    titleBlock: null, // F5-1 — 도곽은 사용자가 켜기 전까지 없다
+
     ...base(deviceId, now),
   };
 }

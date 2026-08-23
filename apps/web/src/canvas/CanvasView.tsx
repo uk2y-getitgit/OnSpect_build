@@ -17,6 +17,7 @@ import {
   type InputEvent,
   type MemoScreen,
   type RenderInput,
+  type TitleBlockConfig,
 } from '@onspect/canvas-core';
 import { DEFAULT_GLOBAL_STYLE } from '@onspect/canvas-core';
 import { loadDrawing, cachedDrawing, type LoadedDrawing } from './imageLoader';
@@ -39,6 +40,8 @@ export type CanvasViewProps = {
   /** 생성 드래그 중인 도형 미리보기. 아직 문서에 없다 */
   ghost: GhostShape | null;
   displayNumbers: Record<string, string>;
+  /** F5-1 도곽. null = 그리지 않는다 */
+  titleBlock: TitleBlockConfig | null;
   send: (ev: InputEvent) => void;
   drawingUrl: string | null;
   /** 도면 없는 층의 빈 상태에서 P4 로 보낸다 (§2-10-c) */
@@ -58,6 +61,7 @@ export function CanvasView({
   memoScreens,
   ghost,
   displayNumbers,
+  titleBlock,
   send,
   drawingUrl,
   onUploadDrawing,
@@ -182,8 +186,9 @@ export function CanvasView({
       dragDefectId: state.drag?.defectId ?? null,
       memos: memoScreens,
       ghost,
+      titleBlock,
     };
-  }, [drawing, state, defects, displayNumbers, memoScreens, ghost]);
+  }, [drawing, state, defects, displayNumbers, memoScreens, ghost, titleBlock]);
 
   // 배경 — 뷰포트/크기/이미지가 바뀔 때만
   useLayoutEffect(() => {
@@ -202,6 +207,7 @@ export function CanvasView({
     state.canvas.h,
     image,
     drawing?.id,
+    titleBlock,
   ]);
 
   // 오버레이 — 매 변경
