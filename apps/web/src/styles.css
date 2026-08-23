@@ -2129,7 +2129,8 @@ select.input { cursor: pointer; }
 
 .rowmenu { position: relative; flex: 0 0 auto; }
 
-.menu--anchored { position: absolute; right: 0; top: calc(100% + 2px); }
+/* F6 — MoreMenu 는 이제 body 에 포털되어 `fixed` 로 배치된다 (ui/Menu.tsx 의 실측 좌표).
+   여기서는 자리만 잡던 `.menu--anchored` 를 쓰지 않는다. */
 
 .menu__group { display: contents; }
 

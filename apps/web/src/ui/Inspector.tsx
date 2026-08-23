@@ -39,8 +39,6 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
 
   const locked = isLocked(defect);
   const incomplete = isIncomplete(defect);
-  const mark = defect.marks[0];
-  const pos = mark && mark.geometry.k === 'POINT' ? mark.geometry : null;
 
   return (
     <aside className="inspector" aria-label="결함 정보">
@@ -86,23 +84,6 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
           <dd className="num">{fmt(defect.countEa, 'EA')}</dd>
         </div>
       </dl>
-
-      <h3 className="inspector__section">도면 위치</h3>
-      <dl className="kv kv--tight">
-        <div className="kv__row">
-          <dt>마크</dt>
-          <dd className="num">{pos ? `${pos.x.toFixed(4)}, ${pos.y.toFixed(4)}` : '—'}</dd>
-        </div>
-        <div className="kv__row">
-          <dt>번호 풍선</dt>
-          <dd className="num">
-            {defect.label.placed
-              ? `${defect.label.x.toFixed(4)}, ${defect.label.y.toFixed(4)}`
-              : '자동 배치'}
-          </dd>
-        </div>
-      </dl>
-      <p className="hint">좌표는 0~1 정규화 값입니다. 도면 해상도가 바뀌어도 표기가 어긋나지 않습니다.</p>
 
       {defect.memo && (
         <>
