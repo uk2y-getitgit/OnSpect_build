@@ -3021,3 +3021,10 @@ select.input { cursor: pointer; }
   color: var(--text);
   word-break: keep-all;
 }
+
+/* ── F5-1 도곽 설정 ────────────────────────────────────────────────────── */
+.tbset { display: flex; flex-direction: column; gap: 10px; }
+.tbset__toggle { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+.tbset__note { margin: 0; font-size: 12px; color: var(--text-muted); word-break: keep-all; }
+.tbset__row { display: flex; align-items: center; gap: 10px; }
+.tbset__key { flex: 0 0 132px; font-size: 12px; color: var(--text-muted); word-break: keep-all; }

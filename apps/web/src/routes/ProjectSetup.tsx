@@ -22,6 +22,7 @@ import {
   type CopyStructureResult,
   clampScale,
   type Drawing,
+  type DrawingTitleBlock,
   type Floor,
   type Project,
 } from '@onspect/project-core';
@@ -34,6 +35,7 @@ import { ConfirmDialog } from '../ui/Overlays';
 import { useToast } from '../ui/ToastHost';
 import { DrawingThumb } from '../ui/DrawingThumb';
 import { DrawingScaleDialog } from './DrawingScaleDialog';
+import { TitleBlockDialog } from './TitleBlockDialog';
 import { releaseComposite } from '../canvas/drawingComposite';
 import { scaledImgLayout } from '../data/imageIngest';
 
@@ -64,6 +66,9 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
   /** F5-3 — 도면 크기 조절 대상 */
   const [scaling, setScaling] = useState<Drawing | null>(null);
   const [scaleBusy, setScaleBusy] = useState(false);
+  /** F5-1 — 도곽 설정 대상 */
+  const [titling, setTitling] = useState<Drawing | null>(null);
+  const [titleBusy, setTitleBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
@@ -319,6 +324,22 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
         setScaleBusy(false);
         setScaling(null);
         toast(`도면 크기를 ${Math.round(next * 100)}%로 바꿨습니다`);
+      })();
+    },
+    [storage, guard, toast],
+  );
+
+  /** F5-1 — 도곽 설정 저장. 저장되는 것은 숫자·문자뿐이고 좌표는 건드리지 않는다 */
+  const applyTitleBlock = useCallback(
+    (dw: Drawing, tb: DrawingTitleBlock) => {
+      setTitleBusy(true);
+      const updated: Drawing = { ...dw, titleBlock: tb, updatedAt: Date.now() };
+      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
+      void (async () => {
+        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        setTitleBusy(false);
+        setTitling(null);
+        toast(tb.enabled ? '도곽 설정을 저장했습니다' : '도곽을 껐습니다');
       })();
     },
     [storage, guard, toast],
@@ -723,6 +744,10 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
                                     },
                                   },
                                   {
+                                    label: '도곽 설정',
+                                    onSelect: () => setTitling(dw),
+                                  },
+                                  {
                                     label: '도면 크기 조절',
                                     disabled: !dw.imgLayout,
                                     onSelect: () => setScaling(dw),
@@ -968,6 +993,18 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
             void doCopyStructure();
           }}
           onCancel={() => setConfirming(null)}
+        />
+      )}
+
+      {titling && (
+        <TitleBlockDialog
+          drawing={titling}
+          project={project}
+          busy={titleBusy}
+          onApply={(tb) => applyTitleBlock(titling, tb)}
+          onClose={() => {
+            if (!titleBusy) setTitling(null);
+          }}
         />
       )}
 
