@@ -162,6 +162,12 @@ export type RenderInput = {
   memos?: readonly MemoScreen[];
   /** 생성 드래그 중인 도형 미리보기 (아직 문서에 없다) */
   ghost?: GhostShape | null;
+  /**
+   * F2 — 붙일 결함을 아직 못 고른 자유그리기(사후연결 대기).
+   * 문서에 없으므로 ghost 와 같은 층에 그린다. **점선 + 대기 표시**로 그려
+   * 이미 붙은 그리기(실선)와 눈으로 구분된다.
+   */
+  pending?: readonly GhostShape[] | null;
   /** F5-1 도곽. `null` = 그리지 않는다. **배경 레이어에서만 쓴다** */
   titleBlock?: TitleBlockConfig | null;
   /** F5-2 범례. `null` = 그리지 않는다. **배경 레이어에서만 쓴다** */
@@ -410,6 +416,8 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
 
   // 8. 생성 중인 도형 미리보기 — 아직 문서에 없다
   const ghostOps: DrawOp[] = input.ghost ? ghostToOps(input.ghost) : [];
+  // 8-b. 사후연결 대기 중인 그리기 (F2) — 점선으로 "아직 안 붙었다"를 알린다
+  for (const g of input.pending ?? []) ghostOps.push(...ghostToOps(g, PENDING_DASH));
 
   // 9. 스냅 가이드선 — 항상 최상단
   const guideOps: DrawOp[] = [];
@@ -595,7 +603,10 @@ function memoOps_(m: MemoScreen, selected: boolean, hovered: boolean): DrawOp[] 
   return ops;
 }
 
-function ghostToOps(g: GhostShape): DrawOp[] {
+/** F2 대기 그리기의 점선 패턴 — 스크린 px */
+export const PENDING_DASH: readonly number[] = [7, 5];
+
+function ghostToOps(g: GhostShape, dashOverride?: readonly number[]): DrawOp[] {
   if (g.k === 'ARROW') {
     const out: DrawOp[] = [];
     arrowOps(
@@ -634,10 +645,11 @@ function ghostToOps(g: GhostShape): DrawOp[] {
         alpha: 0.9,
         cap: 'round',
         join: 'round',
+        ...(dashOverride ? { dash: [...dashOverride] } : {}),
       },
     ];
   }
-  const dash = g.shape === 'DASH' ? [...AREA_DASH] : undefined;
+  const dash = dashOverride ? [...dashOverride] : g.shape === 'DASH' ? [...AREA_DASH] : undefined;
   if (g.k === 'AREA_ELLIPSE') {
     return [
       {

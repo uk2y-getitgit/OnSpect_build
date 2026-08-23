@@ -15,6 +15,7 @@ import {
   canUndo,
   DEFAULT_GLOBAL_STYLE,
   ghostOf,
+  pendingGhostsOf,
   isLocked,
   memoScreensOf,
   previewOf,
@@ -286,6 +287,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   );
 
   const ghost = useMemo(() => ghostOf(state.canvas, reduceCtx), [state.canvas, reduceCtx]);
+  // F2 — 사후연결 대기 중인 자유그리기 (아직 어느 결함에도 안 붙었다)
+  const pending = useMemo(
+    () => pendingGhostsOf(state.canvas, reduceCtx),
+    [state.canvas, reduceCtx],
+  );
+  const pendingCount = state.canvas.pendingSketch?.paths.length ?? 0;
 
   const editingMemo = useMemo(
     () => memos.find((m) => m.id === state.editingMemoId) ?? null,
@@ -537,6 +544,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             defects={defects}
             memoScreens={memoScreens}
             ghost={ghost}
+            pending={pending}
             displayNumbers={displayNumbers}
             titleBlock={titleBlock}
             legend={legend}
@@ -595,6 +603,28 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               onDelete={() => send({ k: 'DELETE_SELECTION' })}
               onClose={() => dispatch({ t: 'CLOSE_MENU' })}
             />
+          )}
+
+          {pendingCount > 0 && (
+            <div className="stage__pending" data-floating role="status">
+              <span className="stage__pending-txt">
+                그리기 <b className="num">{pendingCount}</b>획 대기 중 — 붙일 결함을 클릭하세요
+              </span>
+              <button
+                type="button"
+                className="btn btn--small btn--primary"
+                onClick={() => send({ k: 'PENDING_SKETCH_TO_NEW_DEFECT' })}
+              >
+                새 결함으로
+              </button>
+              <button
+                type="button"
+                className="btn btn--small"
+                onClick={() => send({ k: 'CANCEL_PENDING_SKETCH' })}
+              >
+                취소
+              </button>
+            </div>
           )}
 
           <div className="stage__help" data-floating>

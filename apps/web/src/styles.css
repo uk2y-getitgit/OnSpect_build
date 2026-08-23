@@ -3029,3 +3029,24 @@ select.input { cursor: pointer; }
 .tbset__row { display: flex; align-items: center; gap: 10px; }
 .tbset__key { flex: 0 0 132px; font-size: 12px; color: var(--text-muted); word-break: keep-all; }
 .tbset__sep { width: 100%; height: 1px; margin: 4px 0; border: 0; background: var(--border); }
+
+/* ── F2 자유그리기 사후연결 대기 바 ────────────────────────────────────── */
+.stage__pending {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  font-size: 12px;
+  color: var(--text);
+}
+.stage__pending-txt { word-break: keep-all; }

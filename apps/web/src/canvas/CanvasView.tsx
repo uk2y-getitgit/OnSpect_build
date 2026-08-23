@@ -40,6 +40,8 @@ export type CanvasViewProps = {
   memoScreens: MemoScreen[];
   /** 생성 드래그 중인 도형 미리보기. 아직 문서에 없다 */
   ghost: GhostShape | null;
+  /** F2 — 사후연결 대기 중인 자유그리기. 점선으로 그려진다 */
+  pending: GhostShape[];
   displayNumbers: Record<string, string>;
   /** F5-1 도곽. null = 그리지 않는다 */
   titleBlock: TitleBlockConfig | null;
@@ -63,6 +65,7 @@ export function CanvasView({
   defects,
   memoScreens,
   ghost,
+  pending,
   displayNumbers,
   titleBlock,
   legend,
@@ -190,10 +193,11 @@ export function CanvasView({
       dragDefectId: state.drag?.defectId ?? null,
       memos: memoScreens,
       ghost,
+      pending,
       titleBlock,
       legend,
     };
-  }, [drawing, state, defects, displayNumbers, memoScreens, ghost, titleBlock, legend]);
+  }, [drawing, state, defects, displayNumbers, memoScreens, ghost, pending, titleBlock, legend]);
 
   // 배경 — 뷰포트/크기/이미지가 바뀔 때만
   useLayoutEffect(() => {

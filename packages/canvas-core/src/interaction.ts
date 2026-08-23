@@ -114,6 +114,7 @@ export function initialCanvasState(canvas: Size = { w: 0, h: 0 }): CanvasState {
     keys: { ...NO_KEYS },
     cursor: 'default',
     busy: false,
+    pendingSketch: null,
   };
 }
 
@@ -235,6 +236,29 @@ export function ghostOf(state: CanvasState, ctx: ReduceContext): GhostShape | nu
     };
   }
   return null;
+}
+
+/**
+ * F2 — 사후연결 대기 중인 자유그리기의 화면 미리보기.
+ * 아직 문서에 없으므로 DefectScreen 이 아니다. 어댑터는 `RenderInput.pending` 에 넣는다.
+ *
+ * 색은 **현회차 상태색**을 그대로 쓴다 — 곧 결함에 붙을 그리기이기 때문이다.
+ * "아직 안 붙었다"는 신호는 색이 아니라 **점선 + 안내 패널**이 준다.
+ */
+export function pendingGhostsOf(state: CanvasState, ctx: ReduceContext): GhostShape[] {
+  const p = state.pendingSketch;
+  if (!p || !state.drawing) return [];
+  const iw = state.drawing.imageWidth;
+  const ih = state.drawing.imageHeight;
+  const vp = state.viewport;
+  return p.paths
+    .filter((path) => path.points.length >= 2)
+    .map((path) => ({
+      k: 'SKETCH' as const,
+      points: path.points.map((n) => toScreen(n, vp, iw, ih)),
+      color: ctx.globalStyle.statusColor.CURRENT,
+      width: Math.max(1, path.width * vp.zoom),
+    }));
 }
 
 function findDefect(ctx: ReduceContext, id: string | null | undefined): Defect | null {
@@ -560,6 +584,20 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
       );
     }
 
+    // ── F2 자유그리기 사후연결 ────────────────────────────────────────────
+    case 'ATTACH_PENDING_SKETCH':
+      return attachPendingSketch(state, ev.defectId, ctx);
+
+    case 'PENDING_SKETCH_TO_NEW_DEFECT':
+      return pendingSketchToNewDefect(state, ctx);
+
+    case 'CANCEL_PENDING_SKETCH': {
+      if (!state.pendingSketch) return ok(state, ctx);
+      return ok({ ...state, pendingSketch: null }, ctx, [], [
+        { k: 'TOAST', kind: 'info', text: '그리기를 취소했습니다' },
+      ]);
+    }
+
     case 'SELECT_DEFECT': {
       if (!ev.defectId) {
         return ok({ ...state, selection: { ...NO_SELECTION } }, ctx);
@@ -662,6 +700,15 @@ function onPointerDown(
    * 그래서 ARROW 는 여기서 드래그-생성 분기로 보내지 않고, POINT 처럼 아래
    * 공통 흐름(빈 도면 → 팬 후보 → UP 에서 클릭 판정)을 그대로 탄다.
    */
+  /**
+   * F2 사후연결 — 대기 중인 그리기가 있고 **결함 위**를 누르면 곧장 붙인다.
+   * 도구를 바꾸지 않고도 붙을 곳을 고를 수 있어야 한다(AD14 설계 메모).
+   * 빈 곳을 누르면 아무 일도 없고 계속 대기한다(아래 공통 흐름으로 내려간다).
+   */
+  if (next0.pendingSketch && hit?.defectId) {
+    return attachPendingSketch(next0, hit.defectId, ctx);
+  }
+
   const createType = TOOL_MARK_TYPE[next0.tool];
   const labelGrabbed = hit?.part === 'LABEL';
   if (!labelGrabbed) {
@@ -1499,11 +1546,12 @@ function commitCreateShape(
 }
 
 /**
- * 자유그리기 커밋 — **선택된 결함에 붙인다** (§S2a-1 "결함번호와 연동된다").
+ * 자유그리기 커밋 — **F2 사후연결** (Q16 재결정).
  *
- * 상세기획 §3-3 에서 `marks` 는 1개 이상이 필수다. 그래서 스케치만으로는
- * 유효한 결함을 만들 수 없다. 선택된 결함이 없으면 만들지 않고 안내한다.
- * → ASSUMPTIONS E1 / QUESTIONS Q16 (비차단)
+ * 선택된 결함이 있으면 그대로 붙인다(기존 동작). 없으면 **버리지 않고**
+ * `pendingSketch` 에 담아 두고 붙일 곳을 고르게 한다 — 사용자 요구:
+ * *"그리기는 자유그리기 후 결함번호 선택 또는 추가"*.
+ * 대기 중에 더 그리면 획이 쌓인다.
  */
 function commitCreateSketch(
   state: CanvasState,
@@ -1514,34 +1562,136 @@ function commitCreateSketch(
   if (pts.length < 2) {
     return ok(state, ctx, [], [{ k: 'TOAST', kind: 'warn', text: '끌어서 선을 그려 주세요' }]);
   }
+  const path0: SketchPath = {
+    id: ctx.makeId(),
+    points: pts.map(roundNorm),
+    width: ctx.globalStyle.sketchWidth,
+  };
+
   const target = findDefect(ctx, state.selection.defectId);
-  if (!target) {
-    return ok(state, ctx, [], [
-      {
-        k: 'TOAST',
-        kind: 'warn',
-        text: '그리기를 붙일 결함을 먼저 선택해 주세요',
-      },
+  if (!target || isLocked(target)) {
+    // 붙일 곳이 없다(또는 전회차라 못 붙인다) → **버리지 않고 대기**시킨다 (F2)
+    const prev = state.pendingSketch?.paths ?? [];
+    const pending = { paths: [...prev, path0] };
+    const text =
+      target && isLocked(target)
+        ? '전회차 표기에는 붙일 수 없습니다. 다른 결함을 고르거나 [새 결함으로]를 누르세요'
+        : prev.length === 0
+          ? '붙일 결함을 클릭하거나 [새 결함으로]를 누르세요'
+          : `그리기 ${pending.paths.length}획 대기 중`;
+    return ok({ ...state, pendingSketch: pending }, ctx, [], [
+      { k: 'TOAST', kind: 'info', text },
     ]);
   }
+  return ok(
+    {
+      ...state,
+      selection: { ...NO_SELECTION, defectId: target.id, part: 'SKETCH', pathId: path0.id },
+    },
+    ctx,
+    [{ k: 'ADD_SKETCH', defectId: target.id, path: path0, index: sketchOf(target).length }],
+    [{ k: 'TOAST', kind: 'info', text: '그리기가 추가되었습니다', undoable: true }],
+  );
+}
+
+// ── F2 사후연결 — 붙이기 / 새 결함으로 ─────────────────────────────────────
+/** 대기 중인 획 전부를 한 결함에 붙인다 */
+function attachPendingSketch(
+  state: CanvasState,
+  defectId: string,
+  ctx: ReduceContext,
+): ReduceResult {
+  const pending = state.pendingSketch;
+  if (!pending || pending.paths.length === 0) return ok(state, ctx);
+  const target = findDefect(ctx, defectId);
+  if (!target) return ok(state, ctx);
   if (isLocked(target)) {
     return ok(state, ctx, [], [
       { k: 'TOAST', kind: 'warn', text: '전회차 표기는 편집할 수 없습니다' },
     ]);
   }
-  const path: SketchPath = {
-    id: ctx.makeId(),
-    points: pts.map(roundNorm),
-    width: ctx.globalStyle.sketchWidth,
-  };
+  const base = sketchOf(target).length;
+  const commands: Command[] = pending.paths.map((path, i) => ({
+    k: 'ADD_SKETCH',
+    defectId: target.id,
+    path,
+    index: base + i,
+  }));
+  const first = pending.paths[0]!;
   return ok(
     {
       ...state,
-      selection: { ...NO_SELECTION, defectId: target.id, part: 'SKETCH', pathId: path.id },
+      pendingSketch: null,
+      selection: { ...NO_SELECTION, defectId: target.id, part: 'SKETCH', pathId: first.id },
     },
     ctx,
-    [{ k: 'ADD_SKETCH', defectId: target.id, path, index: sketchOf(target).length }],
-    [{ k: 'TOAST', kind: 'info', text: '그리기가 추가되었습니다', undoable: true }],
+    commands,
+    [
+      { k: 'TOAST', kind: 'info', text: '그리기를 결함에 붙였습니다', undoable: true },
+      { k: 'REVEAL_DEFECT', defectId: target.id },
+    ],
+  );
+}
+
+/**
+ * 대기 중인 획의 **중심**에 새 결함(POINT 마크)을 만들고 그 획을 함께 넣는다.
+ * 상세기획 §3-3 에서 `marks` 는 1개 이상이 필수라 스케치만으로는 결함이 될 수 없다.
+ * 커맨드는 `CREATE_DEFECT` 하나뿐이라 Undo 한 번으로 통째로 되돌아간다.
+ */
+function pendingSketchToNewDefect(state: CanvasState, ctx: ReduceContext): ReduceResult {
+  const pending = state.pendingSketch;
+  if (!pending || pending.paths.length === 0 || !state.drawing) return ok(state, ctx);
+  const iw = state.drawing.imageWidth;
+  const ih = state.drawing.imageHeight;
+
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  for (const path of pending.paths) {
+    for (const pt of path.points) {
+      sx += pt.x;
+      sy += pt.y;
+      n += 1;
+    }
+  }
+  if (n === 0) return ok(state, ctx);
+  const at = roundNorm({ x: clamp(sx / n, 0, 1), y: clamp(sy / n, 0, 1) });
+
+  const defectId = ctx.makeId();
+  const markId = ctx.makeId();
+  let maxSeq = 0;
+  for (const d of ctx.defects) if (d.seq > maxSeq) maxSeq = d.seq;
+  const auto = roundNorm(autoLabelNorm(at, ctx.globalStyle.balloonRadius, iw, ih));
+
+  const defect: Defect = {
+    id: defectId,
+    projectId: ctx.projectId ?? '',
+    drawingId: state.drawing.id,
+    floorId: ctx.floorId ?? '',
+    seq: maxSeq + 1,
+    status: 'CURRENT',
+    prevDefectId: null,
+    marks: [
+      { id: markId, defectId, type: 'POINT', geometry: { k: 'POINT', x: at.x, y: at.y }, sortOrder: 0 },
+    ],
+    label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
+    sketch: pending.paths,
+    style: null,
+    ...EMPTY_DEFECT_ATTRS,
+  };
+
+  return ok(
+    {
+      ...state,
+      pendingSketch: null,
+      selection: { ...NO_SELECTION, defectId, part: 'MARK', markId },
+    },
+    ctx,
+    [{ k: 'CREATE_DEFECT', defect }],
+    [
+      { k: 'TOAST', kind: 'info', text: '그리기로 새 결함을 만들었습니다', undoable: true },
+      { k: 'REVEAL_DEFECT', defectId },
+    ],
   );
 }
 
@@ -1730,6 +1880,12 @@ function onKeyDown(
   const s = { ...state, keys };
 
   if (key === 'Escape') {
+    // F2 — 대기 중인 그리기가 있으면 그것부터 버린다(선택 해제보다 먼저)
+    if (s.pendingSketch && !s.drag) {
+      return ok({ ...s, pendingSketch: null }, ctx, [], [
+        { k: 'TOAST', kind: 'info', text: '그리기를 취소했습니다' },
+      ]);
+    }
     if (s.drag) {
       // originNorm 으로 복귀 후 취소. 커밋하지 않았으므로 drag 를 버리면 원위치다
       return ok({ ...s, drag: null, guides: [] }, ctx);

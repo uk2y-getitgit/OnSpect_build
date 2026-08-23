@@ -390,6 +390,20 @@ export type DragState = {
   memoId: string | null;
 };
 
+/**
+ * F2 — 자유그리기 **사후연결** 대기 상태.
+ *
+ * 사용자 요구: *"그리기는 자유그리기 후 결함번호 선택 또는 추가"* (Q16 재결정).
+ * 선택된 결함 없이 획을 그리면 버리지 않고 여기에 담아 두고, 붙일 곳을 고르게 한다.
+ *
+ * · 대기 중에 획을 더 그리면 **쌓인다** (여러 획으로 한 결함을 그릴 수 있어야 한다)
+ * · 대기 중에 도구를 바꿔도 유지된다 (실수로 잃으면 안 된다 — F4 와 같은 정신)
+ * · Escape 또는 [취소] 로 버린다
+ *
+ * ⚠️ 아직 문서(Defect[])에 없다. 저장·Undo 스택 어디에도 들어가지 않는다.
+ */
+export type PendingSketch = { paths: SketchPath[] };
+
 export type Cursor =
   | 'default'
   | 'crosshair'
@@ -434,6 +448,8 @@ export type CanvasState = {
   cursor: Cursor;
   /** 도면 로딩 중이면 커서 wait + 입력 무시 */
   busy: boolean;
+  /** F2 — 붙일 결함을 아직 못 고른 자유그리기. null = 대기 없음 */
+  pendingSketch: PendingSketch | null;
 };
 
 // ── 입력 이벤트 (경계 규칙 6) ──────────────────────────────────────────────
@@ -468,7 +484,14 @@ export type InputEvent =
   /** null 이면 상태색(전역 상속)으로 되돌린다 */
   | { k: 'SET_MARK_COLOR'; defectId: string; color: string | null }
   /** 개별 스타일 전체를 버리고 전역 상속으로 복귀 (§S2a-5 [초기화]) */
-  | { k: 'RESET_STYLE'; defectId: string };
+  | { k: 'RESET_STYLE'; defectId: string }
+  // ── F2 자유그리기 사후연결 ────────────────────────────────────────────────
+  /** 대기 중인 그리기를 이 결함에 붙인다 */
+  | { k: 'ATTACH_PENDING_SKETCH'; defectId: string }
+  /** 대기 중인 그리기의 중심에 새 결함을 만들고 붙인다 */
+  | { k: 'PENDING_SKETCH_TO_NEW_DEFECT' }
+  /** 대기 중인 그리기를 버린다 */
+  | { k: 'CANCEL_PENDING_SKETCH' };
 
 /** 코어가 어댑터에게 요청하는 부수효과. 코어는 직접 수행하지 않는다 */
 export type Effect =

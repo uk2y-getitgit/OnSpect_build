@@ -285,11 +285,113 @@ describe('S2a-1 · 자유그리기는 마크가 아니라 결함 종속 스케�
     }
   });
 
-  it('선택된 결함이 없으면 만들지 않고 안내한다 (marks 는 1개 이상이어야 한다)', () => {
+  /**
+   * F2 (Q16 재결정) — 예전에는 "선택된 결함이 없으면 만들지 않고 안내"였다.
+   * 지금은 **버리지 않고 사후연결 대기**로 넘어간다. 아래 F2 블록이 그 동작을 고정한다.
+   */
+  it('선택된 결함이 없으면 커맨드를 내지 않고 대기 상태로 넘어간다', () => {
     const ctx = ctxOf([]);
     const r = run(baseState('SKETCH'), ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
     expect(r.commands).toHaveLength(0);
+    expect(r.state.pendingSketch?.paths).toHaveLength(1);
+  });
+});
+
+// ── F2 자유그리기 사후연결 ─────────────────────────────────────────────────
+describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () => {
+  const stroke = () => drag({ x: 100, y: 100 }, { x: 400, y: 300 });
+
+  it('대기 중에 더 그리면 획이 쌓인다 (버리지 않는다)', () => {
+    const ctx = ctxOf([]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const b = run(a.state, ctx, drag({ x: 150, y: 150 }, { x: 300, y: 350 }));
+    expect(b.state.pendingSketch?.paths).toHaveLength(2);
+    expect(b.commands).toHaveLength(0);
+  });
+
+  it('[새 결함으로] 는 CREATE_DEFECT 하나로 끝난다 (Undo 한 번에 통째로 되돌아간다)', () => {
+    const ctx = ctxOf([]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const r = run(a.state, ctx, [{ k: 'PENDING_SKETCH_TO_NEW_DEFECT' }]);
+    expect(r.commands).toHaveLength(1);
+    const c = r.commands[0]!;
+    expect(c.k).toBe('CREATE_DEFECT');
+    if (c.k !== 'CREATE_DEFECT') return;
+    // marks 는 1개 이상이 필수다 (상세기획 §3-3) — 획의 중심에 POINT 를 놓는다
+    expect(c.defect.marks).toHaveLength(1);
+    expect(c.defect.marks[0]!.type).toBe('POINT');
+    expect(c.defect.sketch).toHaveLength(1);
+    expect(r.state.pendingSketch).toBeNull();
+  });
+
+  it('새 결함의 POINT 는 획의 중심이고 [0,1] 안이다', () => {
+    const ctx = ctxOf([]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const r = run(a.state, ctx, [{ k: 'PENDING_SKETCH_TO_NEW_DEFECT' }]);
+    const c = r.commands[0]!;
+    if (c.k !== 'CREATE_DEFECT') throw new Error('CREATE_DEFECT');
+    const g = c.defect.marks[0]!.geometry;
+    if (g.k !== 'POINT') throw new Error('POINT');
+    expect(g.x).toBeGreaterThanOrEqual(0);
+    expect(g.x).toBeLessThanOrEqual(1);
+    expect(g.y).toBeGreaterThanOrEqual(0);
+    expect(g.y).toBeLessThanOrEqual(1);
+  });
+
+  it('대기 중 결함 표기를 클릭하면 그 결함에 붙는다 (도구를 바꾸지 않아도 된다)', () => {
+    const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
+    const ctx = ctxOf([d]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    expect(a.state.pendingSketch?.paths).toHaveLength(1);
+    // 마크(0.5, 0.5) = 스크린 (2000, 500) — 4000×1000 도면, zoom 1
+    const r = run(a.state, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 9, screen: { x: 2000, y: 500 }, button: 0, keys: NO_KEYS },
+    ]);
+    expect(r.commands.filter((c) => c.k === 'ADD_SKETCH')).toHaveLength(1);
+    expect(r.state.pendingSketch).toBeNull();
+  });
+
+  it('두 획을 그린 뒤 붙이면 ADD_SKETCH 가 획 수만큼 나온다', () => {
+    const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
+    const ctx = ctxOf([d]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const b = run(a.state, ctx, drag({ x: 150, y: 150 }, { x: 300, y: 350 }));
+    const r = run(b.state, ctx, [{ k: 'ATTACH_PENDING_SKETCH', defectId: 'd1' }]);
+    expect(r.commands.filter((c) => c.k === 'ADD_SKETCH')).toHaveLength(2);
+  });
+
+  it('전회차 결함에는 붙지 않고 경고만 낸다', () => {
+    const d = { ...defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 }), status: 'PREV_PENDING' as const };
+    const ctx = ctxOf([d]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const r = run(a.state, ctx, [{ k: 'ATTACH_PENDING_SKETCH', defectId: 'd1' }]);
+    expect(r.commands).toHaveLength(0);
     expect(r.effects.some((e) => e.k === 'TOAST' && e.kind === 'warn')).toBe(true);
+    expect(r.state.pendingSketch?.paths).toHaveLength(1); // 버리지 않는다
+  });
+
+  it('Escape 로 대기를 버린다', () => {
+    const ctx = ctxOf([]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const r = run(a.state, ctx, [{ k: 'KEY_DOWN', key: 'Escape', keys: NO_KEYS }]);
+    expect(r.state.pendingSketch).toBeNull();
+    expect(r.commands).toHaveLength(0);
+  });
+
+  it('도구를 바꿔도 대기는 유지된다 (실수로 잃으면 안 된다)', () => {
+    const ctx = ctxOf([]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const r = run(a.state, ctx, [{ k: 'SET_TOOL', tool: 'SELECT' }]);
+    expect(r.state.pendingSketch?.paths).toHaveLength(1);
+  });
+
+  it('선택된 결함이 있으면 예전처럼 곧바로 붙는다 (대기하지 않는다)', () => {
+    const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
+    const ctx = ctxOf([d]);
+    const st = { ...baseState('SKETCH'), selection: { defectId: 'd1', part: 'MARK' as const, markId: 'm-d1' } };
+    const r = run(st, ctx, stroke());
+    expect(r.commands.filter((c) => c.k === 'ADD_SKETCH')).toHaveLength(1);
+    expect(r.state.pendingSketch).toBeNull();
   });
 });
 
