@@ -82,20 +82,6 @@ function drag(from: SPoint, to: SPoint, shift = false): InputEvent[] {
 
 // ── 생성 ────────────────────────────────────────────────────────────────────
 describe('S2a-2 · 생성 조작', () => {
-  it('방향 — 누른 지점이 꼬리, 뗀 지점이 머리다', () => {
-    const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, drag({ x: 100, y: 100 }, { x: 300, y: 250 }));
-    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
-    expect(c?.k).toBe('CREATE_DEFECT');
-    const g = c && c.k === 'CREATE_DEFECT' ? c.defect.marks[0]!.geometry : null;
-    expect(g?.k).toBe('ARROW');
-    if (g?.k !== 'ARROW') throw new Error('unreachable');
-    expect(g.from.x).toBeCloseTo(100 / 4000, 5);
-    expect(g.from.y).toBeCloseTo(100 / 1000, 5);
-    expect(g.to.x).toBeCloseTo(300 / 4000, 5);
-    expect(g.to.y).toBeCloseTo(250 / 1000, 5);
-  });
-
   it('영역 — 대각 드래그가 어느 방향이어도 w·h 가 음수가 되지 않는다', () => {
     const ctx = ctxOf();
     // 오른쪽 아래 → 왼쪽 위 로 끈다
@@ -116,9 +102,9 @@ describe('S2a-2 · 생성 조작', () => {
     expect(r.effects.some((e) => e.k === 'TOAST' && e.kind === 'warn')).toBe(true);
   });
 
-  it('생성 직후 그 대상이 선택 상태가 된다 (점과 동일)', () => {
+  it('생성 직후 그 대상이 선택 상태가 된다', () => {
     const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
+    const r = run(baseState('AREA_RECT'), ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
     const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
     expect(r.state.selection.defectId).toBe(c && c.k === 'CREATE_DEFECT' ? c.defect.id : null);
     expect(r.state.selection.part).toBe('MARK');
@@ -149,8 +135,70 @@ describe('S2a-2 · 생성 조작', () => {
 
   it('도면 밖에서 시작하면 만들지 않는다', () => {
     const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, drag({ x: -50, y: -50 }, { x: 200, y: 200 }));
+    const r = run(baseState('AREA_RECT'), ctx, drag({ x: -50, y: -50 }, { x: 200, y: 200 }));
     expect(r.commands).toHaveLength(0);
+  });
+});
+
+// ── F2 · 화살표는 점과 동일하게 클릭 한 번으로 만든다 ───────────────────────
+describe('F2 · 화살표 — 점과 동일한 클릭 생성 (드래그가 아니다)', () => {
+  it('클릭 한 번으로 결함이 만들어진다 — 드래그가 필요 없다', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 100, y: 100 }, button: 0, keys: NO_KEYS },
+      { k: 'POINTER_UP', pointerId: 1, screen: { x: 100, y: 100 }, keys: NO_KEYS },
+    ]);
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    expect(c?.k).toBe('CREATE_DEFECT');
+    const g = c && c.k === 'CREATE_DEFECT' ? c.defect.marks[0]!.geometry : null;
+    expect(g?.k).toBe('ARROW');
+    if (g?.k !== 'ARROW') throw new Error('unreachable');
+    // 클릭한 지점이 꼬리(from) 이다
+    expect(g.from.x).toBeCloseTo(100 / 4000, 5);
+    expect(g.from.y).toBeCloseTo(100 / 1000, 5);
+    // 머리(to)는 꼬리와 다른 기본 방향·길이를 갖는다 — 사용자가 나중에 조정한다
+    expect(g.to.x).not.toBeCloseTo(g.from.x, 5);
+  });
+
+  it('생성 직후 선택 상태가 된다 (점 도구와 동일)', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 300, y: 200 }, button: 0, keys: NO_KEYS },
+      { k: 'POINTER_UP', pointerId: 1, screen: { x: 300, y: 200 }, keys: NO_KEYS },
+    ]);
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    expect(r.state.selection.defectId).toBe(c && c.k === 'CREATE_DEFECT' ? c.defect.id : null);
+    expect(r.state.selection.part).toBe('MARK');
+  });
+
+  it('도면 밖을 클릭하면 만들지 않는다 (점 도구와 동일한 안내)', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: -50, y: -50 }, button: 0, keys: NO_KEYS },
+      { k: 'POINTER_UP', pointerId: 1, screen: { x: -50, y: -50 }, keys: NO_KEYS },
+    ]);
+    expect(r.commands).toHaveLength(0);
+    expect(r.effects.some((e) => e.k === 'TOAST' && e.kind === 'warn')).toBe(true);
+  });
+
+  it('그 자리에서 드래그하면(클릭이 아니라 이동) 팬으로 처리되고 아무것도 만들지 않는다', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, drag({ x: 100, y: 100 }, { x: 300, y: 250 }));
+    expect(r.commands).toHaveLength(0);
+  });
+
+  it('머리(TO) 핸들은 클릭 생성 이후에도 기존 히트 테스트로 그대로 잡힌다 (§2-4 HANDLE)', () => {
+    const d = withGeometry(
+      defect('a1', 1, { x: 0.1, y: 0.1 }, { x: 0.05, y: 0.05 }),
+      { k: 'ARROW', from: { x: 0.1, y: 0.1 }, to: { x: 0.3, y: 0.2 } },
+      'ARROW',
+    );
+    const screens = buildScreens({ drawing: DRAWING, viewport: VP, defects: [d], globalStyle: GS, preview: null });
+    const to = screens[0]!.marks[0]!.to;
+    if (!to) throw new Error('expected arrow head');
+    const hit = hitTest(to, screens, { defectId: 'a1', part: 'MARK', markId: 'a1-m0' });
+    expect(hit?.part).toBe('HANDLE');
+    expect(hit?.handle).toBe('TO');
   });
 });
 
@@ -184,8 +232,8 @@ describe('F4 · 번호 풍선은 도구가 켜져 있어도 항상 먼저 잡힌
   it('라벨이 아닌 위치(빈 도면)를 누르면 도구대로 그대로 생성한다 — 예외는 라벨뿐이다', () => {
     const d = defect('d1', 1, { x: 0.05, y: 0.05 }, { x: 0.05, y: 0.05 });
     const ctx = ctxOf([d]);
-    // d1 의 마크·라벨과 겹치지 않는 먼 지점에서 드래그
-    const r = run(baseState('ARROW'), ctx, drag({ x: 2000, y: 500 }, { x: 2300, y: 650 }));
+    // d1 의 마크·라벨과 겹치지 않는 먼 지점에서 드래그 (AREA_RECT — 드래그로 생성하는 도구)
+    const r = run(baseState('AREA_RECT'), ctx, drag({ x: 2000, y: 500 }, { x: 2300, y: 650 }));
     const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
     expect(c?.k).toBe('CREATE_DEFECT');
   });

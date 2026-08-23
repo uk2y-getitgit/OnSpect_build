@@ -5,6 +5,8 @@
  * 세 곳에 복제하면 "클릭은 잡히는데 그림은 딴 데 있는" 버그가 난다.
  */
 import {
+  ARROW_DEFAULT_ANGLE_DEG,
+  ARROW_DEFAULT_LEN_IMG,
   LABEL_AUTO_ANGLE_DEG,
   LABEL_AUTO_DIST_FACTOR,
 } from './constants.js';
@@ -116,6 +118,19 @@ export function autoLabelNorm(
   const d = balloonRadiusImg * LABEL_AUTO_DIST_FACTOR;
   const a = radians(LABEL_AUTO_ANGLE_DEG);
   return { x: anchor.x + (d * Math.cos(a)) / iw, y: anchor.y + (d * Math.sin(a)) / ih };
+}
+
+/**
+ * F2 — 화살표를 점처럼 클릭 한 번으로 만들 때의 기본 머리(TO) 위치.
+ * `autoLabelNorm` 과 같은 원리 — 거리를 **이미지 px** 로 재야 도면 종횡비와
+ * 무관하게 화면에서 항상 같은 방향으로 보인다. 사용자가 머리 핸들로 나중에 조정한다.
+ */
+export function defaultArrowTo(from: NPoint, iw: number, ih: number): NPoint {
+  const a = radians(ARROW_DEFAULT_ANGLE_DEG);
+  return {
+    x: from.x + (ARROW_DEFAULT_LEN_IMG * Math.cos(a)) / iw,
+    y: from.y + (ARROW_DEFAULT_LEN_IMG * Math.sin(a)) / ih,
+  };
 }
 
 /** 실제로 그려지는 라벨 중심. placed=false 면 자동 배치 위치를 쓴다 */

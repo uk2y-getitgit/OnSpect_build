@@ -51,7 +51,8 @@ const ITEMS: Item[] = [
   {
     id: 'arrow',
     label: '방향',
-    hint: '방향 표기 — 누른 곳이 꼬리, 뗀 곳이 화살촉입니다',
+    // F2 — 점과 동일한 클릭 생성. 기본 방향으로 생기고, 화살촉을 끌어 나중에 조정한다
+    hint: '방향 표기 — 도면을 클릭하면 결함 1건이 추가됩니다. 화살촉을 끌어 방향을 조정하세요',
     tool: 'ARROW',
     icon: (
       <svg viewBox="0 0 20 20" aria-hidden="true">

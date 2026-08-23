@@ -22,6 +22,7 @@ import {
   autoLabelNorm,
   centerOfGeometry,
   centerOfMark,
+  defaultArrowTo,
   effectiveLabelNorm,
   isLocked,
   sketchOf,
@@ -656,18 +657,22 @@ function onPointerDown(
    * F4 예외 — **번호 풍선(LABEL)만은** 어떤 도구가 켜져 있어도 항상 먼저 잡힌다.
    * 히트 테스트 우선순위(§2-4)에서 라벨이 이미 최상위이므로, 여기서는 그 결과를
    * 도구보다 앞세우기만 하면 된다. 라벨이 아닌 다른 표기 위는 여전히 도구가 이긴다.
+   *
+   * F2 — **화살표는 점과 동일하게 클릭 한 번으로 만든다** (드래그 생성이 아니다).
+   * 그래서 ARROW 는 여기서 드래그-생성 분기로 보내지 않고, POINT 처럼 아래
+   * 공통 흐름(빈 도면 → 팬 후보 → UP 에서 클릭 판정)을 그대로 탄다.
    */
   const createType = TOOL_MARK_TYPE[next0.tool];
   const labelGrabbed = hit?.part === 'LABEL';
   if (!labelGrabbed) {
-    if (createType && createType !== 'POINT') {
+    if (createType && createType !== 'POINT' && createType !== 'ARROW') {
       return startCreateShape(next0, ev.screen, createType, ev.pointerId, ctx);
     }
     if (next0.tool === 'SKETCH') return startCreateSketch(next0, ev.screen, ev.pointerId, ctx);
   }
 
-  // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점·메모 도구면 생성)
-  if (!hit) return startPan(next0.tool === 'POINT' || next0.tool === 'MEMO');
+  // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점·화살표·메모 도구면 생성)
+  if (!hit) return startPan(next0.tool === 'POINT' || next0.tool === 'ARROW' || next0.tool === 'MEMO');
 
   // ── 메모 (결함이 아니다) ──────────────────────────────────────────────
   if (hit.part === 'MEMO' && hit.memoId) {
@@ -1202,6 +1207,7 @@ function onPointerUp(
     // 이동 없는 클릭
     if (drag.pointToolCandidate && state.drawing) {
       if (state.tool === 'POINT') return createDefectAt(cleared, ev.screen, ctx);
+      if (state.tool === 'ARROW') return createArrowAt(cleared, ev.screen, ctx);
       if (state.tool === 'MEMO') return createMemoAt(cleared, ev.screen, ctx);
     }
     return ok({ ...cleared, selection: { ...NO_SELECTION } }, ctx);
@@ -1367,7 +1373,63 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
   );
 }
 
-// ── 방향 · 영역 생성 커밋 (§S2a-2) ─────────────────────────────────────────
+// ── 방향(화살표) 클릭 생성 (F2) ────────────────────────────────────────────
+/**
+ * 화살표를 **점과 동일하게** 클릭 한 번으로 만든다(F2). 머리(TO)는 기본 방향·길이로
+ * 놓고, 사용자가 나중에 머리 핸들을 끌어 조정한다(§2-4 히트 우선순위의 HANDLE 판정을
+ * 그대로 재사용한다 — 이 함수는 생성만 하고 편집 경로는 기존 그대로다).
+ */
+function createArrowAt(state: CanvasState, screen: SPoint, ctx: ReduceContext): ReduceResult {
+  if (!state.drawing) return ok(state, ctx);
+  const iw = state.drawing.imageWidth;
+  const ih = state.drawing.imageHeight;
+  const n = toNorm(screen, state.viewport, iw, ih);
+
+  // 마크는 [0,1] 클램프 대상이다. 도면 밖 클릭은 결함의 실제 위치가 될 수 없으므로 무시한다
+  if (n.x < 0 || n.x > 1 || n.y < 0 || n.y > 1) {
+    return ok(state, ctx, [], [{ k: 'TOAST', kind: 'warn', text: '도면 안쪽을 클릭해 주세요' }]);
+  }
+
+  const from = roundNorm(n);
+  const to = roundNorm(defaultArrowTo(from, iw, ih));
+  const geometry: MarkGeometry = { k: 'ARROW', from, to };
+
+  const defectId = ctx.makeId();
+  const markId = ctx.makeId();
+
+  let maxSeq = 0;
+  for (const d of ctx.defects) if (d.seq > maxSeq) maxSeq = d.seq;
+
+  const anchor = centerOfGeometry(geometry) ?? from;
+  const auto = roundNorm(autoLabelNorm(anchor, ctx.globalStyle.balloonRadius, iw, ih));
+
+  const defect: Defect = {
+    id: defectId,
+    projectId: ctx.projectId ?? '',
+    drawingId: state.drawing.id,
+    floorId: ctx.floorId ?? '',
+    seq: maxSeq + 1,
+    status: 'CURRENT',
+    marks: [{ id: markId, defectId, type: 'ARROW', geometry, sortOrder: 0 }],
+    label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
+    sketch: [],
+    style: null,
+    // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
+    ...EMPTY_DEFECT_ATTRS,
+  };
+
+  return ok(
+    { ...state, selection: { defectId, part: 'MARK', markId } },
+    ctx,
+    [{ k: 'CREATE_DEFECT', defect }],
+    [
+      { k: 'TOAST', kind: 'info', text: '표기가 추가되었습니다', undoable: true },
+      { k: 'REVEAL_DEFECT', defectId },
+    ],
+  );
+}
+
+// ── 영역 생성 커밋 (§S2a-2) ─────────────────────────────────────────────────
 function commitCreateShape(
   state: CanvasState,
   drag: DragState,
