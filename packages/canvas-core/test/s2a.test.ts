@@ -154,6 +154,62 @@ describe('S2a-2 · 생성 조작', () => {
   });
 });
 
+// ── F4 · 번호 풍선은 도구와 무관하게 항상 잡힌다 ────────────────────────────
+describe('F4 · 번호 풍선은 도구가 켜져 있어도 항상 먼저 잡힌다', () => {
+  const TOOLS_WITH_CREATE: CanvasState['tool'][] = ['ARROW', 'AREA_RECT', 'AREA_ELLIPSE', 'SKETCH'];
+
+  for (const tool of TOOLS_WITH_CREATE) {
+    it(`${tool} 도구가 켜져 있어도 라벨을 클릭하면 라벨 드래그가 시작된다 (생성되지 않는다)`, () => {
+      const d = defect('d1', 1, { x: 0.2, y: 0.2 }, { x: 0.5, y: 0.5 });
+      const ctx = ctxOf([d]);
+      const screens = buildScreens({
+        drawing: DRAWING,
+        viewport: VP,
+        defects: [d],
+        globalStyle: GS,
+        preview: null,
+      });
+      const labelScreen = screens[0]!.label;
+      const r = run(baseState(tool), ctx, [
+        { k: 'POINTER_DOWN', pointerId: 1, screen: labelScreen, button: 0, keys: NO_KEYS },
+      ]);
+      expect(r.state.drag?.kind).toBe('MOVE_LABEL');
+      expect(r.state.selection.defectId).toBe('d1');
+      expect(r.state.selection.part).toBe('LABEL');
+      // 새 결함이 만들어지지 않았다 — 라벨을 잡은 것이지 그 위에 새로 그린 게 아니다
+      expect(r.commands.some((c) => c.k === 'CREATE_DEFECT')).toBe(false);
+    });
+  }
+
+  it('라벨이 아닌 위치(빈 도면)를 누르면 도구대로 그대로 생성한다 — 예외는 라벨뿐이다', () => {
+    const d = defect('d1', 1, { x: 0.05, y: 0.05 }, { x: 0.05, y: 0.05 });
+    const ctx = ctxOf([d]);
+    // d1 의 마크·라벨과 겹치지 않는 먼 지점에서 드래그
+    const r = run(baseState('ARROW'), ctx, drag({ x: 2000, y: 500 }, { x: 2300, y: 650 }));
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    expect(c?.k).toBe('CREATE_DEFECT');
+  });
+
+  it('전회차(잠긴) 결함의 라벨은 다른 도구가 켜져 있어도 선택만 되고 끌리지 않는다', () => {
+    const d = defect('d1', 1, { x: 0.2, y: 0.2 }, { x: 0.5, y: 0.5 }, { status: 'PREV_PENDING' });
+    const ctx = ctxOf([d]);
+    const screens = buildScreens({
+      drawing: DRAWING,
+      viewport: VP,
+      defects: [d],
+      globalStyle: GS,
+      preview: null,
+    });
+    const labelScreen = screens[0]!.label;
+    const r = run(baseState('AREA_RECT'), ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: labelScreen, button: 0, keys: NO_KEYS },
+    ]);
+    expect(r.state.drag).toBeNull();
+    expect(r.state.selection.defectId).toBe('d1');
+    expect(r.state.selection.part).toBe('LABEL');
+  });
+});
+
 // ── 자유그리기 ──────────────────────────────────────────────────────────────
 describe('S2a-1 · 자유그리기는 마크가 아니라 결함 종속 스케치다', () => {
   it('선택된 결함에 Path 가 붙는다. 번호 라벨·리더선은 생기지 않는다', () => {

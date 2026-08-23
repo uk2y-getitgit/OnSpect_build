@@ -644,20 +644,27 @@ function onPointerDown(
   if (ev.button === 1 || (ev.button === 0 && ev.keys.space)) return startPan(false);
   if (ev.button !== 0) return ok(next0, ctx);
 
+  const screens = screensOf(next0, ctx);
+  const memos = memoScreensOf(next0, ctx);
+  const hit = hitTest(ev.screen, screens, next0.selection, memos);
+
   /**
    * 생성 도구가 켜져 있으면 **기존 표기를 잡기 전에** 생성을 시작한다.
    * 도구를 켜 놓고 도형 위에서 시작하는 것은 "저 위에 새로 그린다" 는 뜻이지
    * "저것을 옮긴다" 가 아니다.
+   *
+   * F4 예외 — **번호 풍선(LABEL)만은** 어떤 도구가 켜져 있어도 항상 먼저 잡힌다.
+   * 히트 테스트 우선순위(§2-4)에서 라벨이 이미 최상위이므로, 여기서는 그 결과를
+   * 도구보다 앞세우기만 하면 된다. 라벨이 아닌 다른 표기 위는 여전히 도구가 이긴다.
    */
   const createType = TOOL_MARK_TYPE[next0.tool];
-  if (createType && createType !== 'POINT') {
-    return startCreateShape(next0, ev.screen, createType, ev.pointerId, ctx);
+  const labelGrabbed = hit?.part === 'LABEL';
+  if (!labelGrabbed) {
+    if (createType && createType !== 'POINT') {
+      return startCreateShape(next0, ev.screen, createType, ev.pointerId, ctx);
+    }
+    if (next0.tool === 'SKETCH') return startCreateSketch(next0, ev.screen, ev.pointerId, ctx);
   }
-  if (next0.tool === 'SKETCH') return startCreateSketch(next0, ev.screen, ev.pointerId, ctx);
-
-  const screens = screensOf(next0, ctx);
-  const memos = memoScreensOf(next0, ctx);
-  const hit = hitTest(ev.screen, screens, next0.selection, memos);
 
   // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점·메모 도구면 생성)
   if (!hit) return startPan(next0.tool === 'POINT' || next0.tool === 'MEMO');
