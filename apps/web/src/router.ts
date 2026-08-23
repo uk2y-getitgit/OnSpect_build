@@ -14,7 +14,9 @@ export type Route =
   | { name: 'EDIT'; projectId: string } //    #/p/:pid/edit
   | { name: 'SETUP'; projectId: string } //   #/p/:pid
   | { name: 'UPLOAD'; projectId: string; floorId: string | null } // #/p/:pid/upload
-  | { name: 'CANVAS'; projectId: string; floorId: string | null }; // #/p/:pid/f/:fid
+  | { name: 'CANVAS'; projectId: string; floorId: string | null } // #/p/:pid/f/:fid
+  /** #/p/:pid/settings?from=f/{floorId} — 캔버스에서 왔으면 그 층으로 되돌아간다 (F25) */
+  | { name: 'SETTINGS'; projectId: string; fromFloorId: string | null };
 
 export function parseHash(hash: string): Route {
   const raw = hash.replace(/^#/, '');
@@ -30,6 +32,12 @@ export function parseHash(hash: string): Route {
     if (seg[2] === 'upload') {
       const floorId = new URLSearchParams(query).get('floor');
       return { name: 'UPLOAD', projectId, floorId: floorId ? decodeURIComponent(floorId) : null };
+    }
+    if (seg[2] === 'settings') {
+      const from = new URLSearchParams(query).get('from');
+      const m = from ? /^f\/(.+)$/.exec(from) : null;
+      // `URLSearchParams` 가 이미 디코드한 값이다. 여기서 또 디코드하지 않는다
+      return { name: 'SETTINGS', projectId, fromFloorId: m?.[1] ?? null };
     }
     if (seg[2] === 'f') {
       return { name: 'CANVAS', projectId, floorId: seg[3] ? decodeURIComponent(seg[3]) : null };
@@ -53,6 +61,10 @@ export function hrefOf(route: Route): string {
       return route.floorId
         ? `#/p/${encodeURIComponent(route.projectId)}/upload?floor=${encodeURIComponent(route.floorId)}`
         : `#/p/${encodeURIComponent(route.projectId)}/upload`;
+    case 'SETTINGS':
+      return route.fromFloorId
+        ? `#/p/${encodeURIComponent(route.projectId)}/settings?from=f/${encodeURIComponent(route.fromFloorId)}`
+        : `#/p/${encodeURIComponent(route.projectId)}/settings`;
     case 'CANVAS':
       return route.floorId
         ? `#/p/${encodeURIComponent(route.projectId)}/f/${encodeURIComponent(route.floorId)}`

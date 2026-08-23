@@ -358,6 +358,17 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           >
             ← 용역 구성
           </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title="결함 입력 항목을 구성합니다. 닫으면 이 층으로 돌아옵니다"
+            onClick={() => {
+              flush();
+              navigate({ name: 'SETTINGS', projectId, fromFloorId: resolvedFloor?.id ?? null });
+            }}
+          >
+            설정
+          </button>
           <span className="topbar__project" title={displayName}>
             {displayName}
           </span>

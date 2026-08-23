@@ -161,6 +161,9 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
     let copied: CopyStructureResult | null = null;
     const committed = await guard(async () => {
       await storage.repo.putProject(p);
+      // 항목설정 스냅샷 (불변식 #7) — **생성 시점의 기본값**을 이 용역에 고정한다.
+      // 이후 기본값이 바뀌어도 이 용역의 보고서 용어는 흔들리지 않는다 (D6)
+      await storage.repo.ensureProjectSettings(p.id);
       if (prevId && draft.copyStructure) {
         copied = await storage.repo.copyStructure(prevId, p.id);
       } else {

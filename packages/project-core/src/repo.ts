@@ -9,6 +9,7 @@
  * Blob 은 `blobKey: string` 이라는 불투명 문자열로만 오간다.
  * Blob 자체를 받는 메서드(도면 등록)는 **어댑터 인터페이스**의 몫이다.
  */
+import type { ItemSettings } from './items/types.js';
 import type { Building, Drawing, Floor, Project } from './types.js';
 
 /** P1 목록 행이 필요로 하는 집계. 건수는 인덱스 count 이고 **출력번호와 무관하다**(불변식 2) */
@@ -79,6 +80,23 @@ export interface ProjectRepo<TDefect = unknown, TMemo = unknown> {
   listMemos(projectId: string): Promise<TMemo[]>;
   upsertMemos(items: readonly TMemo[]): Promise<void>;
   deleteMemos(ids: readonly string[]): Promise<void>;
+
+  // ── 항목 설정 (S3 §2-1 · §2-4) ──────────────────────────────────────────
+  /**
+   * 문서 1건 = 설정 한 벌. **항상 기본키(`'ORG'` | projectId)로 읽는다** —
+   * `by_project` 인덱스는 쓰지 않는다 (ORG 는 projectId 가 null 이라 인덱스에 안 들어간다).
+   */
+  getItemSettings(id: string): Promise<ItemSettings | null>;
+  /** 통째로 쓴다. `put` 1회라 원자적이고 부분 상태가 없다 (§2-1-a) */
+  putItemSettings(s: ItemSettings): Promise<void>;
+  /** 없으면 씨앗으로 1회 생성한다 (§2-7) */
+  ensureOrgSettings(): Promise<ItemSettings>;
+  /**
+   * **지연 스냅샷** (불변식 #7 · §2-4).
+   * 없으면 그 시점의 ORG 를 복사해 만들고 저장한다. 설정·폼·출력이 전부 이 함수만 부른다 —
+   * 호출자가 "없으면 만든다"를 각자 구현하면 반드시 어긋난다.
+   */
+  ensureProjectSettings(projectId: string): Promise<ItemSettings>;
 
   // ── 구조 복사 (§2-13) ───────────────────────────────────────────────────
   /** 동·층·도면만 복사한다. **결함은 복사하지 않는다.** Blob 은 같은 키를 참조(refCount++) */

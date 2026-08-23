@@ -160,8 +160,73 @@ export type ResolvedStyle = {
   sketchWidth: number;
 };
 
+/** 규모 입력 방식 — 폭×길이 / 면적 (S4 스펙 §3-5) */
+export type DefectSizeMode = 'WL' | 'AREA';
+/** 조사구분. 폼에 노출하지 않는다. Phase 4 출력 필터가 쓴다 */
+export type SurveyKind = 'EXTERIOR' | 'DETAIL';
+/** 진행 없음 / 진행 중 */
+export type DefectProgress = 'NONE' | 'ONGOING';
+/** 구조체 / 비구조체 */
+export type DefectStructural = 'STRUCTURAL' | 'NON_STRUCTURAL';
+
 /**
- * 결함. Phase 3 캔버스가 읽는 최소 형태.
+ * 결함의 **도메인 속성** — S4 스펙 §3-2.
+ *
+ * `canvas-core` 는 이 값을 해석하지 않는다 (유일한 예외: `completeness.ts` 의 필수항목 판정).
+ * 렌더·히트·커맨드는 이 타입을 전혀 모른다. 저장 형태는 `Defect` 안에 **플랫**이다.
+ *
+ * **`id` 와 `name` 을 둘 다 저장한다** (F11):
+ *   · 보고서에 인쇄할 글자는 `name` — 설정을 고치거나 지워도 이미 쓴 보고서가 안 흔들린다
+ *   · 코드번호 조회·역참조는 `id`
+ */
+export type DefectAttrs = {
+  // ── 분류 ────────────────────────────────────────────────────────────────
+  /** 폼 미노출. 기본 EXTERIOR */
+  surveyKind: SurveyKind;
+  /** 위치보조 — 거실 · 복도 · 계단실 */
+  locationNote: string | null;
+  structureType: 'RC' | 'SRC' | 'SS' | null;
+
+  memberId: string | null;
+  /** 출력·표시에 쓰는 **이름 스냅샷** */
+  memberName: string | null;
+  /** null = 부재 마스터의 구조체 구분을 그대로 쓴다. 값이 있으면 사용자가 손댄 것 */
+  structural: DefectStructural | null;
+
+  defectTypeId: string | null;
+  defectTypeName: string | null;
+
+  // ── 규모 (§3-5) ─────────────────────────────────────────────────────────
+  sizeMode: DefectSizeMode;
+  /** WL 전용. 실측 폭(mm) — 구간이 아니라 숫자 그대로다 (D7) */
+  widthMm: number | null;
+  /** WL 전용 */
+  lengthMm: number | null;
+  /** AREA 전용 — **직접 입력값.** WL 에서는 저장하지 않고 파생한다 (F14) */
+  areaM2: number | null;
+  /** AREA 의 가로 (보조 입력, 재편집용) */
+  areaWMm: number | null;
+  /** AREA 의 세로 (보조 입력, 재편집용) */
+  areaHMm: number | null;
+  /** null 은 1 로 읽는다. **면적에 곱하지 않는다** (불변식 4) */
+  countEa: number | null;
+
+  // ── 판정 ────────────────────────────────────────────────────────────────
+  progress: DefectProgress;
+  /** 누수여부 O/X */
+  leak: boolean;
+
+  causeId: string | null;
+  /** 자유 텍스트면 id=null, name 만 채운다 */
+  causeName: string | null;
+  repairId: string | null;
+  repairName: string | null;
+
+  memo: string | null;
+};
+
+/**
+ * 결함. Phase 3 캔버스가 읽는 최소 형태 + 도메인 속성(`DefectAttrs`).
  * ⚠️ 출력 결함번호·사진번호 필드는 **없다.** 저장하지 않고 출력 시점에 계산한다(불변식 2).
  * 캔버스가 그리는 숫자는 `displayNumber` 로 **주입받는다** (§2-1-b).
  */
@@ -186,16 +251,7 @@ export type Defect = {
   sketch: SketchPath[];
   /** null = 전역 스타일 상속. 위치 이동은 이 값을 절대 건드리지 않는다 */
   style: StyleOverride | null;
-
-  // 결함 속성 — 미완성 판정(D3)과 우측 패널 표시에 쓴다. Phase 3 에서는 읽기 전용
-  memberName: string | null;
-  defectTypeName: string | null;
-  widthMm: number | null;
-  lengthMm: number | null;
-  areaM2: number | null;
-  countEa: number | null;
-  memo: string | null;
-};
+} & DefectAttrs;
 
 export type DrawingRef = { id: string; imageWidth: number; imageHeight: number };
 

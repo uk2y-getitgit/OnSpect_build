@@ -400,6 +400,14 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
           </button>
         </div>
         <div className="page__actions">
+          <button
+            type="button"
+            className="btn"
+            title="이 용역의 결함 입력 항목(부재 · 결함유형 · 발생원인 · 보수방안)을 구성합니다"
+            onClick={() => navigate({ name: 'SETTINGS', projectId, fromFloorId: null })}
+          >
+            설정
+          </button>
           {project.prevProjectId && (
             <button
               type="button"

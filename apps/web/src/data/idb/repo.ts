@@ -8,14 +8,21 @@
  * `RecordBase` 의 `deviceId`·`updatedAt` 은 **여기서 채운다.** 화면은 신경 쓰지 않는다.
  */
 import type { Defect, Memo } from '@onspect/canvas-core';
+import { normalizeDefectAttrs } from '@onspect/canvas-core';
 import type {
   Building,
   CopyStructureResult,
   Drawing,
   Floor,
+  ItemSettings,
   Project,
   ProjectRepo,
   ProjectSummary,
+} from '@onspect/project-core';
+import {
+  createOrgSettings,
+  ORG_SETTINGS_ID,
+  snapshotForProject,
 } from '@onspect/project-core';
 import {
   countByIndex,
@@ -452,6 +459,58 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     return { buildings: buildingMap.size, floors: floorMap.size, drawings: drawingCount };
   }
 
+  // ── 항목 설정 (S3 §2-1 · §2-4) ──────────────────────────────────────────
+  /**
+   * **항상 기본키로 읽는다.** `by_project` 인덱스는 쓰지 않는다 —
+   * ORG 문서는 `projectId` 가 null 이라 인덱스에 들어가지도 않는다 (§2-1).
+   */
+  async getItemSettings(id: string): Promise<ItemSettings | null> {
+    const tx = this.db.transaction(STORE.itemSettings, 'readonly');
+    const rec = await reqAsPromise<ItemSettings | undefined>(
+      tx.objectStore(STORE.itemSettings).get(id),
+    );
+    return rec ?? null;
+  }
+
+  /** 설정은 **항상 통째로 쓴다.** `put` 1회라 원자적이고 부분 상태가 없다 (§2-1-a) */
+  async putItemSettings(s: ItemSettings): Promise<void> {
+    const tx = this.db.transaction(STORE.itemSettings, 'readwrite');
+    tx.objectStore(STORE.itemSettings).put(this.stamp(s));
+    await txDone(tx);
+  }
+
+  /** 첫 실행에 씨앗으로 1회 만든다 (§2-7). 이미 있으면 그대로 돌려준다 */
+  async ensureOrgSettings(now = Date.now()): Promise<ItemSettings> {
+    const tx = this.db.transaction(STORE.itemSettings, 'readwrite');
+    const store = tx.objectStore(STORE.itemSettings);
+    const existing = await reqAsPromise<ItemSettings | undefined>(store.get(ORG_SETTINGS_ID));
+    if (existing) {
+      await txDone(tx);
+      return existing;
+    }
+    const seeded = createOrgSettings(this.deviceId, now);
+    store.put(seeded);
+    await txDone(tx);
+    return seeded;
+  }
+
+  /**
+   * **지연 스냅샷** (불변식 #7 · §2-4 · F8).
+   *
+   * 없으면 그 시점의 ORG 를 복사해 만들고 저장한다. 사용자에게 아무것도 묻지 않는다.
+   * 일괄 마이그레이션을 돌리지 않으므로 **DB 버전이 1 그대로**다.
+   * 설정 화면·결함 입력 폼·출력이 전부 이 함수만 부른다 —
+   * 호출자가 "없으면 만든다"를 각자 구현하면 반드시 어긋난다.
+   */
+  async ensureProjectSettings(projectId: string, now = Date.now()): Promise<ItemSettings> {
+    const found = await this.getItemSettings(projectId);
+    if (found) return found;
+    const org = await this.ensureOrgSettings(now);
+    const snap = snapshotForProject(org, { projectId, deviceId: this.deviceId, now });
+    await this.putItemSettings(snap);
+    return snap;
+  }
+
   // ── Blob 읽기 (캔버스·썸네일) ───────────────────────────────────────────
   async readBlob(key: string): Promise<Blob | null> {
     const tx = this.db.transaction(STORE.blobs, 'readonly');
@@ -478,6 +537,10 @@ function uniqueKeys(d: Drawing): string[] {
  * 마이그레이션 대신 읽기 정규화를 쓰는 이유: 스키마 버전을 올리지 않아도 되고,
  * 저장은 어차피 다음 수정 때 새 형식으로 나간다.
  */
+/**
+ * 옛 레코드 정규화 — S1·S2a 가 저장한 결함에는 `sketch` 와 `DefectAttrs` 신규 필드가 없다.
+ * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (S4 스펙 §3-3 · ASSUMPTIONS E11).
+ */
 export function normalizeDefect(d: Defect): Defect {
-  return d.sketch ? d : { ...d, sketch: [] };
+  return normalizeDefectAttrs(d);
 }

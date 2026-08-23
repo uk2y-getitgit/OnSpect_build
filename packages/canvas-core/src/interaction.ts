@@ -16,6 +16,7 @@ import {
   ZOOM_WHEEL_STEP,
 } from './constants.js';
 import type { Command } from './commands.js';
+import { EMPTY_DEFECT_ATTRS } from './defectAttrs.js';
 import {
   anchorNorm,
   autoLabelNorm,
@@ -1343,14 +1344,9 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
     label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
     sketch: [],
     style: null,
-    // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다
-    memberName: null,
-    defectTypeName: null,
-    widthMm: null,
-    lengthMm: null,
-    areaM2: null,
-    countEa: null,
-    memo: null,
+    // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
+    // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
+    ...EMPTY_DEFECT_ATTRS,
   };
 
   return ok(
@@ -1414,14 +1410,9 @@ function commitCreateShape(
     label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
     sketch: [],
     style: null,
-    // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다
-    memberName: null,
-    defectTypeName: null,
-    widthMm: null,
-    lengthMm: null,
-    areaM2: null,
-    countEa: null,
-    memo: null,
+    // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
+    // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
+    ...EMPTY_DEFECT_ATTRS,
   };
 
   return ok(

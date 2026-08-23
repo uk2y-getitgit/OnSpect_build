@@ -14,6 +14,7 @@
  */
 export * from './constants.js';
 export * from './types.js';
+export * from './defectAttrs.js';
 export * from './geometry.js';
 export * from './viewport.js';
 export * from './visibility.js';

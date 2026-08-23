@@ -12,6 +12,7 @@
  * 특별 취급하면 샘플에서만 되는 버그가 숨는다.
  */
 import type { Defect, Mark } from '@onspect/canvas-core';
+import { EMPTY_DEFECT_ATTRS, inferSizeMode } from '@onspect/canvas-core';
 import type { Drawing, Floor, Project } from '@onspect/project-core';
 import { makeBuilding, makeDrawing, makeFloor, makeProject } from './factory.js';
 import { newBlobKey } from './idb/blobs.js';
@@ -229,6 +230,9 @@ export async function seedSampleProject(
       },
       sketch: [],
       style: null,
+      // 속성 초기값은 EMPTY_DEFECT_ATTRS 한 곳에만 있다 (S4 스펙 §2-6)
+      ...EMPTY_DEFECT_ATTRS,
+      sizeMode: inferSizeMode(s),
       memberName: s.memberName,
       defectTypeName: s.defectTypeName,
       widthMm: s.widthMm,

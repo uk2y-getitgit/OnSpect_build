@@ -12,6 +12,7 @@ import { DrawingUpload } from './routes/DrawingUpload';
 import { ProjectForm } from './routes/ProjectForm';
 import { ProjectList } from './routes/ProjectList';
 import { ProjectSetup } from './routes/ProjectSetup';
+import { Settings } from './routes/Settings';
 import { ToastHost } from './ui/ToastHost';
 import { useState } from 'react';
 import { ConfirmDialog } from './ui/Overlays';
@@ -62,6 +63,9 @@ function Shell() {
             <ProjectSetup projectId={route.projectId} />
             <DrawingUpload projectId={route.projectId} floorId={route.floorId} />
           </>
+        )}
+        {route.name === 'SETTINGS' && (
+          <Settings projectId={route.projectId} fromFloorId={route.fromFloorId} />
         )}
         {route.name === 'CANVAS' && (
           <CanvasRoute projectId={route.projectId} floorId={route.floorId} />
