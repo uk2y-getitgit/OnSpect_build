@@ -8,6 +8,7 @@
  * 근사가 틀려도 두 곳이 같이 틀리므로 "클릭은 잡히는데 그림은 딴 데" 가 생기지 않는다.
  */
 import {
+  MEMO_BOX_PAD,
   MEMO_BG,
   MEMO_BORDER,
   MEMO_CHARS_PER_LINE,
@@ -22,7 +23,18 @@ import {
 } from './constants.js';
 import { toScreen } from './geometry.js';
 import type { SRect } from './shapes.js';
-import type { Memo, MemoStyle, SPoint, Viewport } from './types.js';
+import type { Memo, MemoStyle, NPoint, SPoint, Viewport } from './types.js';
+
+/**
+ * F2 — **필기 메모인가.** 옛 텍스트 메모와 갈라 쓰는 유일한 판정이다.
+ *
+ * `paths` 가 비어 있으면 옛 레코드(텍스트 메모)다. IndexedDB 를 건드리지 않고
+ * **읽는 시점에** 이 함수 하나로 갈라 쓴다 (DB 버전 유지 — `normalizeDefectAttrs` 와 같은 방식).
+ */
+export function isInkMemo(memo: Memo): boolean {
+  const ps = memo.paths;
+  return Array.isArray(ps) && ps.some((p) => p.points.length >= 2);
+}
 
 export type ResolvedMemoStyle = {
   color: string;
@@ -88,8 +100,14 @@ export function memoLines(text: string): string[] {
 
 export type MemoScreen = {
   memoId: string;
-  /** 상자 (스크린 px) */
+  /**
+   * 상자 (스크린 px).
+   *   · 필기 메모 → 획을 감싸는 **점선 상자**
+   *   · 텍스트 메모 → 노란 상자
+   */
   box: SRect;
+  /** F2 — 필기 획 (스크린 px). 텍스트 메모면 null */
+  paths: { id: string; points: SPoint[]; width: number }[] | null;
   lines: string[];
   /** 글자 크기 (스크린 px) */
   fontSize: number;
@@ -105,6 +123,46 @@ export type MemoScreen = {
  */
 export function memoScreen(memo: Memo, vp: Viewport, iw: number, ih: number): MemoScreen {
   const style = resolveMemoStyle(memo.style);
+
+  // F2 — 필기 메모: 상자는 획에서 파생한다. 글자 근사·줄바꿈이 필요 없다
+  if (isInkMemo(memo)) {
+    const paths = (memo.paths ?? [])
+      .filter((p) => p.points.length >= 2)
+      .map((p) => ({
+        id: p.id,
+        points: p.points.map((n) => toScreen(n, vp, iw, ih)),
+        width: Math.max(1, p.width * vp.zoom),
+      }));
+    const pad = MEMO_BOX_PAD * vp.zoom;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of paths) {
+      for (const pt of p.points) {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y > maxY) maxY = pt.y;
+      }
+    }
+    return {
+      memoId: memo.id,
+      box: {
+        x: minX - pad,
+        y: minY - pad,
+        w: Math.max(MEMO_MIN_W_PX, maxX - minX + pad * 2),
+        h: Math.max(MEMO_MIN_H_PX, maxY - minY + pad * 2),
+      },
+      paths,
+      lines: [],
+      fontSize: 0,
+      lineHeight: 0,
+      pad,
+      style,
+    };
+  }
+
   const lines = memoLines(memo.text);
   const font = MEMO_FONT * style.fontScale;
   const lineH = font * MEMO_LINE_FACTOR;
@@ -118,6 +176,7 @@ export function memoScreen(memo: Memo, vp: Viewport, iw: number, ih: number): Me
   return {
     memoId: memo.id,
     box: { x: at.x, y: at.y, w, h },
+    paths: null,
     lines,
     fontSize: Math.max(6, font * vp.zoom),
     lineHeight: Math.max(7, lineH * vp.zoom),
@@ -135,9 +194,31 @@ export function memoScreens(
 ): MemoScreen[] {
   return memos.map((m) => {
     const s = memoScreen(m, vp, iw, ih);
-    if (preview && preview.memoId === m.id) {
-      return { ...s, box: { ...s.box, x: preview.pos.x, y: preview.pos.y } };
-    }
-    return s;
+    if (!preview || preview.memoId !== m.id) return s;
+    // 드래그 미리보기 — **획도 같은 델타만큼 함께 옮긴다** (상자만 옮기면 획이 남는다)
+    const dx = preview.pos.x - s.box.x;
+    const dy = preview.pos.y - s.box.y;
+    return {
+      ...s,
+      box: { ...s.box, x: preview.pos.x, y: preview.pos.y },
+      paths:
+        s.paths?.map((p) => ({
+          ...p,
+          points: p.points.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })),
+        })) ?? null,
+    };
   });
+}
+
+/** 정규화 점 묶음의 좌상단 (필기 메모의 `pos` 앵커) */
+export function inkAnchor(paths: readonly { points: NPoint[] }[]): NPoint {
+  let x = Infinity;
+  let y = Infinity;
+  for (const p of paths) {
+    for (const pt of p.points) {
+      if (pt.x < x) x = pt.x;
+      if (pt.y < y) y = pt.y;
+    }
+  }
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : { x: 0, y: 0 };
 }

@@ -235,9 +235,19 @@ export function applyMemoCommand(memos: readonly Memo[], c: Command): Memo[] {
     case 'DELETE_MEMO':
       return memos.filter((m) => m.id !== c.memo.id);
     case 'MOVE_MEMO':
-      return memos.map((m) =>
-        m.id === c.memoId ? { ...m, pos: { x: c.to.x, y: c.to.y } } : m,
-      );
+      return memos.map((m) => {
+        if (m.id !== c.memoId) return m;
+        // F2 — 필기 메모는 **획도 같은 델타만큼 함께 옮긴다.**
+        // `pos` 는 획 묶음의 좌상단이므로 둘이 어긋나면 상자와 글씨가 따로 논다.
+        const dx = c.to.x - c.from.x;
+        const dy = c.to.y - c.from.y;
+        const paths =
+          m.paths?.map((p) => ({
+            ...p,
+            points: p.points.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })),
+          })) ?? null;
+        return { ...m, pos: { x: c.to.x, y: c.to.y }, paths };
+      });
     case 'SET_MEMO_TEXT':
       return memos.map((m) => (m.id === c.memoId ? { ...m, text: c.to } : m));
     default:

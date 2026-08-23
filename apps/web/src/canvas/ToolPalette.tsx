@@ -75,7 +75,7 @@ const ITEMS: Item[] = [
   {
     id: 'draw',
     label: '그리기',
-    hint: '자유그리기 — 선택한 결함에 붙습니다. 먼저 결함을 선택하세요',
+    hint: '자유그리기 — 그린 뒤 붙일 결함을 고릅니다. 결함 상태색 실선으로 그려집니다',
     tool: 'SKETCH',
     icon: (
       <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -85,14 +85,13 @@ const ITEMS: Item[] = [
   },
   {
     id: 'memo',
-    label: '메모',
-    hint: '메모 — 결함과 무관한 쪽지입니다. 결함 목록에 나오지 않습니다',
+    label: '필기메모',
+    hint: '필기 메모 — 끌어서 손으로 씁니다. 결함과 무관하며 결함 목록에 나오지 않습니다',
     tool: 'MEMO',
     icon: (
       <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M3.5 3.5h13v9l-4 4h-9z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M16.5 12.5h-4v4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M6 7h8M6 10h5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M3 15.5l1-3L13 3.6a1.6 1.6 0 0 1 2.3 0l1.1 1.1a1.6 1.6 0 0 1 0 2.3L7.5 16l-3 1z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M12 5l3 3" stroke="currentColor" strokeWidth="1.4" />
       </svg>
     ),
   },

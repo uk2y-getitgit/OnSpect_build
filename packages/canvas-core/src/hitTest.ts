@@ -180,6 +180,19 @@ export function hitTest(
   // 7. 메모 — 결함 표기보다 아래. 메모가 결함 조작을 가로채면 안 된다
   for (let i = memos.length - 1; i >= 0; i -= 1) {
     const m = memos[i]!;
+    // F2 필기 메모는 **획 근처 또는 점선 테두리**만 잡는다.
+    // 상자 속을 통째로 잡으면 큰 낙서 하나가 그 안의 도면 조작을 전부 삼킨다
+    // (§S2a-3 "큰 것보다 작은 것이 이긴다" 와 같은 정신).
+    if (m.paths) {
+      const near = m.paths.some(
+        (path) =>
+          distToPolyline(p, path.points) <= Math.max(HIT_STROKE_PX, path.width / 2 + HIT_PAD_PX),
+      );
+      if (near || distToRectBorder(p, m.box) <= HIT_STROKE_PX) {
+        return { defectId: null, part: 'MEMO', markId: null, memoId: m.memoId };
+      }
+      continue;
+    }
     if (pointInRect(p, m.box)) {
       return { defectId: null, part: 'MEMO', markId: null, memoId: m.memoId };
     }

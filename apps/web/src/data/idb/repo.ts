@@ -190,7 +190,9 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
       'by_project',
       projectId,
     );
-    const memos = await getAllByIndex<Memo>(tx.objectStore(STORE.memos), 'by_project', projectId);
+    const memos = (
+      await getAllByIndex<Memo>(tx.objectStore(STORE.memos), 'by_project', projectId)
+    ).map(normalizeMemo);
     // S1 에 저장된 레코드에는 `sketch` 가 없다. 읽는 즉시 채워 화면 코드가 분기하지 않게 한다
     const defects = rawDefects.map(normalizeDefect);
     return { project, buildings, floors, drawings, defects, memos };
@@ -389,7 +391,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
   // 결함과 **다른 스토어**다. 결함 건수·결함 리스트 어디에도 섞이지 않는다.
   async listMemos(projectId: string): Promise<Memo[]> {
     const tx = this.db.transaction(STORE.memos, 'readonly');
-    return getAllByIndex<Memo>(tx.objectStore(STORE.memos), 'by_project', projectId);
+    const rows = await getAllByIndex<Memo>(tx.objectStore(STORE.memos), 'by_project', projectId);
+    return rows.map(normalizeMemo);
   }
 
   async upsertMemos(items: readonly Memo[]): Promise<void> {
@@ -584,6 +587,19 @@ export function normalizeDefect(d: Defect): Defect {
  * 옛 도면 레코드 정규화 — F1 이전 레코드에는 `imgLayout` 이 없다.
  * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (같은 방식: normalizeDefect 참조).
  */
+/**
+ * 옛 메모 레코드 정규화 — F2 이전 레코드에는 `paths`(필기 획)가 없다.
+ *
+ * **읽는 시점에 `null` 로 채운다. DB 버전을 올리지 않고 마이그레이션도 만들지 않는다.**
+ * `paths === null` 이 곧 "옛 텍스트 메모"의 표식이고, 렌더·히트·더블클릭이
+ * 그 표식 하나로 갈린다(`isInkMemo`). 옛 메모는 계속 노란 상자로 보이고 글도 고칠 수 있다 —
+ * 새로 만드는 메모만 손글씨다.
+ */
+export function normalizeMemo(m: Memo): Memo {
+  if (m.paths !== undefined) return m;
+  return { ...m, paths: null };
+}
+
 export function normalizeDrawing(d: Drawing): Drawing {
   if (
     d.imgLayout !== undefined &&

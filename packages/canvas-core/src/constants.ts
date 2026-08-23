@@ -169,6 +169,28 @@ export const MEMO_MAX_LINES = 6;
 export const MEMO_MIN_W_PX = 26;
 export const MEMO_MIN_H_PX = 20;
 
+// ── 필기 메모 (F2) ─────────────────────────────────────────────────────────
+/**
+ * **그리기(결함)와 메모를 눈으로 확실히 가른다** — 사용자 명시 요구 "구분은 확실하게".
+ *
+ * | | 그리기 | 메모 |
+ * |---|---|---|
+ * | 색 | 결함 **상태색**(빨강·보라·회색) | 아래 `MEMO_INK` — 중립 앰버 |
+ * | 선 | 실선, 상태 불투명도 | 실선(글씨는 점선이면 못 읽는다) |
+ * | 테두리 | 없음 | 획 둘레에 **점선 상자** |
+ *
+ * 질감 차이를 "점선 획"이 아니라 "점선 **상자**"로 준 이유: 손글씨를 점선으로 그리면
+ * 글자가 읽히지 않는다(§F2 표는 굵기·투명도·점선 중 **택1**을 허용한다).
+ */
+export const MEMO_INK = '#8a6a12';
+/** 필기 획 굵기 — 이미지 px */
+export const MEMO_INK_WIDTH = 3;
+export const MEMO_INK_ALPHA = 0.95;
+/** 획 둘레 점선 상자의 여백 — 이미지 px */
+export const MEMO_BOX_PAD = 6;
+export const MEMO_BOX_DASH: readonly number[] = [6, 4];
+export const MEMO_BOX_ALPHA = 0.45;
+
 /** 상태별 기본 표기색 (§2-9-c · 디자인시스템 §3 예약색) */
 export const STATUS_COLOR: Record<'CURRENT' | 'PREV_PENDING' | 'REPAIRED', string> = {
   CURRENT: '#e5342a',

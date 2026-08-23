@@ -22,6 +22,10 @@ import {
   HOVER_HALO_COLOR,
   HOVER_MARK_GROW_PX,
   HOVER_STROKE_GROW_PX,
+  MEMO_BOX_ALPHA,
+  MEMO_BOX_DASH,
+  MEMO_INK,
+  MEMO_INK_ALPHA,
   SELECTION_BOX_PAD_PX,
   SELECTION_COLOR,
   SELECTION_RING_PX,
@@ -563,6 +567,35 @@ function arrowOps(
 function memoOps_(m: MemoScreen, selected: boolean, hovered: boolean): DrawOp[] {
   const ops: DrawOp[] = [];
   const b = m.box;
+
+  // ── F2 필기 메모 ────────────────────────────────────────────────────────
+  // 그리기(결함)와 **눈으로 확실히 갈린다**: 중립 앰버 잉크 + 점선 상자.
+  // 결함 상태색(빨강·보라·회색)은 여기 절대 오지 않는다.
+  if (m.paths) {
+    ops.push({
+      k: 'rect',
+      at: { x: b.x, y: b.y },
+      w: b.w,
+      h: b.h,
+      stroke: selected ? SELECTION_COLOR : MEMO_INK,
+      width: selected ? 2 : hovered ? 1.6 : 1,
+      alpha: selected || hovered ? 0.9 : MEMO_BOX_ALPHA,
+      dash: [...MEMO_BOX_DASH],
+    });
+    for (const p of m.paths) {
+      ops.push({
+        k: 'polyline',
+        pts: p.points,
+        color: MEMO_INK,
+        width: p.width,
+        alpha: MEMO_INK_ALPHA,
+        cap: 'round',
+        join: 'round',
+      });
+    }
+    return ops;
+  }
+
   ops.push({
     k: 'rect',
     at: { x: b.x, y: b.y },

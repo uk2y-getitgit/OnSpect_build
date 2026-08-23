@@ -11,6 +11,8 @@ import {
   CREATE_MIN_DRAG_PX,
   LABEL_SOFT_MAX,
   LABEL_SOFT_MIN,
+  MEMO_INK,
+  MEMO_INK_WIDTH,
   SKETCH_MAX_POINTS,
   SKETCH_MIN_STEP_PX,
   ZOOM_WHEEL_STEP,
@@ -29,7 +31,7 @@ import {
 } from './defectGeom.js';
 import type { DefectScreen, PreviewOverride } from './defectGeom.js';
 import { clamp, dist, lockAxis, roundNorm, toNorm, toScreen } from './geometry.js';
-import { memoScreens, type MemoScreen } from './memoGeom.js';
+import { inkAnchor, isInkMemo, memoScreens, type MemoScreen } from './memoGeom.js';
 import {
   clampGeometryInside,
   normalizeRect,
@@ -206,11 +208,14 @@ export function ghostOf(state: CanvasState, ctx: ReduceContext): GhostShape | nu
   const color = st.statusColor.CURRENT;
 
   if (d.kind === 'CREATE_SKETCH' && d.pathPreview && d.pathPreview.length >= 2) {
+    // F2 — 같은 드래그 커널을 쓰지만 **메모는 중립 앰버**로 미리보기한다.
+    // 그리기(결함 상태색)와 그리는 도중에도 구분돼야 한다
+    const memoTool = state.tool === 'MEMO';
     return {
       k: 'SKETCH',
       points: d.pathPreview.map((n) => toScreen(n, vp, iw, ih)),
-      color,
-      width: Math.max(1, st.sketchWidth * vp.zoom),
+      color: memoTool ? MEMO_INK : color,
+      width: Math.max(1, (memoTool ? MEMO_INK_WIDTH : st.sketchWidth) * vp.zoom),
     };
   }
   if (d.kind !== 'CREATE_SHAPE' || !d.geomPreview) return null;
@@ -299,7 +304,8 @@ const TOOL_CURSOR: Partial<Record<Tool, Cursor>> = {
   AREA_RECT: 'crosshair',
   AREA_ELLIPSE: 'crosshair',
   SKETCH: 'crosshair',
-  MEMO: 'text',
+  // F2 — 메모는 이제 손글씨다. 글자 입력 커서(text)가 아니라 그리기 커서
+  MEMO: 'crosshair',
 };
 
 export function computeCursor(state: CanvasState, ctx: ReduceContext): Cursor {
@@ -458,14 +464,24 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
       const screens = screensOf(state, ctx);
       const hit = hitTest(ev.screen, screens, state.selection, memoScreensOf(state, ctx));
       if (!hit) return ok(fitState(state), ctx);
-      // 메모 더블클릭 = 글 고치기 (§S2a-4)
+      // 메모 더블클릭 = 글 고치기 (§S2a-4).
+      // F2 — **필기 메모는 글로 고칠 수 없다.** 옛 텍스트 메모만 편집기를 연다
       if (hit.part === 'MEMO' && hit.memoId) {
-        return ok(
-          { ...state, selection: { ...NO_SELECTION, part: 'MEMO', memoId: hit.memoId } },
-          ctx,
-          [],
-          [{ k: 'EDIT_MEMO', memoId: hit.memoId }],
-        );
+        const picked: CanvasState = {
+          ...state,
+          selection: { ...NO_SELECTION, part: 'MEMO', memoId: hit.memoId },
+        };
+        const m = findMemo(ctx, hit.memoId);
+        if (m && isInkMemo(m)) {
+          return ok(picked, ctx, [], [
+            {
+              k: 'TOAST',
+              kind: 'info',
+              text: '필기 메모입니다. 고치려면 지우고 다시 쓰세요',
+            },
+          ]);
+        }
+        return ok(picked, ctx, [], [{ k: 'EDIT_MEMO', memoId: hit.memoId }]);
       }
       if (!hit.defectId) return ok(state, ctx);
       return ok(
@@ -715,11 +731,15 @@ function onPointerDown(
     if (createType && createType !== 'POINT' && createType !== 'ARROW') {
       return startCreateShape(next0, ev.screen, createType, ev.pointerId, ctx);
     }
-    if (next0.tool === 'SKETCH') return startCreateSketch(next0, ev.screen, ev.pointerId, ctx);
+    // F2 — 메모도 자유그리기와 **같은 드래그 커널**을 탄다 (손글씨 메모).
+    // 커밋 시점(onPointerUp)에 도구를 보고 결함 스케치 / 메모로 갈린다
+    if (next0.tool === 'SKETCH' || next0.tool === 'MEMO') {
+      return startCreateSketch(next0, ev.screen, ev.pointerId, ctx);
+    }
   }
 
   // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점·화살표·메모 도구면 생성)
-  if (!hit) return startPan(next0.tool === 'POINT' || next0.tool === 'ARROW' || next0.tool === 'MEMO');
+  if (!hit) return startPan(next0.tool === 'POINT' || next0.tool === 'ARROW');
 
   // ── 메모 (결함이 아니다) ──────────────────────────────────────────────
   if (hit.part === 'MEMO' && hit.memoId) {
@@ -1255,14 +1275,18 @@ function onPointerUp(
     if (drag.pointToolCandidate && state.drawing) {
       if (state.tool === 'POINT') return createDefectAt(cleared, ev.screen, ctx);
       if (state.tool === 'ARROW') return createArrowAt(cleared, ev.screen, ctx);
-      if (state.tool === 'MEMO') return createMemoAt(cleared, ev.screen, ctx);
     }
     return ok({ ...cleared, selection: { ...NO_SELECTION } }, ctx);
   }
 
   // ── S2a 커밋 ─────────────────────────────────────────────────────────────
   if (drag.kind === 'CREATE_SHAPE') return commitCreateShape(cleared, drag, ctx);
-  if (drag.kind === 'CREATE_SKETCH') return commitCreateSketch(cleared, drag, ctx);
+  if (drag.kind === 'CREATE_SKETCH') {
+    // F2 — 같은 드래그, 다른 결과물. 메모는 결함이 아니다
+    return state.tool === 'MEMO'
+      ? commitCreateMemoInk(cleared, drag, ctx)
+      : commitCreateSketch(cleared, drag, ctx);
+  }
 
   if (drag.kind === 'MOVE_MEMO') {
     const memo = findMemo(ctx, drag.memoId);
@@ -1695,18 +1719,44 @@ function pendingSketchToNewDefect(state: CanvasState, ctx: ReduceContext): Reduc
   );
 }
 
-// ── 메모 생성 (§S2a-2) ─────────────────────────────────────────────────────
-function createMemoAt(state: CanvasState, screen: SPoint, ctx: ReduceContext): ReduceResult {
+// ── 메모 생성 — F2 필기 메모 ───────────────────────────────────────────────
+/**
+ * 손글씨 메모 커밋. 사용자 요구: *"메모→자유그리기처럼 동작(필기메모)"*.
+ *
+ * 그리기(결함 스케치)와 **같은 드래그 커널**을 쓰지만 결과물이 다르다:
+ *   · 결함에 붙지 않는다 — 별도 `memos` 스토어의 독립 레코드다
+ *   · 결함 상태색을 쓰지 않는다 — 중립 앰버(`MEMO_INK`) + 점선 상자
+ *   · 번호·리더선이 붙지 않고 결함 리스트에도 나오지 않는다
+ *
+ * 한 획 = 메모 하나다. 여러 획으로 이어 쓰고 싶으면 메모를 여러 개 만든다
+ * (결함 스케치의 "사후연결 대기"처럼 묶는 개념은 메모에 없다 — 붙일 대상이 없기 때문).
+ */
+function commitCreateMemoInk(
+  state: CanvasState,
+  drag: DragState,
+  ctx: ReduceContext,
+): ReduceResult {
+  const pts = drag.pathPreview ?? [];
+  if (pts.length < 2) {
+    return ok(state, ctx, [], [{ k: 'TOAST', kind: 'warn', text: '끌어서 메모를 써 주세요' }]);
+  }
   if (!state.drawing) return ok(state, ctx);
-  const n = toNorm(screen, state.viewport, state.drawing.imageWidth, state.drawing.imageHeight);
+
+  const path: SketchPath = {
+    id: ctx.makeId(),
+    points: pts.map(roundNorm),
+    width: MEMO_INK_WIDTH,
+  };
   const now = (ctx.now ?? (() => 0))();
   const memo: Memo = {
     id: ctx.makeId(),
     projectId: ctx.projectId ?? '',
     drawingId: state.drawing.id,
     floorId: ctx.floorId ?? '',
-    pos: roundNorm(softClampLabel(n)),
+    // 앵커는 획 묶음의 좌상단. MOVE_MEMO 가 pos 와 획을 같은 델타로 옮긴다
+    pos: roundNorm(inkAnchor([path])),
     text: '',
+    paths: [path],
     style: null,
     createdAt: now,
     updatedAt: now,
@@ -1717,8 +1767,7 @@ function createMemoAt(state: CanvasState, screen: SPoint, ctx: ReduceContext): R
     { ...state, selection: { ...NO_SELECTION, part: 'MEMO', memoId: memo.id } },
     ctx,
     [{ k: 'CREATE_MEMO', memo }],
-    // 빈 메모는 아무 뜻이 없다. 만들자마자 바로 쓰게 한다
-    [{ k: 'EDIT_MEMO', memoId: memo.id }],
+    [{ k: 'TOAST', kind: 'info', text: '메모를 추가했습니다', undoable: true }],
   );
 }
 

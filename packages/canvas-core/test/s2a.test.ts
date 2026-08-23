@@ -19,12 +19,12 @@ import {
   type Doc,
 } from '../src/commands.js';
 import { NO_KEYS, reduce, type ReduceContext } from '../src/interaction.js';
-import { buildScreens } from '../src/renderModel.js';
+import { buildOverlay, buildScreens } from '../src/renderModel.js';
 import { hitTest } from '../src/hitTest.js';
 import { memoScreens, wrapMemoText } from '../src/memoGeom.js';
 import { hatchRect, normalizeRect, squareTo } from '../src/shapes.js';
 import { initialCanvasState } from '../src/interaction.js';
-import { STATUS_COLOR, MEMO_BG, MEMO_BORDER, MEMO_TEXT } from '../src/constants.js';
+import { STATUS_COLOR, MEMO_BG, MEMO_BORDER, MEMO_INK, MEMO_TEXT } from '../src/constants.js';
 import type { CanvasState, Defect, InputEvent, Memo, SPoint } from '../src/types.js';
 import { defect, GS } from './helpers.js';
 
@@ -397,17 +397,84 @@ describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () 
 
 // ── 메모 ────────────────────────────────────────────────────────────────────
 describe('S2a-1 · 메모는 결함이 아니다', () => {
-  it('클릭하면 메모가 만들어지고 곧바로 편집기를 요청한다', () => {
+  /**
+   * F2 — 메모는 이제 **손글씨**다. 예전에는 클릭 한 번 → 빈 텍스트 상자 + 편집기였다.
+   * 지금은 자유그리기처럼 끌어서 쓴다. 편집기는 **옛 텍스트 메모에만** 뜬다.
+   */
+  it('끌어서 쓰면 필기 메모가 만들어진다 (편집기를 열지 않는다)', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('MEMO'), ctx, drag({ x: 200, y: 200 }, { x: 320, y: 260 }));
+    const c = r.commands.find((x) => x.k === 'CREATE_MEMO');
+    expect(c?.k).toBe('CREATE_MEMO');
+    if (c?.k !== 'CREATE_MEMO') return;
+    expect(c.memo.paths?.length).toBe(1);
+    expect(c.memo.text).toBe('');
+    expect(r.effects.some((e) => e.k === 'EDIT_MEMO')).toBe(false);
+    // 결함 커맨드는 하나도 나오지 않는다
+    expect(r.commands.some((x) => x.k === 'CREATE_DEFECT')).toBe(false);
+    // 대기(사후연결)는 결함 그리기 전용이다 — 메모는 붙일 대상이 없다
+    expect(r.state.pendingSketch).toBeNull();
+  });
+
+  it('클릭만 하면(끌지 않으면) 메모가 만들어지지 않는다', () => {
     const ctx = ctxOf();
     const r = run(baseState('MEMO'), ctx, [
       { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 200, y: 200 }, button: 0, keys: NO_KEYS },
       { k: 'POINTER_UP', pointerId: 1, screen: { x: 200, y: 200 }, keys: NO_KEYS },
     ]);
+    expect(r.commands).toHaveLength(0);
+  });
+
+  it('필기 메모는 결함 상태색을 절대 쓰지 않는다 (중립 앰버 + 점선 상자)', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('MEMO'), ctx, drag({ x: 200, y: 200 }, { x: 320, y: 260 }));
     const c = r.commands.find((x) => x.k === 'CREATE_MEMO');
-    expect(c?.k).toBe('CREATE_MEMO');
-    expect(r.effects.some((e) => e.k === 'EDIT_MEMO')).toBe(true);
-    // 결함 커맨드는 하나도 나오지 않는다
-    expect(r.commands.some((x) => x.k === 'CREATE_DEFECT')).toBe(false);
+    if (c?.k !== 'CREATE_MEMO') throw new Error('CREATE_MEMO');
+    const screens = memoScreens([c.memo], VP, DRAWING.imageWidth, DRAWING.imageHeight, null);
+    const ops = memoRenderOps(screens);
+    const json = JSON.stringify(ops).toLowerCase();
+    for (const reserved of Object.values(STATUS_COLOR)) {
+      expect(json).not.toContain(reserved.toLowerCase());
+    }
+    expect(json).toContain(MEMO_INK.toLowerCase());
+  });
+
+  it('필기 메모를 옮기면 획도 같은 델타만큼 함께 움직인다', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('MEMO'), ctx, drag({ x: 200, y: 200 }, { x: 320, y: 260 }));
+    const c = r.commands.find((x) => x.k === 'CREATE_MEMO');
+    if (c?.k !== 'CREATE_MEMO') throw new Error('CREATE_MEMO');
+    const memo = c.memo;
+    const from = memo.pos;
+    const to = { x: from.x + 0.1, y: from.y + 0.05 };
+    const moved = applyToDoc({ defects: [], memos: [memo] }, {
+      k: 'MOVE_MEMO',
+      memoId: memo.id,
+      from,
+      to,
+    }).memos[0]!;
+    expect(moved.pos).toEqual(to);
+    const a = memo.paths![0]!.points[0]!;
+    const b = moved.paths![0]!.points[0]!;
+    expect(b.x - a.x).toBeCloseTo(0.1, 6);
+    expect(b.y - a.y).toBeCloseTo(0.05, 6);
+    // 되돌리면 원위치
+    const back = applyToDoc({ defects: [], memos: [moved] }, invertCommand({
+      k: 'MOVE_MEMO',
+      memoId: memo.id,
+      from,
+      to,
+    })).memos[0]!;
+    expect(back.paths![0]!.points[0]!.x).toBeCloseTo(a.x, 6);
+  });
+
+  it('옛 텍스트 메모(paths=null)는 그대로 노란 상자로 그려진다', () => {
+    const legacy = makeMemo('m-old', { x: 0.2, y: 0.2 }, '누수 확인');
+    const screens = memoScreens([legacy], VP, DRAWING.imageWidth, DRAWING.imageHeight, null);
+    expect(screens[0]!.paths).toBeNull();
+    expect(screens[0]!.lines.length).toBeGreaterThan(0);
+    const json = JSON.stringify(memoRenderOps(screens)).toLowerCase();
+    expect(json).toContain(MEMO_BG.toLowerCase());
   });
 
   it('메모 커맨드는 결함 컬렉션을 건드리지 않는다', () => {
@@ -690,6 +757,28 @@ describe('shapes — 순수 기하', () => {
 });
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+/** 메모 레이어의 DrawOp 만 뽑는다 (결함이 없으므로 오버레이 = 메모 ops) */
+function memoRenderOps(ms: ReturnType<typeof memoScreens>) {
+  return buildOverlay(
+    {
+      drawing: DRAWING,
+      viewport: VP,
+      canvas: CANVAS,
+      defects: [],
+      displayNumbers: {},
+      globalStyle: GS,
+      selection: { defectId: null, part: null, markId: null },
+      hover: null,
+      guides: [],
+      preview: null,
+      dragDefectId: null,
+      memos: ms,
+    },
+    [],
+  );
+}
+
+/** 옛 **텍스트** 메모 (F2 이전 레코드). `paths: null` 이 그 표식이다 */
 function makeMemo(id: string, pos: { x: number; y: number }, text: string): Memo {
   return {
     id,
@@ -698,6 +787,7 @@ function makeMemo(id: string, pos: { x: number; y: number }, text: string): Memo
     floorId: 'f1',
     pos,
     text,
+    paths: null,
     style: null,
     createdAt: 1,
     updatedAt: 1,
