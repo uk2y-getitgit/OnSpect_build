@@ -10,6 +10,7 @@
  * RN 전환 시 그대로 재사용한다. 저장소 구현만 갈아끼운다.
  */
 export * from './types.js';
+export * from './a4.js';
 export * from './displayName.js';
 export * from './floorOrder.js';
 export * from './fileNameParse.js';

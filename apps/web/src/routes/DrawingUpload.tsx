@@ -342,6 +342,7 @@ export function DrawingUpload({ projectId, floorId }: { projectId: string; floor
             renderBlobKey: renderKey,
             sourceBlobKey: sameBlob ? renderKey : newBlobKey(),
             thumbBlobKey: newBlobKey(),
+            imgLayout: c.imgLayout,
           },
           now,
         ),

@@ -280,7 +280,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
   // ── 도면 ────────────────────────────────────────────────────────────────
   async listDrawings(projectId: string): Promise<Drawing[]> {
     const tx = this.db.transaction(STORE.drawings, 'readonly');
-    return getAllByIndex<Drawing>(tx.objectStore(STORE.drawings), 'by_project', projectId);
+    const rows = await getAllByIndex<Drawing>(tx.objectStore(STORE.drawings), 'by_project', projectId);
+    return rows.map(normalizeDrawing);
   }
 
   async putDrawing(d: Drawing): Promise<void> {
@@ -543,4 +544,13 @@ function uniqueKeys(d: Drawing): string[] {
  */
 export function normalizeDefect(d: Defect): Defect {
   return normalizeDefectAttrs(d);
+}
+
+/**
+ * 옛 도면 레코드 정규화 — F1 이전 레코드에는 `imgLayout` 이 없다.
+ * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (같은 방식: normalizeDefect 참조).
+ */
+export function normalizeDrawing(d: Drawing): Drawing {
+  if (d.imgLayout !== undefined) return d;
+  return { ...d, imgLayout: null };
 }

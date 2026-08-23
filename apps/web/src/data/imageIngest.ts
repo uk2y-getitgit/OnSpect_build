@@ -9,7 +9,14 @@
  * 이미지 1파일 = 후보 1개, PDF 1파일 = 후보 N개일 뿐이고 **뒤쪽 화면·모델·저장은 한 벌**이다.
  * 그래서 PDF 지원(T13)은 나중에 모듈 하나를 더하면 끝난다 — 마이그레이션이 없다.
  */
-import { parseDrawingFileName, type FileNameGuess } from '@onspect/project-core';
+import {
+  A4_LANDSCAPE,
+  calcFitRect,
+  fitRectToImgLayout,
+  parseDrawingFileName,
+  type FileNameGuess,
+  type ImgLayout,
+} from '@onspect/project-core';
 
 /** 허용 MIME (§2-8-b) */
 export const ACCEPT_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'] as const;
@@ -19,17 +26,15 @@ export const ACCEPT_ATTR = ACCEPT_MIME.join(',');
 export const MAX_FILE_BYTES = 40 * 1024 * 1024;
 /** 1회 업로드 장수 */
 export const MAX_FILES_PER_UPLOAD = 20;
-/** 래스터 장변 상한 */
-export const MAX_RASTER_EDGE = 4096;
 /** 썸네일 장변 */
 export const THUMB_EDGE = 320;
 /**
- * 확대 배수 상한.
+ * 벡터(SVG) 확대 배수 상한 — 원본 치수가 작을 때 선명도를 확보하려고 키워서 먹인다.
  *
- * **1 = 확대하지 않는다.** 스펙 §2-8-b 는 최대 2배까지 허용하지만 쓰지 않는다:
- *   · 래스터는 없는 디테일을 만들지 못하면서 바이트만 4배가 된다
- *   · 벡터를 키워도 `imageLoader` 가 `imageWidth` 기준으로 다시 래스터화하므로 이득이 없고,
- *     `imageWidth`(정규화 좌표의 분모)만 원본과 달라져 표기 크기의 상대 비율이 바뀐다
+ * F1 이후로는 `imageWidth`(정규화 좌표의 분모)가 항상 `A4_LANDSCAPE.w` 로 고정이라
+ * 예전의 우려("imageWidth 가 원본과 달라져 표기 크기의 상대 비율이 바뀐다")는 더 이상
+ * 해당하지 않는다. 그래도 **1 = 확대하지 않는다**를 유지한다 — 래스터 장변 상한이
+ * A4 캔버스 크기(1754px)로 자연히 대체된 것처럼, 벡터 확대는 이번 범위 밖의 별개 튜닝이다.
  */
 export const MAX_VECTOR_UPSCALE = 1;
 
@@ -40,9 +45,11 @@ export type ReadyCandidate = {
   mime: string;
   /** 원본 파일 크기 */
   byteSize: number;
-  /** 래스터 픽셀 — **정규화 좌표의 분모가 된다** */
+  /** 래스터 픽셀 — **정규화 좌표의 분모가 된다.** F1 이후 항상 A4_LANDSCAPE(1754×1240) */
   imageWidth: number;
   imageHeight: number;
+  /** F1 — A4 캔버스 안에서 원본 그림이 차지하는 사각형 */
+  imgLayout: ImgLayout;
   renderBlob: Blob;
   /** 원본 Blob. D5 ④ — 래스터와 같은 객체일 수 있다 */
   sourceBlob: Blob;
@@ -142,31 +149,41 @@ async function ingestOne(file: File): Promise<PageCandidate> {
 
   try {
     const decoded = await decode(file, mime);
-    const scale = scaleFor(decoded.width, decoded.height, decoded.isVector);
-    const w = Math.max(1, Math.round(decoded.width * scale));
-    const h = Math.max(1, Math.round(decoded.height * scale));
 
-    const renderBlob = await toPngBlob(decoded.source, w, h);
-    const tScale = Math.min(1, THUMB_EDGE / Math.max(w, h));
-    const thumbBlob = await toPngBlob(
-      decoded.source,
-      Math.max(1, Math.round(w * tScale)),
-      Math.max(1, Math.round(h * tScale)),
-    );
+    // F1 — 원본 크기·비율에 상관없이 A4 가로 캔버스에 contain 배치한다 (불변식 #1 과
+    // 충돌하지 않는다 — 오히려 모든 도면이 같은 종횡비가 되어 도움이 된다).
+    // 벡터(SVG)는 원본 치수가 작을 수 있어 §2-8-b 대로 최대 2배까지 키워서 먹인다 —
+    // 그래도 최종 해상도는 A4 캔버스(1754×1240)로 자연히 다시 눌린다.
+    const vecScale = decoded.isVector ? MAX_VECTOR_UPSCALE : 1;
+    const natW = decoded.width * vecScale;
+    const natH = decoded.height * vecScale;
+
+    const fit = calcFitRect(natW, natH, A4_LANDSCAPE.w, A4_LANDSCAPE.h);
+    const imgLayout = fitRectToImgLayout(fit);
+    const renderBlob = await toPngBlob(decoded.source, A4_LANDSCAPE.w, A4_LANDSCAPE.h, fit);
+
+    // 썸네일도 같은 배치 비율로 — 실제 렌더와 다르게 보이면 안 된다
+    const tScale = Math.min(1, THUMB_EDGE / Math.max(A4_LANDSCAPE.w, A4_LANDSCAPE.h));
+    const thumbW = Math.max(1, Math.round(A4_LANDSCAPE.w * tScale));
+    const thumbH = Math.max(1, Math.round(A4_LANDSCAPE.h * tScale));
+    const thumbFit = calcFitRect(natW, natH, thumbW, thumbH);
+    const thumbBlob = await toPngBlob(decoded.source, thumbW, thumbH, thumbFit);
     decoded.release();
 
     return {
       ...base,
       status: 'READY',
       mime,
-      imageWidth: w,
-      imageHeight: h,
+      imageWidth: A4_LANDSCAPE.w,
+      imageHeight: A4_LANDSCAPE.h,
+      imgLayout,
       renderBlob,
       // 원본을 함께 보관한다 (D5 ④) — PDF 지원이 켜졌을 때 다시 렌더해야 하고,
       // Phase 5 서버가 업로드해야 하는 것도 래스터가 아니라 원본이다
       sourceBlob: file,
       thumbBlob,
-      sourceLabel: `${w}×${h} · ${fmtBytes(file.size)}`,
+      // 원본 해상도를 그대로 보여준다 — A4 캔버스 크기는 모든 도면이 똑같아 정보가 없다
+      sourceLabel: `${decoded.width}×${decoded.height} · ${fmtBytes(file.size)}`,
       guess: parseDrawingFileName(file.name),
     };
   } catch (e) {
@@ -261,28 +278,29 @@ function decodeViaImage(file: File, isVector: boolean): Promise<Decoded> {
 }
 
 /**
- * 장변 4096px 상한.
- * **래스터는 확대하지 않는다** — 없는 디테일을 만들지 못하면서 바이트만 4배가 된다.
- * 벡터(SVG)만 최대 2배까지 키워 확대했을 때의 선명도를 확보한다.
+ * 캔버스(canvasW×canvasH) 에 흰 배경을 깔고, `dest` 사각형 자리에 원본을 그린다.
+ * `dest` 를 생략하면 캔버스 전체를 채운다(예전 동작과 동일).
+ *
+ * F1 이후로는 **A4 캔버스 크기가 곧 이 raster 의 최종 해상도**다 — 원본이 아무리 커도
+ * `drawImage` 가 `dest.w`×`dest.h` 로 다시 그리므로, 예전에 `scaleFor`/`MAX_RASTER_EDGE` 가
+ * 하던 "장변 상한" 역할을 A4 캔버스 크기(1754px)가 자연히 대신한다.
  */
-function scaleFor(w: number, h: number, isVector: boolean): number {
-  const long = Math.max(w, h);
-  if (long <= 0) return 1;
-  const cap = MAX_RASTER_EDGE / long;
-  return Math.min(isVector ? MAX_VECTOR_UPSCALE : 1, cap);
-}
-
-async function toPngBlob(source: CanvasImageSource, w: number, h: number): Promise<Blob> {
+async function toPngBlob(
+  source: CanvasImageSource,
+  canvasW: number,
+  canvasH: number,
+  dest: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: canvasW, h: canvasH },
+): Promise<Blob> {
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
+  c.width = canvasW;
+  c.height = canvasH;
   const ctx = c.getContext('2d');
   if (!ctx) throw new Error('캔버스 컨텍스트를 만들 수 없습니다');
   // 도면은 흰 종이다. 투명 배경을 그대로 두면 캔버스에서 배경이 비친다
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, canvasW, canvasH);
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(source, 0, 0, w, h);
+  ctx.drawImage(source, dest.x, dest.y, dest.w, dest.h);
 
   const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('이미지를 저장 형식으로 바꾸지 못했습니다');

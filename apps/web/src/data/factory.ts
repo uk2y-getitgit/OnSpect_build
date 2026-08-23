@@ -12,6 +12,7 @@ import {
   type Drawing,
   type DrawingSource,
   type Floor,
+  type ImgLayout,
   type InspectionHalf,
   type InspectionKind,
   type Project,
@@ -99,6 +100,8 @@ export function makeDrawing(
     renderBlobKey: string;
     sourceBlobKey: string;
     thumbBlobKey: string;
+    /** F1 — A4 정규화된 새 도면만 값을 준다. 없으면(예전 방식) null */
+    imgLayout?: ImgLayout | null;
   },
   now = Date.now(),
 ): Drawing {
@@ -114,6 +117,7 @@ export function makeDrawing(
     sourceBlobKey: args.sourceBlobKey,
     thumbBlobKey: args.thumbBlobKey,
     sortOrder: 0, // S1 은 층당 1장 (Q15 A안)
+    imgLayout: args.imgLayout ?? null,
     ...base(deviceId, now),
   };
 }

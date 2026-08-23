@@ -193,6 +193,7 @@ export async function seedSampleProject(
         renderBlobKey: renderKey,
         sourceBlobKey: newBlobKey(),
         thumbBlobKey: newBlobKey(),
+        imgLayout: cand.imgLayout,
       },
       now,
     );
