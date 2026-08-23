@@ -25,10 +25,12 @@ import {
 } from '@onspect/canvas-core';
 import {
   projectDisplayName,
+  seedAttrs,
   sortByOrder,
   type Building,
   type Drawing,
   type Floor,
+  type ItemSettings,
   type Project,
 } from '@onspect/project-core';
 import { CanvasView } from '../canvas/CanvasView';
@@ -68,6 +70,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
+  /**
+   * 결함정보 폼이 고를 항목 목록 — **이 용역의 설정 스냅샷**이다 (D6).
+   * 전역(ORG) 문서가 아니다. 다른 용역의 설정을 바꿔도 여기 결함은 흔들리지 않는다.
+   */
+  const [settings, setSettings] = useState<ItemSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
@@ -85,20 +92,39 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   useEffect(() => {
     if (storage.phase !== 'READY') return;
     let alive = true;
-    void storage.repo.loadBundle(projectId).then((b) => {
+    void (async () => {
+      const b = await storage.repo.loadBundle(projectId);
       if (!alive) return;
       if (!b) {
         setNotFound(true);
         return;
       }
+      // 지연 스냅샷(§2-4) — S1·S2a 로 만든 옛 용역도 여는 시점에 자기 설정을 갖는다.
+      // 저장소를 못 쓰면(사생활 보호 모드) null 로 두고 캔버스는 계속 돈다 — 폼만 접힌다
+      let s: ItemSettings | null = null;
+      try {
+        s = await storage.repo.ensureProjectSettings(projectId);
+      } catch {
+        s = null;
+      }
+      if (!alive) return;
       setProject(b.project);
       setBuildings(b.buildings);
       setFloors(b.floors);
       setDrawings(b.drawings);
-      dispatch({ t: 'LOAD', projectId, defects: b.defects, memos: b.memos });
+      setSettings(s);
+      dispatch({
+        t: 'LOAD',
+        projectId,
+        defects: b.defects,
+        memos: b.memos,
+        // 새 결함에 얹을 초기값 — 지금은 용역의 기본 구조유형뿐이다.
+        // 부재·결함유형은 현장에서 고르는 값이라 기본값을 두지 않는다
+        defectSeed: s ? seedAttrs(s, b.project) : {},
+      });
       setLoaded(true);
       void guard(() => storage.repo.touchProject(projectId, Date.now()));
-    });
+    })();
     return () => {
       alive = false;
     };
@@ -642,6 +668,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         <Inspector
           ref={inspectorRef}
           defect={selected}
+          settings={settings}
+          saving={state.writes.seq > 0}
+          onAttrsChange={(attrs) =>
+            selected && dispatch({ t: 'SET_DEFECT_ATTRS', defectId: selected.id, attrs })
+          }
           onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
           onDelete={() => send({ k: 'DELETE_SELECTION' })}
         />

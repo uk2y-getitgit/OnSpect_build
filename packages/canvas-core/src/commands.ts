@@ -8,6 +8,7 @@
  */
 import type {
   Defect,
+  DefectAttrs,
   Mark,
   MarkGeometry,
   Memo,
@@ -91,7 +92,26 @@ export type Command =
   | { k: 'CREATE_MEMO'; memo: Memo }
   | { k: 'DELETE_MEMO'; memo: Memo }
   | { k: 'MOVE_MEMO'; memoId: string; from: NPoint; to: NPoint }
-  | { k: 'SET_MEMO_TEXT'; memoId: string; from: string; to: string };
+  | { k: 'SET_MEMO_TEXT'; memoId: string; from: string; to: string }
+  // ── S2b ──────────────────────────────────────────────────────────────────
+  /**
+   * 결함의 **도메인 속성** 교체 (부재·결함유형·규모·원인·보수방안·메모…).
+   * 위치·크기·스타일은 여기 들어오지 않는다 — `DefectAttrs` 에 그런 필드가 없다(함정 #5).
+   */
+  | {
+      k: 'SET_DEFECT_ATTRS';
+      defectId: string;
+      from: DefectAttrs;
+      to: DefectAttrs;
+      /**
+       * Undo 병합 키 = 이번에 바뀐 속성 키들(`changedAttrKeys` 결과)을 이어 붙인 문자열.
+       * 같은 결함의 같은 키 묶음을 `ATTR_MERGE_WINDOW_MS` 안에 다시 고치면 한 단계로 합친다.
+       * 빈 문자열이면 병합하지 않는다.
+       */
+      mergeKey: string;
+      /** 병합 창 판정용 시각(ms). 코어는 시간을 모른다 — 어댑터가 넣어 준다 (경계 규칙 1) */
+      at: number;
+    };
 
 /** 사람이 읽는 커맨드 이름 — 토스트·Undo 안내에 쓴다 */
 export function describeCommand(c: Command): string {
@@ -128,6 +148,8 @@ export function describeCommand(c: Command): string {
       return '메모 이동';
     case 'SET_MEMO_TEXT':
       return '메모 수정';
+    case 'SET_DEFECT_ATTRS':
+      return '결함정보 수정';
     default:
       return '변경';
   }
@@ -218,6 +240,11 @@ export function applyCommand(defects: readonly Defect[], c: Command): Defect[] {
 
     case 'SET_STYLE':
       return replace(defects, c.defectId, (d) => ({ ...d, style: c.to }));
+
+    // ── S2b ────────────────────────────────────────────────────────────────
+    // 속성만 통째로 갈아 끼운다. `seq` 가 그대로이므로 재정렬(sorted)이 필요 없다.
+    case 'SET_DEFECT_ATTRS':
+      return replace(defects, c.defectId, (d) => ({ ...d, ...c.to }));
 
     default:
       return defects as Defect[];
@@ -371,6 +398,8 @@ export function invertCommand(c: Command): Command {
       return { k: 'MOVE_MEMO', memoId: c.memoId, from: c.to, to: c.from };
     case 'SET_MEMO_TEXT':
       return { k: 'SET_MEMO_TEXT', memoId: c.memoId, from: c.to, to: c.from };
+    case 'SET_DEFECT_ATTRS':
+      return { ...c, from: c.to, to: c.from };
     default:
       return c;
   }
@@ -383,7 +412,30 @@ export const EMPTY_HISTORY: History = { undo: [], redo: [] };
 
 export const HISTORY_LIMIT = 200;
 
+/**
+ * 결함 속성 편집의 Undo 병합 창 (S2b · 스펙 §7 "폭 프리셋을 6번 누르면 Ctrl+Z 가 6단계").
+ * 타이핑 한 글자·프리셋 연타가 각각 한 단계로 쌓이면 되돌리기가 쓸모없어진다.
+ */
+export const ATTR_MERGE_WINDOW_MS = 800;
+
+/**
+ * 직전 커맨드와 합칠 수 있으면 합친 커맨드를, 아니면 null 을 돌려준다.
+ * **같은 결함 · 같은 필드 묶음 · 창 안** 세 조건이 전부 맞을 때만 합친다 —
+ * 부재를 바꾼 뒤 폭을 고친 것을 하나로 묶으면 Undo 가 사용자를 속인다.
+ */
+function mergeAttrCommand(prev: Command | undefined, next: Command): Command | null {
+  if (!prev || prev.k !== 'SET_DEFECT_ATTRS' || next.k !== 'SET_DEFECT_ATTRS') return null;
+  if (prev.defectId !== next.defectId) return null;
+  if (prev.mergeKey === '' || prev.mergeKey !== next.mergeKey) return null;
+  const dt = next.at - prev.at;
+  if (dt < 0 || dt > ATTR_MERGE_WINDOW_MS) return null;
+  // 합쳐도 **되돌아갈 지점(from)은 맨 처음 값**이다
+  return { ...next, from: prev.from };
+}
+
 export function pushHistory(h: History, c: Command): History {
+  const merged = mergeAttrCommand(h.undo[h.undo.length - 1], c);
+  if (merged) return { undo: [...h.undo.slice(0, -1), merged], redo: [] };
   const undo = [...h.undo, c];
   if (undo.length > HISTORY_LIMIT) undo.shift();
   return { undo, redo: [] }; // 새 편집이 들어오면 redo 는 버린다

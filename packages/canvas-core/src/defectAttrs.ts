@@ -85,3 +85,32 @@ export function normalizeDefectAttrs(d: Defect): Defect {
     leak: d.leak ?? EMPTY_DEFECT_ATTRS.leak,
   };
 }
+
+/**
+ * `DefectAttrs` 의 키 목록. **`EMPTY_DEFECT_ATTRS` 하나에서 파생**하므로
+ * 필드가 늘어도 이 배열을 손댈 일이 없다.
+ */
+export const DEFECT_ATTR_KEYS = Object.keys(EMPTY_DEFECT_ATTRS) as (keyof DefectAttrs)[];
+
+/**
+ * `Defect` 에서 **도메인 속성만** 떼어 낸다 (S2b).
+ * 폼은 `marks`·`label`·`style` 을 절대 보지 않는다 — 넘기지도 않는다(§4-2 경계).
+ */
+export function attrsOf(d: DefectAttrs): DefectAttrs {
+  const out = {} as Record<string, unknown>;
+  for (const k of DEFECT_ATTR_KEYS) out[k] = d[k];
+  return out as DefectAttrs;
+}
+
+/**
+ * 바뀐 속성 키 목록. 값이 같으면 빈 배열이다 (얕은 비교 — 모든 필드가 원시값이다).
+ *
+ * S2b 는 이 결과를 **Undo 병합 키**로 쓴다. `폭` 프리셋을 여섯 번 누르면
+ * 매번 `['widthMm']` 이 나오므로 한 단계로 묶이고, 부재를 바꾸면 여러 키가 함께
+ * 바뀌어 키 문자열이 달라지므로 앞 조작과 섞이지 않는다.
+ */
+export function changedAttrKeys(from: DefectAttrs, to: DefectAttrs): (keyof DefectAttrs)[] {
+  const out: (keyof DefectAttrs)[] = [];
+  for (const k of DEFECT_ATTR_KEYS) if (from[k] !== to[k]) out.push(k);
+  return out;
+}

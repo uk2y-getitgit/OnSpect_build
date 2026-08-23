@@ -11,7 +11,7 @@
  * `DefectAttrs` 는 타입으로만 쓴다(`import type`) — canvas-core 의 렌더·store·repo 는
  * 전혀 참조하지 않는다.
  */
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import type { DefectAttrs } from '@onspect/canvas-core';
 import {
   causesOf,
@@ -40,6 +40,8 @@ export type DefectInfoFormProps = {
 };
 
 export function DefectInfoForm({ value, settings, onChange, disabled = false }: DefectInfoFormProps) {
+  // 폼이 한 화면에 두 벌 있어도(미리보기 + 우측 패널) label-for 가 어긋나지 않게 한다
+  const uid = useId();
   const members = useMemo(
     () => (value.structureType ? membersOf(settings, value.structureType) : []),
     [settings, value.structureType],
@@ -186,12 +188,12 @@ export function DefectInfoForm({ value, settings, onChange, disabled = false }: 
       {/* 위치보조 */}
       <div className="idf-field">
         <div className="idf-field__head">
-          <label className="idf-field__label" htmlFor="idf-location">
+          <label className="idf-field__label" htmlFor={`${uid}-location`}>
             위치 보조
           </label>
         </div>
         <input
-          id="idf-location"
+          id={`${uid}-location`}
           className="input input--small"
           type="text"
           placeholder="거실 · 복도 · 계단실"
@@ -206,12 +208,12 @@ export function DefectInfoForm({ value, settings, onChange, disabled = false }: 
       {/* 메모 */}
       <div className="idf-field">
         <div className="idf-field__head">
-          <label className="idf-field__label" htmlFor="idf-memo">
+          <label className="idf-field__label" htmlFor={`${uid}-memo`}>
             메모
           </label>
         </div>
         <textarea
-          id="idf-memo"
+          id={`${uid}-memo`}
           className="input idf-memo"
           rows={2}
           value={value.memo ?? ''}

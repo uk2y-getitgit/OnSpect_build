@@ -11,13 +11,16 @@
  */
 import {
   applyToDoc,
+  attrsOf,
   canRedo,
+  changedAttrKeys,
   canUndo,
   DEFAULT_GLOBAL_STYLE,
   defectTargetOf,
   describeCommand,
   EMPTY_HISTORY,
   initialCanvasState,
+  isLocked,
   memoTargetOf,
   pushHistory,
   redo as redoStack,
@@ -26,6 +29,7 @@ import {
   type CanvasState,
   type Command,
   type Defect,
+  type DefectAttrs,
   type Doc,
   type DrawingRef,
   type Effect,
@@ -78,6 +82,11 @@ export type AppState = {
   focusTick: number;
   /** 텍스트 편집기를 열어야 할 메모. `EDIT_MEMO` 이펙트가 채운다 */
   editingMemoId: string | null;
+  /**
+   * 새 결함에 얹을 속성 초기값 (S2b) — 이 용역의 **설정 스냅샷**에서 온다(D6).
+   * `project-core` 의 `seedAttrs()` 결과를 라우트가 `LOAD` 로 넣어 준다.
+   */
+  defectSeed: Partial<DefectAttrs>;
   idSeed: number;
   toastSeed: number;
 };
@@ -85,7 +94,19 @@ export type AppState = {
 export type Action =
   | { t: 'INPUT'; ev: InputEvent }
   | { t: 'SET_FLOOR'; floorId: string; drawing: DrawingRef | null }
-  | { t: 'LOAD'; projectId: string; defects: Defect[]; memos: Memo[] }
+  | {
+      t: 'LOAD';
+      projectId: string;
+      defects: Defect[];
+      memos: Memo[];
+      defectSeed?: Partial<DefectAttrs>;
+    }
+  /**
+   * 결함 속성 편집 (S2b). 폼은 **다음 값 전체**를 올린다 — 연동 규칙(§3-6)이 한 필드
+   * 변경으로 3~4 필드를 함께 바꾸기 때문이다. 여기서 `SET_DEFECT_ATTRS` 커맨드로 바꿔
+   * 마커 이동과 **같은 Undo 스택**에 쌓고, 같은 저장 대기열로 흘려보낸다.
+   */
+  | { t: 'SET_DEFECT_ATTRS'; defectId: string; attrs: DefectAttrs }
   | { t: 'FLUSHED'; seq: number }
   | { t: 'UNDO' }
   | { t: 'REDO' }
@@ -115,6 +136,7 @@ export function initialAppState(init: {
     reveal: null,
     focusTick: 0,
     editingMemoId: null,
+    defectSeed: {},
     idSeed: 1,
     toastSeed: 1,
   };
@@ -153,9 +175,13 @@ export function appReducer(state: AppState, action: Action): AppState {
         projectId: action.projectId,
         defects: action.defects,
         memos: action.memos,
+        defectSeed: action.defectSeed ?? {},
         history: EMPTY_HISTORY,
         writes: NO_WRITES,
       };
+
+    case 'SET_DEFECT_ATTRS':
+      return setDefectAttrs(state, action.defectId, action.attrs);
 
     case 'EDIT_MEMO':
       return { ...state, editingMemoId: action.memoId };
@@ -307,6 +333,7 @@ function runInput(state: AppState, ev: InputEvent): AppState {
     now: () => Date.now(),
     floorId: state.floorId,
     projectId: state.projectId,
+    defectSeed: state.defectSeed,
   };
 
   const r = reduce(state.canvas, ev, ctx);
@@ -320,6 +347,32 @@ function runInput(state: AppState, ev: InputEvent): AppState {
   for (const e of r.effects) next = runEffect(next, e);
 
   return next;
+}
+
+/**
+ * 결함 속성 변경을 커맨드로 바꿔 문서·Undo·저장 대기열에 한 번에 태운다.
+ *
+ * · **바뀐 게 없으면 아무 일도 하지 않는다** — 폼이 같은 값을 다시 올려도 이력이 쌓이지 않는다
+ * · **잠긴 결함(전회차)은 거부한다** — 폼도 `disabled` 지만 마지막 관문을 여기 둔다
+ * · 병합 키는 바뀐 필드 묶음이다. 같은 필드를 800ms 안에 또 고치면 Undo 한 단계로 합쳐진다
+ *   (`pushHistory` 안의 `mergeAttrCommand`)
+ */
+function setDefectAttrs(state: AppState, defectId: string, next: DefectAttrs): AppState {
+  const d = state.defects.find((x) => x.id === defectId);
+  if (!d || isLocked(d)) return state;
+  const from = attrsOf(d);
+  const to = attrsOf(next);
+  const changed = changedAttrKeys(from, to);
+  if (changed.length === 0) return state;
+  return applyAndPush(state, {
+    k: 'SET_DEFECT_ATTRS',
+    defectId,
+    from,
+    to,
+    mergeKey: changed.join('|'),
+    // 코어는 시간을 모른다. 어댑터가 넣어 준다 (경계 규칙 1)
+    at: Date.now(),
+  });
 }
 
 function applyAndPush(state: AppState, c: Command): AppState {

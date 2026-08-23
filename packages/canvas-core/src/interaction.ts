@@ -53,6 +53,7 @@ import type {
   CanvasState,
   Cursor,
   Defect,
+  DefectAttrs,
   DragState,
   Effect,
   GlobalStyle,
@@ -91,6 +92,12 @@ export type ReduceContext = {
   floorId?: string;
   /** 새 결함이 속할 용역. 캔버스는 해석하지 않는 불투명 문자열이다 */
   projectId?: string;
+  /**
+   * 새 결함에 얹을 속성 초기값 (S2b). 예: 용역의 기본 구조유형.
+   * **캔버스는 이 값을 해석하지 않는다** — 받아서 펼치기만 한다.
+   * 무엇을 넣을지는 `project-core` 의 `seedAttrs()` 가 정한다.
+   */
+  defectSeed?: Partial<DefectAttrs>;
 };
 
 export type ReduceResult = {
@@ -1432,6 +1439,7 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
     ...EMPTY_DEFECT_ATTRS,
+    ...(ctx.defectSeed ?? {}),
   };
 
   return ok(
@@ -1489,6 +1497,7 @@ function createArrowAt(state: CanvasState, screen: SPoint, ctx: ReduceContext): 
     style: null,
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     ...EMPTY_DEFECT_ATTRS,
+    ...(ctx.defectSeed ?? {}),
   };
 
   return ok(
@@ -1556,6 +1565,7 @@ function commitCreateShape(
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
     ...EMPTY_DEFECT_ATTRS,
+    ...(ctx.defectSeed ?? {}),
   };
 
   return ok(
@@ -1702,6 +1712,7 @@ function pendingSketchToNewDefect(state: CanvasState, ctx: ReduceContext): Reduc
     sketch: pending.paths,
     style: null,
     ...EMPTY_DEFECT_ATTRS,
+    ...(ctx.defectSeed ?? {}),
   };
 
   return ok(

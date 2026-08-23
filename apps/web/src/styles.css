@@ -64,7 +64,8 @@
 
   --topbar-h: 48px;
   --sidebar-w: 268px;
-  --inspector-w: 300px;
+  /* S2b — 결함정보 입력 폼이 이 패널 안에서 돈다. 버튼 그리드가 2열은 나와야 한다 */
+  --inspector-w: 320px;
 
   /*
    * 콘텐츠 컨테이너 폭 (스펙 R-2-1).
@@ -141,14 +142,14 @@ kbd {
 @media (max-width: 1200px) {
   :root {
     --sidebar-w: 232px;
-    --inspector-w: 268px;
+    --inspector-w: 296px;
   }
 }
 
 @media (max-width: 980px) {
   :root {
     --sidebar-w: 204px;
-    --inspector-w: 240px;
+    --inspector-w: 268px;
     --font-body: 12.5px;
   }
   .topbar__project {
@@ -1135,6 +1136,14 @@ kbd {
   color: var(--text-muted);
 }
 
+/* 폼이 들어가는 자리. 액션 버튼은 항상 아래에 붙어 있고 폼만 늘어난다 */
+.inspector__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
 .inspector__actions {
   display: flex;
   flex-direction: column;
@@ -1143,6 +1152,29 @@ kbd {
   padding-top: 10px;
   border-top: 1px solid var(--border-2);
 }
+
+/* 저장 표시 — 로컬 우선이라 "저장 중"은 아주 짧게 스쳐 간다. 요란하면 안 된다 */
+.inspector__save {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
+
+.inspector__save::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.inspector__save[data-state='PENDING'] { color: var(--text-muted); }
+.inspector__save[data-state='PENDING']::before { background: var(--text-dim); }
 
 .inspector__actions .btn {
   width: 100%;
@@ -2927,6 +2959,16 @@ select.input { cursor: pointer; }
 
 /* ── 메모 ─────────────────────────────────────────────────────────────── */
 .idf-memo { resize: vertical; word-break: keep-all; overflow-wrap: break-word; }
+
+/* ── 우측 패널 안의 폼 (S2b) — 좁은 폭 대응 ───────────────────────────── */
+/* 미리보기 탭 기준인 max-width:420px 를 풀고, 버튼 그리드를 패널 폭에 맞춰 좁힌다 */
+.inspector .idf { max-width: none; gap: 12px; }
+.inspector .idf-grid { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.inspector .idf-presetgrid { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); }
+.inspector .idf-size__body { padding: 8px; gap: 10px; }
+.inspector .idf-rect { padding: 8px; }
+/* 값이 길면(예: `마감박리/박락`) 라벨 아래로 떨어뜨린다 — 잘라내지 않는다 */
+.inspector .idf-field__value { flex: 1 1 auto; min-width: 0; }
 
 /* ── 입력 미리보기 탭 (S4-T7) ─────────────────────────────────────────── */
 .idf-preview { display: flex; flex-direction: column; gap: 12px; }
