@@ -80,7 +80,10 @@ export function CanvasView({
       setLoad({ phase: 'idle' });
       return;
     }
-    const hit = cachedDrawing(drawing.id);
+    // F5-3 — 같은 도면이라도 배율이 다르면 다른 합성 이미지다.
+    // URL 을 캐시 키에 섞어 배율이 바뀌면 옛 래스터를 다시 쓰지 않게 한다
+    const cacheKey = `${drawing.id}|${drawingUrl}`;
+    const hit = cachedDrawing(cacheKey);
     if (hit) {
       setImage(hit);
       setLoad({ phase: 'ready' });
@@ -89,7 +92,7 @@ export function CanvasView({
     let alive = true;
     setImage(null);
     setLoad({ phase: 'loading' });
-    loadDrawing(drawing.id, drawingUrl, drawing.imageWidth, drawing.imageHeight)
+    loadDrawing(cacheKey, drawingUrl, drawing.imageWidth, drawing.imageHeight)
       .then((d) => {
         if (!alive) return;
         setImage(d);

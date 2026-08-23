@@ -2989,3 +2989,35 @@ select.input { cursor: pointer; }
     animation: none !important;
   }
 }
+
+/* ── F5-3 도면 크기 조절 ───────────────────────────────────────────────── */
+.dscale { display: flex; flex-direction: column; gap: 12px; }
+.dscale__row { display: flex; align-items: center; gap: 12px; }
+.dscale__range { flex: 1; min-width: 0; accent-color: var(--accent); }
+.dscale__value {
+  min-width: 56px;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dscale__presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.dscale__preset--on {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.dscale__note { margin: 0; font-size: 12px; color: var(--text-muted); word-break: keep-all; }
+.dscale__warn {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: keep-all;
+}

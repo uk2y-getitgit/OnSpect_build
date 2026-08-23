@@ -585,6 +585,6 @@ export function normalizeDefect(d: Defect): Defect {
  * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (같은 방식: normalizeDefect 참조).
  */
 export function normalizeDrawing(d: Drawing): Drawing {
-  if (d.imgLayout !== undefined) return d;
-  return { ...d, imgLayout: null };
+  if (d.imgLayout !== undefined && d.imgScale !== undefined) return d;
+  return { ...d, imgLayout: d.imgLayout ?? null, imgScale: d.imgScale ?? null };
 }

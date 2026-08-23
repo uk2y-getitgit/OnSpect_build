@@ -18,6 +18,24 @@ export const A4_LANDSCAPE = { w: 1754, h: 1240 } as const;
 
 export type FitRect = { x: number; y: number; w: number; h: number };
 
+// ── F5-3 도면 크기 조절 ────────────────────────────────────────────────────
+/**
+ * 도면 그림이 A4 지면 안에서 차지하는 배율. Numdraw 실측값 그대로.
+ *
+ * ⚠️ **넘버링 좌표는 절대 함께 옮기지 않는다** (F5-3 원문). Numdraw 는 배율이 바뀌면
+ * 넘버링 좌표를 같은 비율로 이동시켰지만, 우리 좌표는 0~1 정규화(불변식 #1)라
+ * 그 코드를 이식하면 **두 번 변환되어 어긋난다.**
+ */
+export const MIN_SCALE = 0.3;
+export const MAX_SCALE = 2.5;
+export const DEFAULT_SCALE = 1;
+
+/** 범위 밖·NaN·null 을 전부 안전한 숫자로 만든다 (Numdraw `clampScale` 이식) */
+export function clampScale(v: unknown): number {
+  const n = Number(v) || DEFAULT_SCALE;
+  return Math.max(MIN_SCALE, Math.min(MAX_SCALE, n));
+}
+
 /** 도면 영역 — A4 캔버스 안에서 실제 도면 그림이 차지하는 사각형 (F5-4) */
 export type ImgLayout = { offX: number; offY: number; dW: number; dH: number };
 
@@ -26,12 +44,16 @@ export type ImgLayout = { offX: number; offY: number; dW: number; dH: number };
  *   · 상하좌우 10mm 여백
  *   · 하단 20mm 도곽(F5-1 TitleBlock) 예약
  *   · 남는 영역 안에서 비율을 유지하며 최대로 키운다(contain), 중앙 배치
+ *
+ * `scale`(F5-3)은 그 contain 결과에 곱하는 **도면 크기 조절** 값이다. 1 이 기본이고,
+ * 1 을 넘으면 A4 지면 밖으로 넘쳐 잘릴 수 있다(Numdraw 와 같은 동작). 중앙 배치는 유지된다.
  */
 export function calcFitRect(
   natW: number,
   natH: number,
   a4w: number = A4_LANDSCAPE.w,
   a4h: number = A4_LANDSCAPE.h,
+  scale: number = DEFAULT_SCALE,
 ): FitRect {
   // 가로면 297mm 기준으로 px/mm 를 구한다(landscape 고정이므로 항상 297:210)
   const pxMm = a4w / 297;
@@ -42,7 +64,7 @@ export function calcFitRect(
 
   const safeW = Math.max(1, natW);
   const safeH = Math.max(1, natH);
-  const scl = Math.min(avW / safeW, avH / safeH);
+  const scl = Math.min(avW / safeW, avH / safeH) * clampScale(scale);
 
   const w = Math.max(1, Math.round(safeW * scl));
   const h = Math.max(1, Math.round(safeH * scl));

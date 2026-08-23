@@ -215,7 +215,7 @@ type Decoded = {
   release: () => void;
 };
 
-async function decode(file: File, mime: string): Promise<Decoded> {
+async function decode(file: Blob, mime: string): Promise<Decoded> {
   if (mime === 'image/svg+xml') return decodeSvg(file);
 
   // ⚠️ EXIF orientation 을 **래스터화 시 적용**한다.
@@ -238,7 +238,7 @@ async function decode(file: File, mime: string): Promise<Decoded> {
 }
 
 /** SVG 는 `viewBox` / `width`·`height` 에서 원본 치수를 얻는다 (§2-8-b) */
-async function decodeSvg(file: File): Promise<Decoded> {
+async function decodeSvg(file: Blob): Promise<Decoded> {
   const text = await file.text();
   const dims = svgDimensions(text);
   const d = await decodeViaImage(file, true);
@@ -255,7 +255,7 @@ function svgDimensions(text: string): { w: number; h: number } {
   return { w: 0, h: 0 };
 }
 
-function decodeViaImage(file: File, isVector: boolean): Promise<Decoded> {
+function decodeViaImage(file: Blob, isVector: boolean): Promise<Decoded> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -312,4 +312,43 @@ export function estimatedBytes(c: PageCandidate): number {
   if (c.status !== 'READY') return 0;
   const sameSource = c.sourceBlob === c.renderBlob;
   return c.renderBlob.size + c.thumbBlob.size + (sameSource ? 0 : c.sourceBlob.size);
+}
+
+// ── F5-3 도면 크기 조절 — 재합성 ────────────────────────────────────────────
+/**
+ * 이미 저장된 **원본 Blob** 을 다시 A4 가로 캔버스에 합성한다. `scale` 은 도면 그림이
+ * 지면 안에서 차지하는 배율(F5-3, `clampScale` 범위).
+ *
+ * ⚠️ 결과 Blob 을 저장소에 다시 쓰지 않는다 — 호출자(`canvas/drawingComposite.ts`)의
+ * **런타임 캐시**에만 둔다(F5-3 "합성 결과는 페이지 객체가 아니라 별도 캐시").
+ * 저장되는 것은 `Drawing.imgScale`(숫자 하나)과 `imgLayout` 뿐이다.
+ */
+export async function composeA4(
+  source: Blob,
+  scale = 1,
+): Promise<{ renderBlob: Blob; imgLayout: ImgLayout }> {
+  const mime = source.type || 'image/png';
+  const decoded = await decode(source, mime);
+  try {
+    const vecScale = decoded.isVector ? MAX_VECTOR_UPSCALE : 1;
+    const natW = decoded.width * vecScale;
+    const natH = decoded.height * vecScale;
+    const fit = calcFitRect(natW, natH, A4_LANDSCAPE.w, A4_LANDSCAPE.h, scale);
+    const renderBlob = await toPngBlob(decoded.source, A4_LANDSCAPE.w, A4_LANDSCAPE.h, fit);
+    return { renderBlob, imgLayout: fitRectToImgLayout(fit) };
+  } finally {
+    decoded.release();
+  }
+}
+
+/**
+ * 배율만 바꿨을 때의 새 도면 영역(`imgLayout`) — **이미지를 디코드하지 않고** 계산한다.
+ * 옛 배치의 종횡비를 그대로 되살려 쓰므로 원본 Blob 이 필요 없다.
+ * 옛 레코드(`imgLayout === null`)에는 쓸 수 없다 — 그때는 `composeA4` 를 쓴다.
+ */
+export function scaledImgLayout(base: ImgLayout, fromScale: number, toScale: number): ImgLayout {
+  const unitW = base.dW / Math.max(1e-6, fromScale);
+  const unitH = base.dH / Math.max(1e-6, fromScale);
+  const fit = calcFitRect(unitW, unitH, A4_LANDSCAPE.w, A4_LANDSCAPE.h, toScale);
+  return fitRectToImgLayout(fit);
 }

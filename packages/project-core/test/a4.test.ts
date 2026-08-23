@@ -2,7 +2,14 @@
  * F1 — A4 가로 정규화. Numdraw 실측 방식 이식 (`_workspace/12_수정사항_S3중간.md` §F1).
  */
 import { describe, expect, it } from 'vitest';
-import { A4_LANDSCAPE, calcFitRect, fitRectToImgLayout } from '../src/index.js';
+import {
+  A4_LANDSCAPE,
+  calcFitRect,
+  clampScale,
+  fitRectToImgLayout,
+  MAX_SCALE,
+  MIN_SCALE,
+} from '../src/index.js';
 
 describe('A4_LANDSCAPE — 실측 고정값', () => {
   it('1754×1240 (150 DPI, 297×210mm)', () => {
@@ -72,5 +79,58 @@ describe('fitRectToImgLayout', () => {
   it('x,y,w,h 를 offX,offY,dW,dH 로 그대로 옮긴다', () => {
     const r = calcFitRect(1000, 1000);
     expect(fitRectToImgLayout(r)).toEqual({ offX: r.x, offY: r.y, dW: r.w, dH: r.h });
+  });
+});
+
+// ── F5-3 도면 크기 조절 ────────────────────────────────────────────────────
+describe('clampScale — Numdraw 실측 상수', () => {
+  it('범위는 0.3 ~ 2.5 다', () => {
+    expect(MIN_SCALE).toBe(0.3);
+    expect(MAX_SCALE).toBe(2.5);
+  });
+
+  it('범위 밖은 잘라낸다', () => {
+    expect(clampScale(0.1)).toBe(0.3);
+    expect(clampScale(9)).toBe(2.5);
+    expect(clampScale(1.25)).toBe(1.25);
+  });
+
+  it('숫자가 아니거나 0 이면 1 로 본다', () => {
+    expect(clampScale(null)).toBe(1);
+    expect(clampScale(undefined)).toBe(1);
+    expect(clampScale('abc')).toBe(1);
+    expect(clampScale(0)).toBe(1);
+    expect(clampScale(NaN)).toBe(1);
+  });
+});
+
+describe('calcFitRect(scale) — 배치만 바뀌고 좌표계는 그대로다', () => {
+  it('배율 1 은 기본 배치와 완전히 같다', () => {
+    expect(calcFitRect(1000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, 1)).toEqual(
+      calcFitRect(1000, 800),
+    );
+  });
+
+  it('배율만큼 크기가 커지고 중앙 배치가 유지된다', () => {
+    const base = calcFitRect(1000, 800);
+    const big = calcFitRect(1000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, 2);
+    expect(big.w).toBeGreaterThan(base.w);
+    expect(big.h).toBeGreaterThan(base.h);
+    // 중심이 유지된다 (반올림 오차 1px 허용)
+    expect(Math.abs(base.x + base.w / 2 - (big.x + big.w / 2))).toBeLessThanOrEqual(1);
+    expect(Math.abs(base.y + base.h / 2 - (big.y + big.h / 2))).toBeLessThanOrEqual(1);
+  });
+
+  it('원본 종횡비는 배율과 무관하게 유지된다', () => {
+    for (const s of [0.3, 0.5, 1, 1.7, 2.5]) {
+      const r = calcFitRect(4000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, s);
+      expect(Math.abs(r.w / r.h - 5)).toBeLessThan(0.05);
+    }
+  });
+
+  it('범위 밖 배율은 clampScale 을 탄다', () => {
+    expect(calcFitRect(1000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, 99)).toEqual(
+      calcFitRect(1000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, MAX_SCALE),
+    );
   });
 });

@@ -35,6 +35,12 @@ import { ContextToolbar } from '../canvas/ContextToolbar';
 import { MemoEditor } from '../canvas/MemoEditor';
 import { ToolPalette } from '../canvas/ToolPalette';
 import { revokeAll } from '../canvas/imageLoader';
+import {
+  cachedCompositeUrl,
+  clearCompositeCache,
+  compositeUrl,
+  isDefaultScale,
+} from '../canvas/drawingComposite';
 import { useAppData } from '../data/appData';
 import { revokeProjectUrls } from '../data/idb/blobs';
 import {
@@ -107,6 +113,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     () => () => {
       revokeProjectUrls(projectId);
       revokeAll();
+      clearCompositeCache();
     },
     [projectId],
   );
@@ -161,19 +168,47 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   }, [resolvedFloor?.id, currentDrawing?.id]);
 
   // 도면 Blob → objectURL. **네트워크를 타지 않는다** (§2-9-d)
+  //
+  // F5-3 — 도면 크기 조절(`imgScale`)이 기본(1)이 아니면 저장된 렌더 Blob 대신
+  // **원본을 그 배율로 다시 합성한 결과**를 쓴다. 합성 결과는 저장소가 아니라
+  // `drawingComposite` 런타임 캐시에만 있다. 결함 좌표는 건드리지 않는다.
   useEffect(() => {
     if (storage.phase !== 'READY' || !currentDrawing) {
       setDrawingUrl(null);
       return;
     }
+    const repo = storage.repo;
+    const dw = currentDrawing;
     let alive = true;
-    void storage.repo.objectUrl(currentDrawing.renderBlobKey, projectId).then((u) => {
-      if (alive) setDrawingUrl(u);
-    });
+
+    const useStored = () =>
+      repo.objectUrl(dw.renderBlobKey, projectId).then((u) => {
+        if (alive) setDrawingUrl(u);
+      });
+
+    if (isDefaultScale(dw.imgScale)) {
+      void useStored();
+    } else {
+      const scale = dw.imgScale ?? 1;
+      const cached = cachedCompositeUrl(dw.id, scale);
+      if (cached) setDrawingUrl(cached);
+      void repo
+        .readBlob(dw.sourceBlobKey)
+        .then((b) => (b ? compositeUrl(dw.id, b, scale) : null))
+        .then((u) => {
+          if (!alive) return;
+          if (u) setDrawingUrl(u);
+          else void useStored();
+        })
+        .catch(() => {
+          // 원본을 못 읽거나 합성이 실패하면 저장된 렌더로 되돌아간다 — 화면이 비지 않게
+          if (alive) void useStored();
+        });
+    }
     return () => {
       alive = false;
     };
-  }, [storage, currentDrawing?.renderBlobKey, projectId]);
+  }, [storage, currentDrawing?.renderBlobKey, currentDrawing?.imgScale, projectId]);
 
   // ── 저장 (로컬 우선 · 커밋 시점 · 250ms 디바운스) ───────────────────────
   const writesRef = useRef(state.writes);

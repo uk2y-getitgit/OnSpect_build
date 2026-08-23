@@ -102,6 +102,8 @@ export function makeDrawing(
     thumbBlobKey: string;
     /** F1 — A4 정규화된 새 도면만 값을 준다. 없으면(예전 방식) null */
     imgLayout?: ImgLayout | null;
+    /** F5-3 도면 크기 조절. 없으면 null(=1) */
+    imgScale?: number | null;
   },
   now = Date.now(),
 ): Drawing {
@@ -118,6 +120,7 @@ export function makeDrawing(
     thumbBlobKey: args.thumbBlobKey,
     sortOrder: 0, // S1 은 층당 1장 (Q15 A안)
     imgLayout: args.imgLayout ?? null,
+    imgScale: args.imgScale ?? null,
     ...base(deviceId, now),
   };
 }
