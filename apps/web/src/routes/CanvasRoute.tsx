@@ -670,9 +670,22 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           defect={selected}
           settings={settings}
           saving={state.writes.seq > 0}
-          onAttrsChange={(attrs) =>
-            selected && dispatch({ t: 'SET_DEFECT_ATTRS', defectId: selected.id, attrs })
-          }
+          onAttrsChange={(attrs) => {
+            if (!selected) return;
+            dispatch({ t: 'SET_DEFECT_ATTRS', defectId: selected.id, attrs });
+            // 구조유형을 바꾸면 그 목록에 없는 부재가 조용히 사라진다(§3-6).
+            // 순수 함수(apply.ts)는 문구를 모른다 — 알리는 것은 호출자 몫이다
+            if (
+              attrs.structureType !== selected.structureType &&
+              selected.memberId !== null &&
+              attrs.memberId === null
+            ) {
+              toast(
+                `이 구조유형에는 '${selected.memberName ?? '선택한 부재'}' 가 없어 선택을 해제했습니다`,
+                { kind: 'warn' },
+              );
+            }
+          }}
           onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
           onDelete={() => send({ k: 'DELETE_SELECTION' })}
         />
