@@ -403,6 +403,35 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     await txDone(tx);
   }
 
+  /**
+   * F1 — `[A4로 맞추기]` / 그 되돌리기. 도면 레코드 · 결함 · 메모를
+   * **한 트랜잭션**에서 쓴다.
+   *
+   * 셋을 따로 쓰면 중간에 실패했을 때 "도면은 A4 인데 좌표는 옛 기준"이라는
+   * 어중간한 상태가 남는다 — 그러면 모든 표기가 여백으로 밀려 보이고 되돌릴 근거도 없다.
+   *
+   * ⚠️ **Blob 을 건드리지 않는다.** 저장된 렌더 래스터는 옛 비율 그대로 두고,
+   * 화면에는 원본을 A4 로 다시 합성한 결과(런타임 캐시)를 보여준다.
+   * 덕분에 되돌리기가 레코드 되돌려쓰기만으로 끝난다.
+   */
+  async writeRenormalize(
+    drawing: Drawing,
+    defects: readonly Defect[],
+    memos: readonly Memo[],
+  ): Promise<void> {
+    const tx = this.db.transaction(
+      [STORE.drawings, STORE.defects, STORE.memos],
+      'readwrite',
+    );
+    tx.objectStore(STORE.drawings).put(this.stamp(drawing));
+    const ds = tx.objectStore(STORE.defects);
+    // 결함에는 RecordBase 가 없다(캔버스 코어 타입) — upsertDefects 와 같이 그대로 넣는다
+    for (const d of defects) ds.put(d);
+    const ms = tx.objectStore(STORE.memos);
+    for (const m of memos) ms.put(this.stamp(m));
+    await txDone(tx);
+  }
+
   async deleteMemos(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
     const tx = this.db.transaction(STORE.memos, 'readwrite');
@@ -605,7 +634,8 @@ export function normalizeDrawing(d: Drawing): Drawing {
     d.imgLayout !== undefined &&
     d.imgScale !== undefined &&
     d.titleBlock !== undefined &&
-    d.legend !== undefined
+    d.legend !== undefined &&
+    d.renormalizedAt !== undefined
   ) {
     return d;
   }
@@ -615,5 +645,6 @@ export function normalizeDrawing(d: Drawing): Drawing {
     imgScale: d.imgScale ?? null,
     titleBlock: d.titleBlock ?? null,
     legend: d.legend ?? null,
+    renormalizedAt: d.renormalizedAt ?? null,
   };
 }

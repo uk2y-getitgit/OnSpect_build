@@ -27,6 +27,7 @@ export * from './hitTest.js';
 export * from './snapAlign.js';
 export * from './snapAngle.js';
 export * from './snapResolve.js';
+export * from './renormalize.js';
 export * from './commands.js';
 export * from './titleBlock.js';
 export * from './legend.js';

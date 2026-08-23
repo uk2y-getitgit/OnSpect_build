@@ -178,6 +178,14 @@ export type Drawing = RecordBase & {
   titleBlock: DrawingTitleBlock | null;
   /** F5-2 범례 설정. `null` = 범례를 쓰지 않는다(기존 도면 전부) */
   legend: DrawingLegend | null;
+  /**
+   * F1 — `[A4로 맞추기]` 를 실행한 시각(epoch ms). `null` = 실행한 적 없다.
+   *
+   * 값이 있으면 **저장된 렌더 래스터(`renderBlobKey`)는 옛 비율 그대로**이고,
+   * 화면에는 원본(`sourceBlobKey`)을 A4 로 다시 합성한 결과를 보여준다
+   * (F5-3 과 같은 런타임 캐시. 저장 용량이 늘지 않고, 되돌리기가 블롭 조작 없이 끝난다).
+   */
+  renormalizedAt: number | null;
 };
 
 // ── 표시 라벨 ──────────────────────────────────────────────────────────────

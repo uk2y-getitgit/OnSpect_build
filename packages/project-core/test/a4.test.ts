@@ -4,11 +4,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   A4_LANDSCAPE,
+  a4Transform,
   calcFitRect,
   clampScale,
   fitRectToImgLayout,
+  fromA4Norm,
+  isA4Normalized,
   MAX_SCALE,
   MIN_SCALE,
+  scaleA4Size,
+  toA4Norm,
+  unscaleA4Size,
 } from '../src/index.js';
 
 describe('A4_LANDSCAPE — 실측 고정값', () => {
@@ -132,5 +138,91 @@ describe('calcFitRect(scale) — 배치만 바뀌고 좌표계는 그대로다',
     expect(calcFitRect(1000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, 99)).toEqual(
       calcFitRect(1000, 800, A4_LANDSCAPE.w, A4_LANDSCAPE.h, MAX_SCALE),
     );
+  });
+});
+
+// ── F1 재정규화 (AD15) ─────────────────────────────────────────────────────
+describe('a4Transform — 재정규화 변환식', () => {
+  const layout = fitRectToImgLayout(calcFitRect(4000, 800));
+
+  it('AD15 식 그대로다: (off + old × d) / a4', () => {
+    const t = a4Transform(layout);
+    const p = toA4Norm({ x: 0.5, y: 0.5 }, t);
+    expect(p.x).toBeCloseTo((layout.offX + 0.5 * layout.dW) / A4_LANDSCAPE.w, 10);
+    expect(p.y).toBeCloseTo((layout.offY + 0.5 * layout.dH) / A4_LANDSCAPE.h, 10);
+  });
+
+  it('변환 결과는 항상 도면 영역(imgLayout) 안이다 → [0,1] 을 벗어나지 않는다', () => {
+    const t = a4Transform(layout);
+    for (const p of [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0.3, y: 0.7 },
+    ]) {
+      const q = toA4Norm(p, t);
+      expect(q.x).toBeGreaterThanOrEqual(0);
+      expect(q.x).toBeLessThanOrEqual(1);
+      expect(q.y).toBeGreaterThanOrEqual(0);
+      expect(q.y).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('왕복 변환은 원위치로 돌아온다 (되돌리기가 수학적으로 보장된다)', () => {
+    for (const [w, h] of [
+      [4000, 800],
+      [800, 4000],
+      [1000, 1000],
+      [1754, 1240],
+    ] as const) {
+      const t = a4Transform(fitRectToImgLayout(calcFitRect(w, h)));
+      for (const p of [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+        { x: 0.123456, y: 0.987654 },
+        { x: -0.4, y: 1.4 }, // 라벨은 [0,1] 밖으로 나갈 수 있다 (소프트 리밋)
+      ]) {
+        const back = fromA4Norm(toA4Norm(p, t), t);
+        expect(back.x).toBeCloseTo(p.x, 10);
+        expect(back.y).toBeCloseTo(p.y, 10);
+      }
+    }
+  });
+
+  it('크기는 오프셋 없이 배율만 먹는다 (위치 식을 쓰면 도형이 커진다)', () => {
+    const t = a4Transform(layout);
+    const s = scaleA4Size({ x: 0.2, y: 0.4 }, t);
+    expect(s.x).toBeCloseTo(0.2 * t.sx, 10);
+    expect(s.y).toBeCloseTo(0.4 * t.sy, 10);
+    const back = unscaleA4Size(s, t);
+    expect(back.x).toBeCloseTo(0.2, 10);
+    expect(back.y).toBeCloseTo(0.4, 10);
+  });
+
+  it('배율이 1 인 항등 배치면 변환도 항등이다', () => {
+    const t = a4Transform({ offX: 0, offY: 0, dW: A4_LANDSCAPE.w, dH: A4_LANDSCAPE.h });
+    const p = toA4Norm({ x: 0.42, y: 0.17 }, t);
+    expect(p).toEqual({ x: 0.42, y: 0.17 });
+  });
+});
+
+describe('isA4Normalized', () => {
+  it('imgLayout 이 있고 크기가 A4 면 이미 정규화된 것이다', () => {
+    expect(
+      isA4Normalized({
+        imgLayout: { offX: 1, offY: 1, dW: 2, dH: 2 },
+        imageWidth: 1754,
+        imageHeight: 1240,
+      }),
+    ).toBe(true);
+  });
+
+  it('imgLayout 이 없으면 옛 도면이다', () => {
+    expect(isA4Normalized({ imgLayout: null, imageWidth: 1754, imageHeight: 1240 })).toBe(false);
+  });
+
+  it('크기가 A4 가 아니면 옛 도면이다', () => {
+    expect(
+      isA4Normalized({ imgLayout: { offX: 0, offY: 0, dW: 1, dH: 1 }, imageWidth: 800, imageHeight: 600 }),
+    ).toBe(false);
   });
 });

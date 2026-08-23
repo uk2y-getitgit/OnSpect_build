@@ -41,7 +41,7 @@ import {
   cachedCompositeUrl,
   clearCompositeCache,
   compositeUrl,
-  isDefaultScale,
+  needsCompose,
 } from '../canvas/drawingComposite';
 import { useAppData } from '../data/appData';
 import { revokeProjectUrls } from '../data/idb/blobs';
@@ -188,7 +188,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         if (alive) setDrawingUrl(u);
       });
 
-    if (isDefaultScale(dw.imgScale)) {
+    if (!needsCompose(dw)) {
       void useStored();
     } else {
       const scale = dw.imgScale ?? 1;
@@ -210,7 +210,13 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     return () => {
       alive = false;
     };
-  }, [storage, currentDrawing?.renderBlobKey, currentDrawing?.imgScale, projectId]);
+  }, [
+    storage,
+    currentDrawing?.renderBlobKey,
+    currentDrawing?.imgScale,
+    currentDrawing?.renormalizedAt,
+    projectId,
+  ]);
 
   // ── 저장 (로컬 우선 · 커밋 시점 · 250ms 디바운스) ───────────────────────
   const writesRef = useRef(state.writes);

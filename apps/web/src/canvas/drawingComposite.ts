@@ -19,9 +19,22 @@ type Entry = { scale: number; url: string };
 const cache = new Map<string, Entry>();
 const inflight = new Map<string, Promise<string>>();
 
-/** 배율이 기본(1)인가 — 그러면 합성이 필요 없다 */
+/** 배율이 기본(1)인가 */
 export function isDefaultScale(scale: number | null | undefined): boolean {
   return clampScale(scale ?? DEFAULT_SCALE) === DEFAULT_SCALE;
+}
+
+/**
+ * 저장된 렌더 래스터를 그대로 쓸 수 없는 도면인가 — 그러면 원본에서 다시 합성한다.
+ *
+ *   · `imgScale ≠ 1`  → F5-3 도면 크기 조절
+ *   · `renormalizedAt` → F1 [A4로 맞추기] (저장된 래스터는 옛 비율 그대로다)
+ */
+export function needsCompose(d: {
+  imgScale: number | null;
+  renormalizedAt: number | null;
+}): boolean {
+  return d.renormalizedAt !== null || !isDefaultScale(d.imgScale);
 }
 
 export function cachedCompositeUrl(drawingId: string, scale: number): string | null {

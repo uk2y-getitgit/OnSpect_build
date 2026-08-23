@@ -76,3 +76,68 @@ export function calcFitRect(
 export function fitRectToImgLayout(r: FitRect): ImgLayout {
   return { offX: r.x, offY: r.y, dW: r.w, dH: r.h };
 }
+
+// ── F1 재정규화 — 기존 도면을 A4 로 맞추기 ─────────────────────────────────
+/**
+ * ⚠️ **실사용자 데이터의 좌표를 바꾸는 조작이다.**
+ *
+ * 정규화 좌표(불변식 #1)는 "그 도면 렌더 이미지 전체(0~1)" 기준이다. A4 로 맞추면
+ * 같은 그림이 이제 A4 지면 안의 **일부 사각형**(`imgLayout`)에만 놓인다.
+ * 옛 좌표를 그대로 두면 모든 표기가 흰 여백 쪽으로 밀려 보인다.
+ *
+ * 변환식 (AD15):
+ *   `newNorm = (imgLayout.off + oldNorm × imgLayout.d) / a4Size`
+ *
+ * 순수 아핀 변환이라 정확히 역이 있다 — 되돌리기가 수학적으로 보장된다.
+ */
+export type NormPoint = { x: number; y: number };
+
+/** 변환 계수. 점·크기 어디에나 이 하나로 적용한다 */
+export type A4Transform = { ox: number; oy: number; sx: number; sy: number };
+
+export function a4Transform(
+  layout: ImgLayout,
+  a4: { w: number; h: number } = A4_LANDSCAPE,
+): A4Transform {
+  return {
+    ox: layout.offX / a4.w,
+    oy: layout.offY / a4.h,
+    sx: layout.dW / a4.w,
+    sy: layout.dH / a4.h,
+  };
+}
+
+/** 옛 좌표 → A4 지면 좌표 */
+export function toA4Norm(p: NormPoint, t: A4Transform): NormPoint {
+  return { x: t.ox + p.x * t.sx, y: t.oy + p.y * t.sy };
+}
+
+/** A4 지면 좌표 → 옛 좌표 (되돌리기) */
+export function fromA4Norm(p: NormPoint, t: A4Transform): NormPoint {
+  return { x: (p.x - t.ox) / t.sx, y: (p.y - t.oy) / t.sy };
+}
+
+/**
+ * **크기**(영역의 w·h)는 오프셋 없이 배율만 곱한다.
+ * 위치와 같은 함수를 쓰면 크기에 여백이 더해져 도형이 커진다.
+ */
+export function scaleA4Size(size: NormPoint, t: A4Transform): NormPoint {
+  return { x: size.x * t.sx, y: size.y * t.sy };
+}
+
+export function unscaleA4Size(size: NormPoint, t: A4Transform): NormPoint {
+  return { x: size.x / t.sx, y: size.y / t.sy };
+}
+
+/** 이미 A4 정규화된 도면인가 — 그러면 [A4로 맞추기]가 할 일이 없다 */
+export function isA4Normalized(d: {
+  imgLayout: ImgLayout | null;
+  imageWidth: number;
+  imageHeight: number;
+}): boolean {
+  return (
+    d.imgLayout !== null &&
+    d.imageWidth === A4_LANDSCAPE.w &&
+    d.imageHeight === A4_LANDSCAPE.h
+  );
+}

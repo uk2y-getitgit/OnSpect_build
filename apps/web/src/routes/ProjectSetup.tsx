@@ -7,8 +7,10 @@
  *    다만 드래그로만 되는 조작은 키보드 사용자에게 없는 기능이라, `⋯` 메뉴에 `위로/아래로` 를 함께 둔다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Defect } from '@onspect/canvas-core';
+import type { Defect, Memo } from '@onspect/canvas-core';
 import {
+  A4_LANDSCAPE,
+  calcFitRect,
   changedOrders,
   floorsNeedingOrderCheck,
   normalizeName,
@@ -21,6 +23,8 @@ import {
   type Building,
   type CopyStructureResult,
   clampScale,
+  fitRectToImgLayout,
+  isA4Normalized,
   type Drawing,
   type DrawingLegend,
   type DrawingTitleBlock,
@@ -38,6 +42,11 @@ import { DrawingThumb } from '../ui/DrawingThumb';
 import { DrawingScaleDialog } from './DrawingScaleDialog';
 import { TitleBlockDialog } from './TitleBlockDialog';
 import { releaseComposite } from '../canvas/drawingComposite';
+import {
+  countRenormalizeTargets,
+  renormalizeAll,
+  type RenormalizeCounts,
+} from '../data/renormalize';
 import { scaledImgLayout } from '../data/imageIngest';
 
 type Editing =
@@ -53,7 +62,12 @@ type Confirming =
   | { kind: 'DELETE_FLOOR'; floor: Floor; drawings: number; defects: number }
   | { kind: 'DELETE_DRAWING'; drawing: Drawing; floor: Floor; defects: number }
   | { kind: 'COPY_STRUCTURE'; existingBuildings: number }
+  /** F1 — [A4로 맞추기]. **좌표를 바꾸는 조작이라 건수를 반드시 보여준다** */
+  | { kind: 'RENORMALIZE'; drawing: Drawing; floor: Floor; counts: RenormalizeCounts }
   | null;
+
+/** F1 — 되돌리기용 스냅샷. 변환 **전** 레코드를 그대로 들고 있는다 */
+type RenormUndo = { drawing: Drawing; defects: Defect[]; memos: Memo[]; label: string };
 
 export function ProjectSetup({ projectId }: { projectId: string }) {
   const { storage, guard, reload, reloadKey } = useAppData();
@@ -64,6 +78,10 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
   const [floors, setFloors] = useState<Floor[]>([]);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [defects, setDefects] = useState<Defect[]>([]);
+  const [memos, setMemos] = useState<Memo[]>([]);
+  /** F1 — 방금 실행한 [A4로 맞추기] 를 되돌릴 수 있는 스냅샷 */
+  const [renormUndo, setRenormUndo] = useState<RenormUndo | null>(null);
+  const [renormBusy, setRenormBusy] = useState(false);
   /** F5-3 — 도면 크기 조절 대상 */
   const [scaling, setScaling] = useState<Drawing | null>(null);
   const [scaleBusy, setScaleBusy] = useState(false);
@@ -97,6 +115,7 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
       setFloors(b.floors);
       setDrawings(b.drawings);
       setDefects(b.defects);
+      setMemos(b.memos);
       setSelectedBuildingId((cur) => {
         if (userPicked.current && cur && b.buildings.some((x) => x.id === cur)) return cur;
         // 사용자가 고른 적이 없으면 **층이 있는 첫 동**을 연다.
@@ -345,6 +364,96 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
     },
     [storage, guard, toast],
   );
+
+  // ── F1 [A4로 맞추기] ────────────────────────────────────────────────────
+  /**
+   * ⚠️ 이 도면에 속한 **모든 결함·메모의 좌표를 바꾼다.**
+   * 그래서 (1) 확인 다이얼로그에서 건수를 먼저 보여주고 (2) 되돌리기 스냅샷을 남기고
+   * (3) 이미 A4 면 아무것도 하지 않는다.
+   */
+  const askRenormalize = useCallback(
+    (dw: Drawing, f: Floor) => {
+      if (isA4Normalized(dw)) {
+        toast('이미 A4 가로 비율입니다. 바꿀 것이 없습니다');
+        return;
+      }
+      setConfirming({
+        kind: 'RENORMALIZE',
+        drawing: dw,
+        floor: f,
+        counts: countRenormalizeTargets(dw.id, defects, memos),
+      });
+    },
+    [defects, memos, toast],
+  );
+
+  const doRenormalize = useCallback(
+    (dw: Drawing) => {
+      if (storage.phase !== 'READY' || isA4Normalized(dw)) return;
+      setRenormBusy(true);
+
+      // 옛 도면의 렌더 래스터 크기가 곧 원본 비율이다 (A4 정규화 전 레코드)
+      const layout = fitRectToImgLayout(calcFitRect(dw.imageWidth, dw.imageHeight));
+      const before = {
+        drawing: dw,
+        defects: defects.filter((d) => d.drawingId === dw.id),
+        memos: memos.filter((m) => m.drawingId === dw.id),
+      };
+      const moved = renormalizeAll(dw.id, layout, defects, memos);
+      const updated: Drawing = {
+        ...dw,
+        imageWidth: A4_LANDSCAPE.w,
+        imageHeight: A4_LANDSCAPE.h,
+        imgLayout: layout,
+        renormalizedAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      void (async () => {
+        const ok = await guard(async () => {
+          await storage.repo.writeRenormalize(updated, moved.defects, moved.memos);
+          return true;
+        });
+        setRenormBusy(false);
+        if (!ok) return;
+        releaseComposite(dw.id);
+        applyRenormLocal(updated, moved.defects, moved.memos);
+        setRenormUndo({ ...before, label: dw.name });
+        toast(`${dw.name}을(를) A4 가로에 맞췄습니다`);
+      })();
+    },
+    [storage, guard, defects, memos, toast],
+  );
+
+  /** 변환 결과(또는 되돌린 결과)를 화면 상태에 반영한다 */
+  const applyRenormLocal = useCallback(
+    (dw: Drawing, ds: readonly Defect[], ms: readonly Memo[]) => {
+      setDrawings((cur) => cur.map((x) => (x.id === dw.id ? dw : x)));
+      const dmap = new Map(ds.map((d) => [d.id, d]));
+      const mmap = new Map(ms.map((m) => [m.id, m]));
+      setDefects((cur) => cur.map((d) => dmap.get(d.id) ?? d));
+      setMemos((cur) => cur.map((m) => mmap.get(m.id) ?? m));
+    },
+    [],
+  );
+
+  const undoRenormalize = useCallback(() => {
+    const snap = renormUndo;
+    if (!snap || storage.phase !== 'READY') return;
+    setRenormBusy(true);
+    void (async () => {
+      const ok = await guard(async () => {
+        await storage.repo.writeRenormalize(snap.drawing, snap.defects, snap.memos);
+        return true;
+      });
+      setRenormBusy(false);
+      if (!ok) return;
+      releaseComposite(snap.drawing.id);
+      applyRenormLocal(snap.drawing, snap.defects, snap.memos);
+      setRenormUndo(null);
+      toast('A4 맞추기를 되돌렸습니다');
+    })();
+  }, [renormUndo, storage, guard, applyRenormLocal, toast]);
 
   // ── 삭제 ────────────────────────────────────────────────────────────────
   const askDeleteBuilding = useCallback(
@@ -745,6 +854,11 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
                                     },
                                   },
                                   {
+                                    label: 'A4로 맞추기',
+                                    disabled: isA4Normalized(dw),
+                                    onSelect: () => askRenormalize(dw, f),
+                                  },
+                                  {
                                     label: '도곽 · 범례 설정',
                                     onSelect: () => setTitling(dw),
                                   },
@@ -995,6 +1109,66 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
           }}
           onCancel={() => setConfirming(null)}
         />
+      )}
+
+      {confirming?.kind === 'RENORMALIZE' && (
+        <ConfirmDialog
+          title="이 도면을 A4 가로에 맞출까요?"
+          danger={false}
+          body={
+            <>
+              <p>
+                <b className="quote">{confirming.floor.name}</b>의 도면을 A4 가로
+                (<span className="num">1754×1240</span>) 지면에 비율을 지켜 다시 배치합니다.
+              </p>
+              <p>
+                <b>
+                  결함 <span className="num">{confirming.counts.defects}</span>건의 위치가 자동으로
+                  옮겨집니다.
+                </b>{' '}
+                <span className="muted">
+                  (표기 {confirming.counts.marks}개 · 그리기 {confirming.counts.sketches}획 · 메모{' '}
+                  {confirming.counts.memos}개)
+                </span>
+              </p>
+              <p className="muted">
+                도면 그림 위의 상대 위치는 그대로 유지됩니다. 실행한 뒤 화면 아래{' '}
+                <b>[되돌리기]</b>로 원래대로 돌릴 수 있습니다.
+              </p>
+            </>
+          }
+          confirmLabel="A4로 맞추기"
+          onConfirm={() => {
+            const dw = confirming.drawing;
+            setConfirming(null);
+            doRenormalize(dw);
+          }}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
+
+      {renormUndo && (
+        <div className="renorm-undo" role="status">
+          <span>
+            <b className="quote">{renormUndo.label}</b>을(를) A4 가로에 맞췄습니다
+          </span>
+          <button
+            type="button"
+            className="btn btn--small"
+            disabled={renormBusy}
+            onClick={undoRenormalize}
+          >
+            되돌리기
+          </button>
+          <button
+            type="button"
+            className="iconbtn iconbtn--small"
+            aria-label="닫기"
+            onClick={() => setRenormUndo(null)}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {titling && (
