@@ -10,3 +10,6 @@ export * from './resolve.js';
 export * from './seed.js';
 export * from './snapshot.js';
 export * from './edit.js';
+export * from './size.js';
+export * from './presets.js';
+export * from './apply.js';

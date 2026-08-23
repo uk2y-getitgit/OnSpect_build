@@ -31,9 +31,10 @@ import { ConfirmDialog } from '../ui/Overlays';
 import { useToast } from '../ui/ToastHost';
 import { ItemsTab } from './settings/ItemsTab';
 import { MiscTab } from './settings/MiscTab';
+import { PreviewTab } from './settings/PreviewTab';
 import type { SettingsApi } from './settings/api';
 
-type TabId = 'ITEMS' | 'MISC';
+type TabId = 'ITEMS' | 'MISC' | 'PREVIEW';
 
 type NavEntry = {
   id: TabId | null;
@@ -48,7 +49,7 @@ const NAV: { group: string; entries: NavEntry[] }[] = [
     group: '입력 항목',
     entries: [
       { id: 'ITEMS', label: '항목 편집', indent: true },
-      { id: null, label: '입력 미리보기', soon: '결함 입력 폼(S4)과 함께 열립니다', indent: true },
+      { id: 'PREVIEW', label: '입력 미리보기', indent: true },
       { id: null, label: '프리셋', soon: '준비 중', indent: true },
     ],
   },
@@ -312,6 +313,7 @@ export function Settings({
               onReloadSeed={reloadSeed}
             />
           )}
+          {tab === 'PREVIEW' && <PreviewTab settings={settings} project={project} />}
           {tab === 'MISC' && (
             <MiscTab
               project={project}
