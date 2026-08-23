@@ -49,6 +49,7 @@ import {
 } from './shapes.js';
 import { resolveStyle } from './style.js';
 import { titleBlockOps, type TitleBlockConfig } from './titleBlock.js';
+import { legendOps, type LegendConfig } from './legend.js';
 import type {
   Defect,
   DrawingRef,
@@ -163,6 +164,8 @@ export type RenderInput = {
   ghost?: GhostShape | null;
   /** F5-1 도곽. `null` = 그리지 않는다. **배경 레이어에서만 쓴다** */
   titleBlock?: TitleBlockConfig | null;
+  /** F5-2 범례. `null` = 그리지 않는다. **배경 레이어에서만 쓴다** */
+  legend?: LegendConfig | null;
 };
 
 /** 아직 커밋되지 않은 생성 미리보기. 문서에 없으므로 DefectScreen 이 아니다 */
@@ -195,6 +198,7 @@ export function buildBackground(input: RenderInput): DrawOp[] {
     },
   ];
   if (input.titleBlock) ops.push(...titleBlockOps(input.titleBlock, size, vp));
+  if (input.legend) ops.push(...legendOps(input.legend, size, vp));
   return ops;
 }
 

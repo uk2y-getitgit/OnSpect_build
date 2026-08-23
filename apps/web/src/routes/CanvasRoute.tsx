@@ -35,7 +35,7 @@ import { ContextToolbar } from '../canvas/ContextToolbar';
 import { MemoEditor } from '../canvas/MemoEditor';
 import { ToolPalette } from '../canvas/ToolPalette';
 import { revokeAll } from '../canvas/imageLoader';
-import { titleBlockConfigFor } from '../canvas/pageDecor';
+import { legendConfigFor, titleBlockConfigFor } from '../canvas/pageDecor';
 import {
   cachedCompositeUrl,
   clearCompositeCache,
@@ -305,6 +305,24 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     [currentDrawing, project],
   );
 
+  // F5-2 범례 — 행은 저장하지 않고 **이 도면에 실제로 쓰인 결함유형**에서 파생한다.
+  // 배경 레이어는 뷰포트가 바뀔 때만 다시 그리므로, 행 구성이 실제로 바뀔 때만
+  // 새 객체가 나오도록 서명(키)으로 memo 를 건다 — 결함을 옮길 때마다 재렌더하지 않게.
+  const legend = useMemo(
+    () => legendConfigFor(currentDrawing, defects),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      currentDrawing?.id,
+      currentDrawing?.legend?.enabled,
+      currentDrawing?.legend?.lgScale,
+      defects
+        .map((d) => d.defectTypeId ?? d.defectTypeName ?? '')
+        .filter((x) => x !== '')
+        .sort()
+        .join('|'),
+    ],
+  );
+
   const selected = useMemo(
     () => defects.find((d) => d.id === state.canvas.selection.defectId) ?? null,
     [defects, state.canvas.selection.defectId],
@@ -521,6 +539,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             ghost={ghost}
             displayNumbers={displayNumbers}
             titleBlock={titleBlock}
+            legend={legend}
             send={send}
             drawingUrl={drawingUrl}
             onUploadDrawing={() => resolvedFloor && goUpload(resolvedFloor.id)}

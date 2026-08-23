@@ -16,6 +16,7 @@ import {
   type GhostShape,
   type InputEvent,
   type MemoScreen,
+  type LegendConfig,
   type RenderInput,
   type TitleBlockConfig,
 } from '@onspect/canvas-core';
@@ -42,6 +43,8 @@ export type CanvasViewProps = {
   displayNumbers: Record<string, string>;
   /** F5-1 도곽. null = 그리지 않는다 */
   titleBlock: TitleBlockConfig | null;
+  /** F5-2 범례. null = 그리지 않는다 */
+  legend: LegendConfig | null;
   send: (ev: InputEvent) => void;
   drawingUrl: string | null;
   /** 도면 없는 층의 빈 상태에서 P4 로 보낸다 (§2-10-c) */
@@ -62,6 +65,7 @@ export function CanvasView({
   ghost,
   displayNumbers,
   titleBlock,
+  legend,
   send,
   drawingUrl,
   onUploadDrawing,
@@ -187,8 +191,9 @@ export function CanvasView({
       memos: memoScreens,
       ghost,
       titleBlock,
+      legend,
     };
-  }, [drawing, state, defects, displayNumbers, memoScreens, ghost, titleBlock]);
+  }, [drawing, state, defects, displayNumbers, memoScreens, ghost, titleBlock, legend]);
 
   // 배경 — 뷰포트/크기/이미지가 바뀔 때만
   useLayoutEffect(() => {
@@ -208,6 +213,7 @@ export function CanvasView({
     image,
     drawing?.id,
     titleBlock,
+    legend,
   ]);
 
   // 오버레이 — 매 변경

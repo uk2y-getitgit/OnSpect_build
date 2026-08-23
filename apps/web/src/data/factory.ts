@@ -122,6 +122,7 @@ export function makeDrawing(
     imgLayout: args.imgLayout ?? null,
     imgScale: args.imgScale ?? null,
     titleBlock: null, // F5-1 — 도곽은 사용자가 켜기 전까지 없다
+    legend: null, // F5-2 — 범례도 마찬가지
 
     ...base(deviceId, now),
   };

@@ -22,6 +22,7 @@ import {
   type CopyStructureResult,
   clampScale,
   type Drawing,
+  type DrawingLegend,
   type DrawingTitleBlock,
   type Floor,
   type Project,
@@ -329,17 +330,17 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
     [storage, guard, toast],
   );
 
-  /** F5-1 — 도곽 설정 저장. 저장되는 것은 숫자·문자뿐이고 좌표는 건드리지 않는다 */
+  /** F5-1·F5-2 — 도곽·범례 설정 저장. 저장되는 것은 숫자·문자뿐이고 좌표는 건드리지 않는다 */
   const applyTitleBlock = useCallback(
-    (dw: Drawing, tb: DrawingTitleBlock) => {
+    (dw: Drawing, tb: DrawingTitleBlock, lg: DrawingLegend) => {
       setTitleBusy(true);
-      const updated: Drawing = { ...dw, titleBlock: tb, updatedAt: Date.now() };
+      const updated: Drawing = { ...dw, titleBlock: tb, legend: lg, updatedAt: Date.now() };
       setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
       void (async () => {
         if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
         setTitleBusy(false);
         setTitling(null);
-        toast(tb.enabled ? '도곽 설정을 저장했습니다' : '도곽을 껐습니다');
+        toast('도곽 · 범례 설정을 저장했습니다');
       })();
     },
     [storage, guard, toast],
@@ -744,7 +745,7 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
                                     },
                                   },
                                   {
-                                    label: '도곽 설정',
+                                    label: '도곽 · 범례 설정',
                                     onSelect: () => setTitling(dw),
                                   },
                                   {
@@ -1000,8 +1001,9 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
         <TitleBlockDialog
           drawing={titling}
           project={project}
+          legendTypes={legendTypesOf(defects, titling.id)}
           busy={titleBusy}
-          onApply={(tb) => applyTitleBlock(titling, tb)}
+          onApply={(tb, lg) => applyTitleBlock(titling, tb, lg)}
           onClose={() => {
             if (!titleBusy) setTitling(null);
           }}
@@ -1156,4 +1158,18 @@ function OrderableList({
       ))}
     </ul>
   );
+}
+
+/** F5-2 — 이 도면에 실제로 쓰인 결함유형 이름 (범례 미리보기용) */
+function legendTypesOf(defects: readonly Defect[], drawingId: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const d of [...defects].sort((a, b) => a.seq - b.seq)) {
+    if (d.drawingId !== drawingId) continue;
+    const name = (d.defectTypeName ?? '').trim();
+    if (name === '' || seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+  }
+  return out;
 }

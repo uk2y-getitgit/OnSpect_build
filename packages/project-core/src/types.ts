@@ -125,6 +125,19 @@ export type DrawingTitleBlock = {
   valueFontSz: number;
 };
 
+/**
+ * F5-2 범례(Legend) 설정 — **저장 형태**.
+ *
+ * 행(결함유형 목록)은 저장하지 않는다. **그 도면에 실제로 쓰인 결함유형**에서
+ * 매번 파생한다(§F5-2 `equipFilter`) — 저장하면 결함을 지웠을 때 유령 행이 남는다.
+ * 색도 없다: 결함유형별 고유 색을 만들지 않는다(D8).
+ */
+export type DrawingLegend = {
+  /** 화면에 그릴지. **출력 ON/OFF 는 Phase 4 의 별개 옵션이다** */
+  enabled: boolean;
+  lgScale: number;
+};
+
 export type Drawing = RecordBase & {
   id: string;
   projectId: string;
@@ -163,6 +176,8 @@ export type Drawing = RecordBase & {
    * 값이 있으면 캔버스 배경에 A4 지면 전체를 두르는 도곽을 그린다.
    */
   titleBlock: DrawingTitleBlock | null;
+  /** F5-2 범례 설정. `null` = 범례를 쓰지 않는다(기존 도면 전부) */
+  legend: DrawingLegend | null;
 };
 
 // ── 표시 라벨 ──────────────────────────────────────────────────────────────
@@ -214,3 +229,6 @@ export const DEFAULT_DRAWING_TITLE_BLOCK: DrawingTitleBlock = {
   labelFontSz: 10,
   valueFontSz: 14,
 };
+
+/** F5-2 범례 기본값 */
+export const DEFAULT_DRAWING_LEGEND: DrawingLegend = { enabled: true, lgScale: 1 };
