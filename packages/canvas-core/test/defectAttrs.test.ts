@@ -94,4 +94,17 @@ describe('normalizeDefectAttrs', () => {
     const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.6 });
     expect(normalizeDefectAttrs(d)).toBe(d);
   });
+
+  it('F7 — prevDefectId 가 없는 옛 레코드는 null 로 채운다', () => {
+    expect(normalizeDefectAttrs(legacy()).prevDefectId).toBeNull();
+  });
+
+  it('F7 — prevDefectId 가 이미 있으면 그대로 둔다', () => {
+    expect(normalizeDefectAttrs(legacy({ prevDefectId: 'd-orig' })).prevDefectId).toBe('d-orig');
+  });
+
+  it('F7 — prevDefectId 가 null 인(이미 정규화된) 레코드는 같은 객체를 돌려준다', () => {
+    const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.6 }, { prevDefectId: null });
+    expect(normalizeDefectAttrs(d)).toBe(d);
+  });
 });

@@ -1351,6 +1351,7 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
     floorId: ctx.floorId ?? '',
     seq: maxSeq + 1,
     status: 'CURRENT',
+    prevDefectId: null, // 새로 만든 결함 — 전회차 참조 없음 (F7)
     marks: [
       { id: markId, defectId, type: 'POINT', geometry: { k: 'POINT', x: at.x, y: at.y }, sortOrder: 0 },
     ],
@@ -1410,6 +1411,7 @@ function createArrowAt(state: CanvasState, screen: SPoint, ctx: ReduceContext): 
     floorId: ctx.floorId ?? '',
     seq: maxSeq + 1,
     status: 'CURRENT',
+    prevDefectId: null, // 새로 만든 결함 — 전회차 참조 없음 (F7)
     marks: [{ id: markId, defectId, type: 'ARROW', geometry, sortOrder: 0 }],
     label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
     sketch: [],
@@ -1475,6 +1477,7 @@ function commitCreateShape(
     floorId: ctx.floorId ?? '',
     seq: maxSeq + 1,
     status: 'CURRENT',
+    prevDefectId: null, // 새로 만든 결함 — 전회차 참조 없음 (F7)
     marks: [{ id: markId, defectId, type: drag.createType, geometry, sortOrder: 0 }],
     label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
     sketch: [],

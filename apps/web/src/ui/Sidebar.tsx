@@ -47,6 +47,10 @@ export function Sidebar({
 }: SidebarProps) {
   const listRef = useRef<HTMLUListElement | null>(null);
   const incomplete = countIncomplete(defects);
+  // F7 — 전회차(PREV_PENDING·REPAIRED) / 금회차(CURRENT) 로 갈라 보여준다.
+  // 전차 등록으로 결함을 가져온 용역이 아니면(전회차 0건) 굳이 나누지 않는다
+  const prevCount = defects.filter((d) => d.status === 'PREV_PENDING' || d.status === 'REPAIRED').length;
+  const currentCount = defects.length - prevCount;
 
   const tree = useMemo(() => {
     const byBuilding = new Map<string, Floor[]>();
@@ -123,7 +127,16 @@ export function Sidebar({
         <h2 className="panel__title">
           조사항목
           <span className="panel__meta">
-            <span className="num">{defects.length}</span>건
+            {prevCount > 0 ? (
+              <span title="전회차 — 아직 확인하지 않았거나 보수완료 처리된 결함">
+                전회차 <span className="num">{prevCount}</span> · 금회차{' '}
+                <span className="num">{currentCount}</span>
+              </span>
+            ) : (
+              <>
+                <span className="num">{defects.length}</span>건
+              </>
+            )}
             {incomplete > 0 && (
               <span className="badge badge--warn" title="부재 또는 결함유형이 비어 있는 결함">
                 미완성 <span className="num">{incomplete}</span>건

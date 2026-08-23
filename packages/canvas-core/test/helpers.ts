@@ -23,6 +23,7 @@ export function defect(
     floorId: 'f',
     seq,
     status: 'CURRENT',
+    prevDefectId: null,
     marks: [m],
     label: { defectId: id, x: labelAt.x, y: labelAt.y, anchorMarkId: m.id, placed: true },
     sketch: [],

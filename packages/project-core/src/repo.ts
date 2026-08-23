@@ -23,11 +23,13 @@ export type ProjectSummary = {
   byteSize: number;
 };
 
-/** 구조 복사 결과 — 토스트 문구에 숫자를 그대로 넣는다 (§2-13) */
+/** 구조 복사 결과 — 토스트 문구에 숫자를 그대로 넣는다 (§2-13 · F7) */
 export type CopyStructureResult = {
   buildings: number;
   floors: number;
   drawings: number;
+  /** `includeDefects` 를 안 켰으면 0 */
+  defects: number;
 };
 
 /**
@@ -98,7 +100,18 @@ export interface ProjectRepo<TDefect = unknown, TMemo = unknown> {
    */
   ensureProjectSettings(projectId: string): Promise<ItemSettings>;
 
-  // ── 구조 복사 (§2-13) ───────────────────────────────────────────────────
-  /** 동·층·도면만 복사한다. **결함은 복사하지 않는다.** Blob 은 같은 키를 참조(refCount++) */
-  copyStructure(fromProjectId: string, toProjectId: string): Promise<CopyStructureResult>;
+  // ── 구조 복사 (§2-13 · F7) ───────────────────────────────────────────────
+  /**
+   * 동·층·도면을 복사한다. Blob 은 같은 키를 참조(refCount++).
+   *
+   * `opts.includeDefects` 가 true 면 결함도 함께 복사한다(F7 — S1 의 결정을 뒤집는다).
+   * 복사된 결함은 전부 `status = 'PREV_PENDING'`, `prevDefectId` 로 원본을 잇는다.
+   * 좌표는 손대지 않는다 — 도면 레코드를 그대로 복사하므로(같은 imageWidth/imageHeight/
+   * imgLayout) 정규화 좌표가 그대로 유효하다.
+   */
+  copyStructure(
+    fromProjectId: string,
+    toProjectId: string,
+    opts?: { includeDefects?: boolean },
+  ): Promise<CopyStructureResult>;
 }

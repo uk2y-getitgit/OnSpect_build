@@ -242,6 +242,12 @@ export type Defect = {
   /** 층 내 입력순번. z-order 와 히트 동률 판정의 기준 */
   seq: number;
   status: DefectStatus;
+  /**
+   * 전회차 원본 결함 참조 (F7 · 상세기획 §3-3). `null` = 이번 회차에 새로 만든 결함.
+   * 값이 있으면 **바로 이전 홉**만 가리킨다(체인은 필요하면 따라가며 조회한다) —
+   * 번호는 저장하지 않는다: 전회차 번호가 필요하면 `prevDefectId` 를 따라가 조회한다.
+   */
+  prevDefectId: string | null;
   marks: Mark[];
   label: Label;
   /**

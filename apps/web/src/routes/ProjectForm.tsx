@@ -39,6 +39,8 @@ type Draft = {
   name: string;
   prevProjectId: string;
   copyStructure: boolean;
+  /** F7 — S1 의 결정을 뒤집는다. 결함까지 가져오면 status=PREV_PENDING(보라)으로 들어간다 */
+  copyDefects: boolean;
 };
 
 export function ProjectForm({ projectId }: { projectId: string | null }) {
@@ -53,6 +55,7 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
     name: '',
     prevProjectId: '',
     copyStructure: false,
+    copyDefects: false,
   }));
   const [others, setOthers] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
@@ -88,6 +91,7 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
         name: p.name,
         prevProjectId: p.prevProjectId ?? '',
         copyStructure: false,
+        copyDefects: false,
       });
       setLoaded(true);
     })();
@@ -165,7 +169,9 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
       // 이후 기본값이 바뀌어도 이 용역의 보고서 용어는 흔들리지 않는다 (D6)
       await storage.repo.ensureProjectSettings(p.id);
       if (prevId && draft.copyStructure) {
-        copied = await storage.repo.copyStructure(prevId, p.id);
+        copied = await storage.repo.copyStructure(prevId, p.id, {
+          includeDefects: draft.copyDefects,
+        });
       } else {
         // **동 1개만 있는 건물이 대다수다.** 빈 화면 장벽을 없앤다 (§2-6)
         await storage.repo.putBuildings([
@@ -179,10 +185,13 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
     reload();
     if (copied) {
       const c: CopyStructureResult = copied;
-      toast(
-        `동 ${c.buildings}개 · 층 ${c.floors}개 · 도면 ${c.drawings}장을 복사했습니다. 결함은 복사되지 않습니다.`,
-        { ttl: 6000 },
-      );
+      const base = `동 ${c.buildings}개 · 층 ${c.floors}개 · 도면 ${c.drawings}장을 복사했습니다.`;
+      // F7 — 결함까지 가져왔으면 전회차(보라)로 들어갔다는 것을 알린다
+      const tail =
+        draft.copyDefects && c.defects > 0
+          ? ` 결함 ${c.defects}건을 전회차로 가져왔습니다.`
+          : ' 결함은 복사되지 않았습니다.';
+      toast(base + tail, { ttl: 6000 });
     }
     // 저장 직후는 P3 다. 목록으로 되돌아가지 않는다 — 다음 할 일이 동 구성이다 (§2-3)
     navigate({ name: 'SETUP', projectId: p.id });
@@ -350,11 +359,39 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
                 <input
                   type="checkbox"
                   checked={draft.copyStructure}
-                  onChange={(e) => setDraft((d) => ({ ...d, copyStructure: e.target.checked }))}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      copyStructure: e.target.checked,
+                      // 동·층·도면 복사를 끄면 결함 승계도 의미가 없다 — 함께 끈다
+                      copyDefects: e.target.checked ? d.copyDefects : false,
+                    }))
+                  }
                 />
                 <span>
                   이전 용역의 동 · 층 · 도면 복사
-                  <em className="check__note">결함은 복사되지 않습니다.</em>
+                  <em className="check__note">
+                    {draft.copyDefects
+                      ? '결함도 함께 가져옵니다 (전회차로 표시).'
+                      : '결함은 복사되지 않습니다.'}
+                  </em>
+                </span>
+              </label>
+            )}
+
+            {/* F7 — S1 의 결정을 뒤집는다. 결함까지 가져오면 status=PREV_PENDING(보라)으로 들어간다 */}
+            {!editing && draft.prevProjectId !== '' && draft.copyStructure && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={draft.copyDefects}
+                  onChange={(e) => setDraft((d) => ({ ...d, copyDefects: e.target.checked }))}
+                />
+                <span>
+                  이전 용역의 결함도 함께 가져오기
+                  <em className="check__note">
+                    전회차(보라색)로 표시됩니다. 현장에서 다시 확인해 처리해 주세요.
+                  </em>
                 </span>
               </label>
             )}

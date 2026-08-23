@@ -416,11 +416,16 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
    * Blob 은 **복사하지 않고 같은 키를 참조**한다(refCount++).
    * 그래서 원본 용역을 지워도 복사본의 도면이 살아 있다.
    */
-  async copyStructure(fromProjectId: string, toProjectId: string): Promise<CopyStructureResult> {
-    const tx = this.db.transaction(
-      [STORE.buildings, STORE.floors, STORE.drawings, STORE.blobs],
-      'readwrite',
-    );
+  async copyStructure(
+    fromProjectId: string,
+    toProjectId: string,
+    opts?: { includeDefects?: boolean },
+  ): Promise<CopyStructureResult> {
+    const includeDefects = opts?.includeDefects ?? false;
+    const stores = includeDefects
+      ? [STORE.buildings, STORE.floors, STORE.drawings, STORE.blobs, STORE.defects]
+      : [STORE.buildings, STORE.floors, STORE.drawings, STORE.blobs];
+    const tx = this.db.transaction(stores, 'readwrite');
     const bs = tx.objectStore(STORE.buildings);
     const fs = tx.objectStore(STORE.floors);
     const ds = tx.objectStore(STORE.drawings);
@@ -448,16 +453,45 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     }
 
     let drawingCount = 0;
+    const drawingMap = new Map<string, string>();
     for (const d of srcDrawings) {
       const fid = floorMap.get(d.floorId);
       if (!fid) continue;
       for (const k of uniqueKeys(d)) await retainBlobIn(blobs, k);
-      ds.put({ ...d, id: newId(), projectId: toProjectId, floorId: fid, createdAt: now, updatedAt: now, deviceId: this.deviceId });
+      const newDrawingId = newId();
+      drawingMap.set(d.id, newDrawingId);
+      ds.put({ ...d, id: newDrawingId, projectId: toProjectId, floorId: fid, createdAt: now, updatedAt: now, deviceId: this.deviceId });
       drawingCount += 1;
     }
 
+    // ── F7 — 결함 승계. 좌표는 손대지 않는다(도면 레코드를 그대로 복사했으므로
+    //    imageWidth/imageHeight/imgLayout 이 같아 정규화 좌표가 그대로 유효하다).
+    //    전부 PREV_PENDING 으로 들어간다 — 지난 회차에 보수완료였던 결함도
+    //    이번 회차에는 다시 확인 대상이다(§Phase 2-D 상태표).
+    let defectCount = 0;
+    if (includeDefects) {
+      const xs = tx.objectStore(STORE.defects);
+      const srcDefects = await getAllByIndex<Defect>(xs, 'by_project', fromProjectId);
+      for (const src of srcDefects) {
+        const fid = floorMap.get(src.floorId);
+        const did = drawingMap.get(src.drawingId);
+        if (!fid || !did) continue;
+        const next: Defect = {
+          ...src,
+          id: newId(),
+          projectId: toProjectId,
+          floorId: fid,
+          drawingId: did,
+          status: 'PREV_PENDING',
+          prevDefectId: src.id,
+        };
+        xs.put(next);
+        defectCount += 1;
+      }
+    }
+
     await txDone(tx);
-    return { buildings: buildingMap.size, floors: floorMap.size, drawings: drawingCount };
+    return { buildings: buildingMap.size, floors: floorMap.size, drawings: drawingCount, defects: defectCount };
   }
 
   // ── 항목 설정 (S3 §2-1 · §2-4) ──────────────────────────────────────────

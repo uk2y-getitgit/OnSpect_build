@@ -64,12 +64,22 @@ export function normalizeDefectAttrs(d: Defect): Defect {
   const hasSketch = Array.isArray(d.sketch);
   const hasMode = d.sizeMode === 'WL' || d.sizeMode === 'AREA';
   // 이미 정규화된 레코드는 **같은 객체를 그대로 돌려준다** (참조 비교로 재렌더를 줄인다)
-  if (hasSketch && hasMode && d.progress !== undefined && d.surveyKind !== undefined) return d;
+  if (
+    hasSketch &&
+    hasMode &&
+    d.progress !== undefined &&
+    d.surveyKind !== undefined &&
+    d.prevDefectId !== undefined
+  ) {
+    return d;
+  }
   return {
     ...EMPTY_DEFECT_ATTRS,
     ...d,
     sketch: hasSketch ? d.sketch : [],
     sizeMode: hasMode ? d.sizeMode : inferSizeMode(d),
+    // F7 — 이전 필드가 없던 옛 레코드는 "전회차 참조 없음"으로 채운다
+    prevDefectId: d.prevDefectId ?? null,
     surveyKind: d.surveyKind ?? EMPTY_DEFECT_ATTRS.surveyKind,
     progress: d.progress ?? EMPTY_DEFECT_ATTRS.progress,
     leak: d.leak ?? EMPTY_DEFECT_ATTRS.leak,

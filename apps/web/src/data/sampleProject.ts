@@ -221,6 +221,7 @@ export async function seedSampleProject(
       floorId: floor.id,
       seq: s.seq,
       status: s.status,
+      prevDefectId: null,
       marks: [m],
       label: {
         defectId: uniqueId,
