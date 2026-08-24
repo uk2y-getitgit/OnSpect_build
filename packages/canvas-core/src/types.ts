@@ -27,14 +27,21 @@ export type MarkType = 'POINT' | 'ARROW' | 'AREA_RECT' | 'AREA_ELLIPSE';
  * ⚠️ **전부 0~1 정규화다** (불변식 #1). 이미지 px 이나 스크린 px 이 들어오면 안 된다.
  * 크기(w·h)도 정규화 비율이다 — 도면 해상도가 바뀌어도 같은 자리에 같은 비율로 남는다.
  *
- * 형식은 S2a 스펙 §S2a-1 에서 확정했다:
- *   ARROW        = 꼬리(from) → 머리(to)
+ * 형식은 S2a 스펙 §S2a-1 (2026-08-24 3차 재개정)에서 확정했다:
+ *   ARROW        = **드래그로 직접 그린 꺾은선**. `points[0]` 이 화살촉(꼬리가 아니라 —
+ *                  화살표는 반대 방향을 가리킨다), 마지막 점이 번호 쪽 끝. **2~4점**
+ *                  (구간 1~3개 = 꺾임 최대 2번). 각 구간은 그리는 동안 실시간으로
+ *                  45도(첫 구간, 8방향) 또는 90도 상대(이후 구간, 직전 구간 기준
+ *                  ±90도)로 스냅되며, **마우스가 실제로 지나간 대로** 확정된다 —
+ *                  번호 위치에서 역산한 경로가 아니다. 번호를 나중에 옮기면 이 경로는
+ *                  그대로 두고 일반 리더선(직선)이 마지막 점에서 번호까지 새로 이어진다.
+ *                  옛 레코드 호환은 `normalizeArrowMarks` 가 읽는 시점에 처리한다(DB 버전은 1 그대로).
  *   AREA_RECT    = 좌상단 + 크기
  *   AREA_ELLIPSE = **외접 사각형** 기준 (중심·반지름이 아니다 — 사각/타원 편집 코드를 공유한다)
  */
 export type MarkGeometry =
   | { k: 'POINT'; x: number; y: number }
-  | { k: 'ARROW'; from: NPoint; to: NPoint }
+  | { k: 'ARROW'; points: NPoint[] }
   | { k: 'AREA_RECT'; x: number; y: number; w: number; h: number }
   | { k: 'AREA_ELLIPSE'; x: number; y: number; w: number; h: number };
 
@@ -407,6 +414,12 @@ export type DragState = {
   pathOrigin: NPoint[] | null;
   pathPreview: NPoint[] | null;
   memoId: string | null;
+  /**
+   * 방향(화살표) 생성 드래그 전용 — 지금까지 확정된(+ 열려 있는 마지막) 구간들의 각도(도).
+   * `geomPreview.points.length - 1` 개. 마지막 값이 "아직 마우스를 따라 늘어나는 중인" 구간의
+   * 각도다. 새 구간이 열릴 때만 값이 늘어난다 — 길이가 바뀌어도 이미 정한 각도는 안 바뀐다
+   */
+  arrowAngles: number[] | null;
 };
 
 /**
@@ -504,9 +517,7 @@ export type InputEvent =
   | { k: 'SET_MARK_COLOR'; defectId: string; color: string | null }
   /** 개별 스타일 전체를 버리고 전역 상속으로 복귀 (§S2a-5 [초기화]) */
   | { k: 'RESET_STYLE'; defectId: string }
-  // ── F2 자유그리기 사후연결 ────────────────────────────────────────────────
-  /** 대기 중인 그리기를 이 결함에 붙인다 */
-  | { k: 'ATTACH_PENDING_SKETCH'; defectId: string }
+  // ── F2 자유그리기 사후연결 — 그리기는 항상 새 결함을 만든다 (2026-08-24) ───
   /** 대기 중인 그리기의 중심에 새 결함을 만들고 붙인다 */
   | { k: 'PENDING_SKETCH_TO_NEW_DEFECT' }
   /** 대기 중인 그리기를 버린다 */

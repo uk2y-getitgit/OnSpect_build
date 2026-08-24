@@ -6,7 +6,7 @@
  *   1. 번호 라벨
  *   2. 영역 리사이즈 핸들 (선택된 결함의 것만)
  *   3. 점 마크
- *   4. 화살표 (머리·꼬리 핸들 → 몸통)
+ *   4. 화살표 (몸통 — 정점 사이 선분들 중 최단거리. 2026-08-24 개정: 핸들 없음, 통째로 이동만)
  *   5. 영역 테두리
  *   6. 자유그리기 선
  *  6-b. 리더선 (S2a 목록에 없다 — 기존 순위의 정신대로 얇은 선들 사이에 둔다)
@@ -108,26 +108,12 @@ export function hitTest(
   const mark = pick(markHits, selection);
   if (mark) return mark;
 
-  // 4. 화살표 — 끝점 핸들이 몸통보다 먼저다 (선택된 것만 핸들 노출)
-  if (selection.defectId) {
-    for (const s of screens) {
-      if (s.defectId !== selection.defectId) continue;
-      for (const m of s.marks) {
-        if (m.type !== 'ARROW' || !m.from || !m.to) continue;
-        if (dist(p, m.to) <= HIT_HANDLE_PX) {
-          return { defectId: s.defectId, part: 'HANDLE', markId: m.id, handle: 'TO' };
-        }
-        if (dist(p, m.from) <= HIT_HANDLE_PX) {
-          return { defectId: s.defectId, part: 'HANDLE', markId: m.id, handle: 'FROM' };
-        }
-      }
-    }
-  }
+  // 4. 화살표 몸통 — 핸들 없음(2026-08-24 개정). 정점을 낱개로 못 옮기고 통째로만 옮긴다(MOVE_SHAPE)
   const arrowHits: HitTarget[] = [];
   for (const s of screens) {
     for (const m of s.marks) {
-      if (m.type !== 'ARROW' || !m.from || !m.to) continue;
-      if (distPointSegment(p, m.from, m.to) <= HIT_STROKE_PX) {
+      if (m.type !== 'ARROW' || !m.points || m.points.length < 2) continue;
+      if (distToPolyline(p, m.points) <= HIT_STROKE_PX) {
         arrowHits.push({ defectId: s.defectId, part: 'MARK', markId: m.id });
       }
     }
@@ -233,6 +219,11 @@ function pick(hits: readonly HitTarget[], selection: Selection): HitTarget | nul
 /**
  * 리더선의 실제 그리기 형상 (§2-7-c).
  * 끝점은 풍선 **테두리에서 멈춘다.** r ≤ balloonRadius 이면 그리지 않는다(null).
+ *
+ * 방향(화살표) 결함도 여기를 그대로 탄다 — `anchor` 가 화살표의 **마지막 점**(번호 쪽 끝)
+ * 이라, 번호가 그 끝에서 가깝게 자동배치돼 있으면(생성 직후) r ≤ balloonR 로 안 그려지고
+ * 화살표 몸통만 보인다. 번호를 나중에 멀리 옮기면 이 직선이 마지막 점에서부터 새로 이어진다
+ * (2026-08-24 재개정 — 그려진 경로는 그대로 두고, 번호 이동은 일반 리더선으로 처리한다).
  */
 export function leaderSegment(s: DefectScreen): { a: SPoint; b: SPoint } | null {
   if (!s.anchor) return null;

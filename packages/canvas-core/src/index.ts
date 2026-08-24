@@ -21,6 +21,7 @@ export * from './visibility.js';
 export * from './style.js';
 export * from './completeness.js';
 export * from './shapes.js';
+export * from './arrowRoute.js';
 export * from './memoGeom.js';
 export * from './defectGeom.js';
 export * from './hitTest.js';

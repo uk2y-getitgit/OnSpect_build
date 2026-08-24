@@ -4,14 +4,10 @@
  * 히트 테스트 · 렌더 모델 · 스냅이 **전부 이 한 곳**을 통해 위치를 얻는다.
  * 세 곳에 복제하면 "클릭은 잡히는데 그림은 딴 데 있는" 버그가 난다.
  */
-import {
-  ARROW_DEFAULT_ANGLE_DEG,
-  ARROW_DEFAULT_LEN_IMG,
-  LABEL_AUTO_ANGLE_DEG,
-  LABEL_AUTO_DIST_FACTOR,
-} from './constants.js';
-import { radians, toScreen } from './geometry.js';
-import type { SRect } from './shapes.js';
+import { LABEL_AUTO_ANGLE_DEG, LABEL_AUTO_DIST_FACTOR } from './constants.js';
+import { angleDeg, radians, toScreen } from './geometry.js';
+import { nearestAngle, SET_8 } from './snapAngle.js';
+import { areaBoundaryPoint, type SRect } from './shapes.js';
 import type {
   Defect,
   Mark,
@@ -23,6 +19,50 @@ import type {
   SPoint,
   Viewport,
 } from './types.js';
+
+/**
+ * 옛 레코드 호환 — ARROW 의 저장 형식이 두 번 바뀌었다:
+ *   ① 최초 형식 `{from,to}` (2점 고정)
+ *   ② 세션 중간 형식 `{x,y,angleDeg}` (화살촉+방향만, 커넥터는 매번 계산 — 커밋된 적 없다)
+ *   ③ 지금 형식 `{points:[...]}` (드래그로 실제 그린 꺾은선, 2~4점)
+ * **읽는 시점에 ③ 으로 바꾼다.** DB 버전은 그대로 1이다(다른 옛 레코드 호환과 같은 방식 —
+ * `normalizeMemo`·`normalizeDrawing` 참조). 이미 ③ 형식인 마크는 손대지 않는다.
+ *
+ * 이미 정규화된 마크뿐이면 **같은 배열을 그대로 돌려준다**(참조 비교로 재렌더를 줄인다).
+ */
+export function normalizeArrowMarks(marks: readonly Mark[]): Mark[] {
+  let changed = false;
+  const out = marks.map((m) => {
+    if (m.type !== 'ARROW') return m;
+    const g = m.geometry as Record<string, unknown>;
+    if (Array.isArray(g.points)) return m as Mark; // 이미 지금 형식
+    changed = true;
+
+    let tip: NPoint;
+    let dir: NPoint | null; // tip 에서 뻗어나가는 방향을 알려주는 두 번째 점(있으면)
+    if (g.from) {
+      tip = g.from as NPoint;
+      dir = (g.to as NPoint | undefined) ?? null;
+    } else if (typeof g.x === 'number' && typeof g.y === 'number') {
+      tip = { x: g.x, y: g.y } as NPoint;
+      dir = null; // ②는 각도만 있고 두 번째 점이 없다 — 아래에서 각도로 만든다
+    } else {
+      tip = { x: 0, y: 0 };
+      dir = null;
+    }
+    // ⚠️ 정규화 좌표에서 그대로 각도를 재면 종횡비 때문에 틀린다(함정 #2) — 도면 크기가
+    // 없는 이 자리에서는 완벽히 보정할 수 없어, ②의 angleDeg 가 있으면 그걸 그대로 쓰고
+    // (이미 화면 기준으로 스냅됐던 값이다), ①(from/to)만 근사로 재계산한다
+    const legacyAngle = typeof g.angleDeg === 'number' ? g.angleDeg : null;
+    const raw = legacyAngle ?? (dir ? angleDeg(tip, dir) : 0);
+    const a = legacyAngle !== null ? legacyAngle : nearestAngle(raw, SET_8);
+    const len = 0.05; // 두 번째 점이 없을 때 쓰는 임의 길이(정규화). 방향만 보존하면 된다
+    const rad = radians(a);
+    const to: NPoint = { x: tip.x + Math.cos(rad) * len, y: tip.y + Math.sin(rad) * len };
+    return { ...m, geometry: { k: 'ARROW', points: [tip, dir ?? to] } as MarkGeometry };
+  });
+  return changed ? out : (marks as Mark[]);
+}
 
 /**
  * 마크의 중심 = **리더선이 붙는 점** (§2-7-b).
@@ -41,8 +81,12 @@ export function centerOfGeometry(g: MarkGeometry): NPoint | null {
     case 'AREA_RECT':
     case 'AREA_ELLIPSE':
       return { x: g.x + g.w / 2, y: g.y + g.h / 2 };
-    case 'ARROW':
-      return { x: g.to.x, y: g.to.y }; // 화살촉 끝
+    case 'ARROW': {
+      // 리더선이 붙는 점 = **번호 쪽 끝**(마지막 점). 화살촉(points[0])의 반대편이다 —
+      // 방향 표기는 "여기서 뻗어나온다"는 뜻이라 번호는 뻗어나온 끝에 붙어야 읽힌다
+      const last = g.points[g.points.length - 1];
+      return last ? { x: last.x, y: last.y } : null;
+    }
     default:
       // 알 수 없는 type 은 무시하고 건너뛴다 (throw 금지 — 스펙 §2-0)
       return null;
@@ -55,26 +99,35 @@ export function geometryToScreen(
   vp: Viewport,
   iw: number,
   ih: number,
-): { rect: SRect | null; from: SPoint | null; to: SPoint | null } {
+): { rect: SRect | null; points: SPoint[] | null } {
   switch (g.k) {
     case 'ARROW':
-      return {
-        rect: null,
-        from: toScreen(g.from, vp, iw, ih),
-        to: toScreen(g.to, vp, iw, ih),
-      };
+      return { rect: null, points: g.points.map((pt) => toScreen(pt, vp, iw, ih)) };
     case 'AREA_RECT':
     case 'AREA_ELLIPSE': {
       const a = toScreen({ x: g.x, y: g.y }, vp, iw, ih);
       return {
         rect: { x: a.x, y: a.y, w: g.w * iw * vp.zoom, h: g.h * ih * vp.zoom },
-        from: null,
-        to: null,
+        points: null,
       };
     }
     default:
-      return { rect: null, from: null, to: null };
+      return { rect: null, points: null };
   }
+}
+
+/**
+ * 화살표(방향 표기)의 **마지막 구간 각도**(도) — 도면 종횡비를 보정해서 스크린 기준으로 잰다.
+ * `zoom=1, tx=ty=0` 가상 뷰포트로 두 점을 스크린 변환한 뒤 각도를 재는 방식이다 —
+ * 실제 뷰포트(줌·팬)는 각도에 영향을 주지 않으므로(등방 확대·평행이동) 이걸로 충분하다.
+ * 점이 1개뿐이면(비정상) null.
+ */
+export function arrowLastLegAngleDeg(points: readonly NPoint[], iw: number, ih: number): number | null {
+  if (points.length < 2) return null;
+  const vp: Viewport = { zoom: 1, tx: 0, ty: 0 };
+  const a = toScreen(points[points.length - 2]!, vp, iw, ih);
+  const b = toScreen(points[points.length - 1]!, vp, iw, ih);
+  return angleDeg(a, b);
 }
 
 /** 리더선이 붙는 지점 (§2-7-b) */
@@ -106,34 +159,32 @@ export function anchorNorm(defect: Defect): NPoint | null {
 }
 
 /**
- * 자동 배치 위치 (B14) — 마크에서 우상단 45도, 거리 = 풍선 반지름 × 3.
- * 거리는 **이미지 px** 로 잰다. 정규화 공간에서 재면 종횡비 때문에 45도가 아니게 된다.
+ * 자동 배치 위치 (B14) — 마크에서 `angleDeg` 방향(기본 우상단 45도), 거리 = 풍선 반지름 × 3.
+ * 거리는 **이미지 px** 로 잰다. 정규화 공간에서 재면 종횡비 때문에 그 각도로 안 보인다.
+ *
+ * ARROW 는 방향이 이미 고정돼 있으므로(`Mark.geometry.angleDeg`) 그 방향을 넘겨 쓴다 —
+ * 화살촉이 가리키는 방향과 다른 쪽에 번호가 뜨면 "그려진 선이 곧 지시선"이 깨진다.
+ * 호출자가 안 넘기면 기본값(우상단 45도)을 쓴다(POINT · AREA_*).
  */
 export function autoLabelNorm(
   anchor: NPoint,
   balloonRadiusImg: number,
   iw: number,
   ih: number,
+  angleDegOverride?: number,
 ): NPoint {
   const d = balloonRadiusImg * LABEL_AUTO_DIST_FACTOR;
-  const a = radians(LABEL_AUTO_ANGLE_DEG);
+  const a = radians(angleDegOverride ?? LABEL_AUTO_ANGLE_DEG);
   return { x: anchor.x + (d * Math.cos(a)) / iw, y: anchor.y + (d * Math.sin(a)) / ih };
 }
 
 /**
- * F2 — 화살표를 점처럼 클릭 한 번으로 만들 때의 기본 머리(TO) 위치.
- * `autoLabelNorm` 과 같은 원리 — 거리를 **이미지 px** 로 재야 도면 종횡비와
- * 무관하게 화면에서 항상 같은 방향으로 보인다. 사용자가 머리 핸들로 나중에 조정한다.
+ * 실제로 그려지는 라벨 중심. placed=false 면 자동 배치 위치를 쓴다.
+ *
+ * 방향(화살표) 결함은 마크가 정확히 1개일 때 **마지막 구간 방향으로 그대로 이어서**
+ * 배치한다 — 그래야 번호로 이어지는 리더선이 화살표 몸통과 한 줄로 보인다(꺾여 보이지 않는다).
+ * 마크가 여러 개(centroid 앵커)면 이 최적화를 포기하고 기본 각도(우상단 45도)를 쓴다.
  */
-export function defaultArrowTo(from: NPoint, iw: number, ih: number): NPoint {
-  const a = radians(ARROW_DEFAULT_ANGLE_DEG);
-  return {
-    x: from.x + (ARROW_DEFAULT_LEN_IMG * Math.cos(a)) / iw,
-    y: from.y + (ARROW_DEFAULT_LEN_IMG * Math.sin(a)) / ih,
-  };
-}
-
-/** 실제로 그려지는 라벨 중심. placed=false 면 자동 배치 위치를 쓴다 */
 export function effectiveLabelNorm(
   defect: Defect,
   style: ResolvedStyle,
@@ -143,7 +194,11 @@ export function effectiveLabelNorm(
   if (defect.label.placed) return { x: defect.label.x, y: defect.label.y };
   const a = anchorNorm(defect);
   if (!a) return { x: defect.label.x, y: defect.label.y };
-  return autoLabelNorm(a, style.balloonRadius, iw, ih);
+  let angleOverride: number | undefined;
+  if (defect.marks.length === 1 && defect.marks[0]!.geometry.k === 'ARROW') {
+    angleOverride = arrowLastLegAngleDeg(defect.marks[0]!.geometry.points, iw, ih) ?? undefined;
+  }
+  return autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride);
 }
 
 export type MarkScreen = {
@@ -153,9 +208,8 @@ export type MarkScreen = {
   center: SPoint;
   /** AREA_* — 외접 사각형(스크린). 그 외에는 null */
   rect: SRect | null;
-  /** ARROW — 꼬리·머리(스크린). 그 외에는 null */
-  from: SPoint | null;
-  to: SPoint | null;
+  /** ARROW — 정점 전부(스크린, 꼬리→머리 순). 그 외에는 null */
+  points: SPoint[] | null;
   /** 미리보기까지 반영된 정규화 기하. 편집 커맨드가 이 값을 근거로 만들어진다 */
   geometry: MarkGeometry;
 };
@@ -224,8 +278,7 @@ export function defectScreen(
       type: m.type,
       center: toScreen(c, vp, iw, ih),
       rect: s.rect,
-      from: s.from,
-      to: s.to,
+      points: s.points,
       geometry: g,
     });
   }
@@ -245,11 +298,27 @@ export function defectScreen(
     });
   }
 
+  const label = toScreen(labelN, vp, iw, ih);
+  let anchor = anchorN ? toScreen(anchorN, vp, iw, ih) : null;
+
+  // 영역(사각/타원) 결함 — 지시선은 도형 **중앙**이 아니라 라벨 쪽 테두리에 붙는다
+  // (2026-08-24, 사용자 지적 — "지금은 영역 중앙점에 지시선 연결됨, 어색함").
+  // 마크가 정확히 1개일 때만 적용한다 — 여러 마크가 얽힌 경우(centroid 앵커)는
+  // 어느 도형 테두리를 기준으로 삼을지 모호해 손대지 않는다(§2-7-b 의 기본 규칙 유지).
+  if (anchor && marks.length === 1) {
+    const only = marks[0]!;
+    if ((only.type === 'AREA_RECT' || only.type === 'AREA_ELLIPSE') && only.rect) {
+      anchor = areaBoundaryPoint(only.rect, only.type, label);
+    }
+    // ARROW 는 여기서 손댈 것이 없다 — `only.points` 는 이미 실제로 그린 꺾은선이고,
+    // 번호까지는 일반 리더선(leaderSegment)이 마지막 점에서부터 잇는다
+  }
+
   return {
     defectId: defect.id,
     seq: defect.seq,
-    label: toScreen(labelN, vp, iw, ih),
-    anchor: anchorN ? toScreen(anchorN, vp, iw, ih) : null,
+    label,
+    anchor,
     marks,
     sketch,
     balloonR: style.balloonRadius * vp.zoom,

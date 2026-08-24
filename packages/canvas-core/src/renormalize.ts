@@ -43,7 +43,7 @@ export function mapGeometry(g: MarkGeometry, t: NormTransform): MarkGeometry {
       return { k: 'POINT', x: p.x, y: p.y };
     }
     case 'ARROW':
-      return { k: 'ARROW', from: mapPoint(g.from, t), to: mapPoint(g.to, t) };
+      return { k: 'ARROW', points: g.points.map((p) => mapPoint(p, t)) };
     case 'AREA_RECT':
     case 'AREA_ELLIPSE': {
       const at = mapPoint({ x: g.x, y: g.y }, t);

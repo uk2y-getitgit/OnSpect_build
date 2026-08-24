@@ -8,7 +8,7 @@
  * 이 파일은 순수 함수만 담는다. 상태·시간·난수를 모른다.
  */
 import { AREA_HANDLES, type Handle, type MarkGeometry, type NPoint, type SPoint } from './types.js';
-import { clamp, dist, distPointSegment, unit } from './geometry.js';
+import { clamp, dist, distPointSegment, sub, unit } from './geometry.js';
 
 // ── 사각형 ─────────────────────────────────────────────────────────────────
 export type SRect = { x: number; y: number; w: number; h: number };
@@ -36,6 +36,41 @@ export function squareTo(start: SPoint, end: SPoint): SPoint {
 
 export function rectCenter(r: SRect): SPoint {
   return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+}
+
+/**
+ * 영역(사각/타원) 중심에서 `target` 방향으로 뻗은 반직선이 **테두리와 만나는 점**.
+ * 지시선은 영역 중앙이 아니라 이 점에 붙는다(§2-7-b 개정, 2026-08-24) — 중앙에 붙으면
+ * 큰 영역일수록 선이 도형 속을 가로질러 어색해 보인다는 사용자 지적.
+ *
+ * **스크린 px 에서 계산한다** — 정규화 공간은 도면 종횡비만큼 눌려 있어 방향이 틀어진다(함정 #2).
+ * `target` 이 중심과 겹치면(드문 경우) 방향이 없으므로 중심을 그대로 돌려준다.
+ */
+export function areaBoundaryPoint(
+  r: SRect,
+  kind: 'AREA_RECT' | 'AREA_ELLIPSE',
+  target: SPoint,
+): SPoint {
+  const c = rectCenter(r);
+  const d = sub(target, c);
+  if (d.x === 0 && d.y === 0) return c;
+  const halfW = r.w / 2;
+  const halfH = r.h / 2;
+  if (kind === 'AREA_RECT') {
+    // 중심에서 각 변까지의 "그 방향" 거리 중 더 가까운(먼저 만나는) 쪽이 실제 교차점이다
+    const tx = d.x !== 0 ? halfW / Math.abs(d.x) : Infinity;
+    const ty = d.y !== 0 ? halfH / Math.abs(d.y) : Infinity;
+    const t = Math.min(tx, ty);
+    return { x: c.x + d.x * t, y: c.y + d.y * t };
+  }
+  // AREA_ELLIPSE — 반직선과 타원의 교차점 (표준 매개식: 반지름(u) = ab / √(b²ux² + a²uy²))
+  const u = unit(d);
+  const a = halfW;
+  const b = halfH;
+  const denom = Math.sqrt(b * b * u.x * u.x + a * a * u.y * u.y);
+  if (denom === 0) return c;
+  const t = (a * b) / denom;
+  return { x: c.x + u.x * t, y: c.y + u.y * t };
 }
 
 /** 8방향 핸들의 좌표. 순서는 `AREA_HANDLES` 와 같다 */
@@ -335,11 +370,8 @@ export function translateGeometry(g: MarkGeometry, dx: number, dy: number): Mark
     case 'POINT':
       return { k: 'POINT', x: g.x + dx, y: g.y + dy };
     case 'ARROW':
-      return {
-        k: 'ARROW',
-        from: { x: g.from.x + dx, y: g.from.y + dy },
-        to: { x: g.to.x + dx, y: g.to.y + dy },
-      };
+      // 꺾은선 — 점 전체를 옮긴다. 방향(각 구간의 각도)은 상대 위치라 자연히 유지된다
+      return { k: 'ARROW', points: g.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
     case 'AREA_RECT':
     case 'AREA_ELLIPSE':
       return { ...g, x: g.x + dx, y: g.y + dy };
@@ -353,13 +385,19 @@ export function geometryBounds(g: MarkGeometry): { x: number; y: number; w: numb
   switch (g.k) {
     case 'POINT':
       return { x: g.x, y: g.y, w: 0, h: 0 };
-    case 'ARROW':
-      return {
-        x: Math.min(g.from.x, g.to.x),
-        y: Math.min(g.from.y, g.to.y),
-        w: Math.abs(g.to.x - g.from.x),
-        h: Math.abs(g.to.y - g.from.y),
-      };
+    case 'ARROW': {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const p of g.points) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
     case 'AREA_RECT':
     case 'AREA_ELLIPSE':
       return { x: g.x, y: g.y, w: g.w, h: g.h };

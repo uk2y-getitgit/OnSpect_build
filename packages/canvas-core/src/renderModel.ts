@@ -180,7 +180,7 @@ export type RenderInput = {
 
 /** 아직 커밋되지 않은 생성 미리보기. 문서에 없으므로 DefectScreen 이 아니다 */
 export type GhostShape =
-  | { k: 'ARROW'; from: SPoint; to: SPoint; color: string; width: number; head: number }
+  | { k: 'ARROW'; points: SPoint[]; color: string; width: number; head: number }
   | {
       k: 'AREA_RECT' | 'AREA_ELLIPSE';
       rect: SRect;
@@ -290,9 +290,10 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
       if (m.type === 'AREA_RECT' || m.type === 'AREA_ELLIPSE') {
         const hovered = hov?.part === 'MARK' && hov.markId === m.id;
         areaOps(m, st, alpha, zoom, hovered, fills, shapes);
-      } else if (m.type === 'ARROW' && m.from && m.to) {
+      } else if (m.type === 'ARROW' && m.points && m.points.length >= 2) {
         const hovered = hov?.part === 'MARK' && hov.markId === m.id;
-        arrowOps(m.from, m.to, st, alpha, zoom, hovered, shapes);
+        // 그린 그대로 그린다 — 번호까지 남은 구간은 아래 "3. 리더선"이 잇는다(일반 결함과 동일)
+        arrowOps(m.points, st, alpha, zoom, hovered, shapes);
       }
     }
 
@@ -358,10 +359,8 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
             dash: [4, 3],
           });
           for (const h of handlePoints(m.rect)) highlights.push(handleOp(h.at));
-        } else if (m.type === 'ARROW' && m.from && m.to) {
-          highlights.push(handleOp(m.from));
-          highlights.push(handleOp(m.to));
         }
+        // ARROW 는 핸들이 없다(2026-08-24 개정) — 정점 낱개 편집 대신 통째로 이동만 지원한다
       }
     }
 
@@ -529,27 +528,37 @@ function areaOps(
   }
 }
 
+/**
+ * 방향(화살표) 커넥터 — `points[0]` 이 화살촉(2026-08-24 재개정, 예전엔 마지막 점이었다).
+ * 화살촉은 `points[1]` 반대쪽(= 처음 고정한 방향)을 가리킨다. 나머지 구간(꺾인 부분 포함)은
+ * 곧은 선분 그대로 잇는다 — **이 선 전체가 지시선이다**, 별도로 그리는 리더선이 없다.
+ */
 function arrowOps(
-  from: SPoint,
-  to: SPoint,
+  points: readonly SPoint[],
   st: ResolvedStyle,
   alpha: number,
   zoom: number,
   hovered: boolean,
   out: DrawOp[],
 ): void {
+  if (points.length < 2) return;
   const head = Math.max(6, st.arrowHead * zoom);
   const width = Math.max(1, st.markStroke * zoom) + (hovered ? HOVER_STROKE_GROW_PX : 0);
+
+  const tip = points[0]!;
+  const next = points[1]!;
+  // arrowShaftEnd/arrowHeadPolygon 은 "to 에서 from 반대 방향으로 화살촉을 그린다"는 계약이다.
+  // 화살촉이 tip 에 있고 next 반대쪽을 가리켜야 하므로 from=next, to=tip 으로 뒤집어 넘긴다
   out.push({
     k: 'line',
-    a: from,
-    b: arrowShaftEnd(from, to, head),
+    a: next,
+    b: arrowShaftEnd(next, tip, head),
     color: st.color,
     width,
     alpha,
     cap: 'round',
   });
-  const tri = arrowHeadPolygon(from, to, head);
+  const tri = arrowHeadPolygon(next, tip, head);
   if (tri) {
     out.push({
       k: 'polyline',
@@ -560,6 +569,18 @@ function arrowOps(
       fill: st.color,
       alpha,
       noStroke: true,
+    });
+  }
+
+  for (let i = 1; i < points.length - 1; i += 1) {
+    out.push({
+      k: 'line',
+      a: points[i]!,
+      b: points[i + 1]!,
+      color: st.color,
+      width,
+      alpha,
+      cap: 'round',
     });
   }
 }
@@ -641,10 +662,10 @@ export const PENDING_DASH: readonly number[] = [7, 5];
 
 function ghostToOps(g: GhostShape, dashOverride?: readonly number[]): DrawOp[] {
   if (g.k === 'ARROW') {
+    if (g.points.length < 2) return [];
     const out: DrawOp[] = [];
     arrowOps(
-      g.from,
-      g.to,
+      g.points,
       {
         color: g.color,
         opacity: 1,
@@ -735,8 +756,7 @@ function intersectsCanvas(s: DefectScreen, canvas: Size): boolean {
       grow(m.rect.x, m.rect.y);
       grow(m.rect.x + m.rect.w, m.rect.y + m.rect.h);
     }
-    if (m.from) grow(m.from.x, m.from.y);
-    if (m.to) grow(m.to.x, m.to.y);
+    if (m.points) for (const p of m.points) grow(p.x, p.y);
   }
   for (const path of s.sketch) {
     for (const p of path.points) grow(p.x, p.y, path.width);

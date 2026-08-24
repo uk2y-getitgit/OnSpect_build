@@ -21,15 +21,16 @@ import type { Command } from './commands.js';
 import { EMPTY_DEFECT_ATTRS } from './defectAttrs.js';
 import {
   anchorNorm,
+  arrowLastLegAngleDeg,
   autoLabelNorm,
   centerOfGeometry,
   centerOfMark,
-  defaultArrowTo,
   effectiveLabelNorm,
   isLocked,
   sketchOf,
 } from './defectGeom.js';
 import type { DefectScreen, PreviewOverride } from './defectGeom.js';
+import { advanceArrowDrag } from './arrowRoute.js';
 import { clamp, dist, lockAxis, roundNorm, toNorm, toScreen } from './geometry.js';
 import { inkAnchor, isInkMemo, memoScreens, type MemoScreen } from './memoGeom.js';
 import {
@@ -206,13 +207,15 @@ export function memoScreensOf(state: CanvasState, ctx: ReduceContext): MemoScree
  * 어댑터는 `RenderInput.ghost` 에 그대로 넣는다.
  */
 export function ghostOf(state: CanvasState, ctx: ReduceContext): GhostShape | null {
-  const d = state.drag;
-  if (!d || !state.drawing) return null;
+  if (!state.drawing) return null;
   const iw = state.drawing.imageWidth;
   const ih = state.drawing.imageHeight;
   const vp = state.viewport;
   const st = ctx.globalStyle;
   const color = st.statusColor.CURRENT;
+
+  const d = state.drag;
+  if (!d) return null;
 
   if (d.kind === 'CREATE_SKETCH' && d.pathPreview && d.pathPreview.length >= 2) {
     // F2 — 같은 드래그 커널을 쓰지만 **메모는 중립 앰버**로 미리보기한다.
@@ -228,10 +231,11 @@ export function ghostOf(state: CanvasState, ctx: ReduceContext): GhostShape | nu
   if (d.kind !== 'CREATE_SHAPE' || !d.geomPreview) return null;
   const g = d.geomPreview;
   if (g.k === 'ARROW') {
+    // 지금까지 실제로 드래그한 대로다 — g.points 가 이미 그 라이브 미리보기다 (advanceArrowDrag)
+    if (g.points.length < 2) return null;
     return {
       k: 'ARROW',
-      from: toScreen(g.from, vp, iw, ih),
-      to: toScreen(g.to, vp, iw, ih),
+      points: g.points.map((p) => toScreen(p, vp, iw, ih)),
       color,
       width: Math.max(1, st.markStroke * vp.zoom),
       head: Math.max(6, st.arrowHead * vp.zoom),
@@ -607,10 +611,7 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
       );
     }
 
-    // ── F2 자유그리기 사후연결 ────────────────────────────────────────────
-    case 'ATTACH_PENDING_SKETCH':
-      return attachPendingSketch(state, ev.defectId, ctx);
-
+    // ── F2 자유그리기 사후연결 — 그리기 완료(항상 새 결함) ───────────────────
     case 'PENDING_SKETCH_TO_NEW_DEFECT':
       return pendingSketchToNewDefect(state, ctx);
 
@@ -719,23 +720,13 @@ function onPointerDown(
    * 히트 테스트 우선순위(§2-4)에서 라벨이 이미 최상위이므로, 여기서는 그 결과를
    * 도구보다 앞세우기만 하면 된다. 라벨이 아닌 다른 표기 위는 여전히 도구가 이긴다.
    *
-   * F2 — **화살표는 점과 동일하게 클릭 한 번으로 만든다** (드래그 생성이 아니다).
-   * 그래서 ARROW 는 여기서 드래그-생성 분기로 보내지 않고, POINT 처럼 아래
-   * 공통 흐름(빈 도면 → 팬 후보 → UP 에서 클릭 판정)을 그대로 탄다.
+   * 방향(화살표) — 2026-08-24 재개정. **눌러서 끄는 드래그**로 방향(45도 8방향)을
+   * 정한다 — 영역과 같은 생성 드래그 경로(`startCreateShape`)를 탄다. 점만 클릭 한 번이다.
    */
-  /**
-   * F2 사후연결 — 대기 중인 그리기가 있고 **결함 위**를 누르면 곧장 붙인다.
-   * 도구를 바꾸지 않고도 붙을 곳을 고를 수 있어야 한다(AD14 설계 메모).
-   * 빈 곳을 누르면 아무 일도 없고 계속 대기한다(아래 공통 흐름으로 내려간다).
-   */
-  if (next0.pendingSketch && hit?.defectId) {
-    return attachPendingSketch(next0, hit.defectId, ctx);
-  }
-
   const createType = TOOL_MARK_TYPE[next0.tool];
   const labelGrabbed = hit?.part === 'LABEL';
   if (!labelGrabbed) {
-    if (createType && createType !== 'POINT' && createType !== 'ARROW') {
+    if (createType && createType !== 'POINT') {
       return startCreateShape(next0, ev.screen, createType, ev.pointerId, ctx);
     }
     // F2 — 메모도 자유그리기와 **같은 드래그 커널**을 탄다 (손글씨 메모).
@@ -745,8 +736,8 @@ function onPointerDown(
     }
   }
 
-  // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점·화살표·메모 도구면 생성)
-  if (!hit) return startPan(next0.tool === 'POINT' || next0.tool === 'ARROW');
+  // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점 도구면 생성)
+  if (!hit) return startPan(next0.tool === 'POINT');
 
   // ── 메모 (결함이 아니다) ──────────────────────────────────────────────
   if (hit.part === 'MEMO' && hit.memoId) {
@@ -807,7 +798,7 @@ function onPointerDown(
     return ok({ ...selected, drag, guides: [] }, ctx);
   }
 
-  // ── 영역 리사이즈 · 화살표 끝점 (§S2a-4) ───────────────────────────────
+  // ── 영역 리사이즈 (§S2a-4). 화살표는 핸들이 없다(2026-08-24 개정) ───────
   if (hit.part === 'HANDLE' && hit.handle && hit.markId) {
     const m = defect.marks.find((x) => x.id === hit.markId);
     if (!m) return ok(selected, ctx);
@@ -905,7 +896,10 @@ function startCreateShape(
     ...newDrag('CREATE_SHAPE', pointerId, screen, state.viewport, {}),
     createStart: n,
     createType: type,
-    geomPreview: shapeFrom(type, n, n),
+    // ARROW 는 shapeFrom(영역 전용)이 못 만든다 — 화살촉 하나만 있고 아직 방향도 없다.
+    // 방향(45도 첫 구간)은 POINTER_MOVE 에서 실제로 끌기 시작해야 정해진다(advanceArrowDrag)
+    geomPreview: type === 'ARROW' ? { k: 'ARROW', points: [n] } : shapeFrom(type, n, n),
+    arrowAngles: type === 'ARROW' ? [] : null,
   };
   return ok({ ...state, drag, guides: [], selection: { ...NO_SELECTION } }, ctx);
 }
@@ -929,9 +923,12 @@ function startCreateSketch(
   return ok({ ...state, drag, guides: [] }, ctx);
 }
 
-/** 시작점·끝점(정규화)에서 타입별 기하를 만든다 */
+/**
+ * 시작점·끝점(정규화)에서 영역 기하를 만든다.
+ * **ARROW 는 여기로 오지 않는다** — 각도(45도 스냅)가 있어야 하는 도형이라
+ * `onPointerMove`/`commitCreateShape` 의 CREATE_SHAPE 분기가 따로 만든다.
+ */
 function shapeFrom(type: MarkType, a: NPoint, b: NPoint): MarkGeometry {
-  if (type === 'ARROW') return { k: 'ARROW', from: { ...a }, to: { ...b } };
   const r = normalizeRect(a.x, a.y, b.x, b.y);
   if (type === 'AREA_ELLIPSE') return { k: 'AREA_ELLIPSE', x: r.x, y: r.y, w: r.w, h: r.h };
   return { k: 'AREA_RECT', x: r.x, y: r.y, w: r.w, h: r.h };
@@ -971,6 +968,7 @@ function newDrag(
     pathOrigin: null,
     pathPreview: null,
     memoId: null,
+    arrowAngles: null,
     ...extra,
   };
 }
@@ -1007,8 +1005,7 @@ function onPointerMove(
         hover.pathId === (state.hover.pathId ?? null) &&
         hover.memoId === (state.hover.memoId ?? null) &&
         hover.handle === (state.hover.handle ?? null));
-    const next = { ...state, keys: ev.keys };
-    return ok(same ? next : { ...next, hover }, ctx);
+    return ok(same ? { ...state, keys: ev.keys } : { ...state, keys: ev.keys, hover }, ctx);
   }
 
   if (drag.pointerId !== ev.pointerId) return ok(state, ctx);
@@ -1032,9 +1029,34 @@ function onPointerMove(
     const type = drag.createType;
     if (!start || !type) return ok(state, ctx);
     const startS = toScreen(start, state.viewport, iw, ih);
-    // Shift = 정사각/정원(영역) · 축 고정(방향). **스크린에서** 판정해야 화면에서 반듯하다
+
+    // 방향(화살표) — 마우스가 실제로 지나간 대로 그린다. 첫 구간은 45도(8방향),
+    // 그 뒤로 옆으로 벗어나면 직전 구간 기준 90도 상대로 최대 2번까지 꺾인다(advanceArrowDrag).
+    // Shift 는 필요 없다 — 자유각이 아예 없으니 축 고정을 따로 둘 이유가 없다
+    if (type === 'ARROW') {
+      const g = drag.geomPreview;
+      if (!g || g.k !== 'ARROW') return ok(state, ctx);
+      const ptsS = g.points.map((p) => toScreen(p, state.viewport, iw, ih));
+      const next = advanceArrowDrag(ptsS, drag.arrowAngles ?? [], ev.screen);
+      const points = next.points.map((p) => {
+        const n = toNorm(p, state.viewport, iw, ih);
+        return { x: clamp(n.x, 0, 1), y: clamp(n.y, 0, 1) };
+      });
+      const geometry: MarkGeometry = { k: 'ARROW', points };
+      return ok(
+        {
+          ...state,
+          keys: ev.keys,
+          guides: [],
+          drag: { ...drag, moved, geomPreview: geometry, arrowAngles: next.angles },
+        },
+        ctx,
+      );
+    }
+
+    // Shift = 정사각/정원(영역). **스크린에서** 판정해야 화면에서 반듯하다
     let endS: SPoint = ev.screen;
-    if (ev.keys.shift) endS = type === 'ARROW' ? lockAxis(endS, startS) : squareTo(startS, endS);
+    if (ev.keys.shift) endS = squareTo(startS, endS);
     const endN = toNorm(endS, state.viewport, iw, ih);
     const clampedEnd: NPoint = { x: clamp(endN.x, 0, 1), y: clamp(endN.y, 0, 1) };
     return ok(
@@ -1109,13 +1131,10 @@ function onPointerMove(
     if (!origin || !handle) return ok(state, ctx);
     const n = toNorm(ev.screen, state.viewport, iw, ih);
     const at: NPoint = { x: clamp(n.x, 0, 1), y: clamp(n.y, 0, 1) };
+    // ARROW 는 여기 오지 않는다 — 핸들이 없다(2026-08-24 개정, hitTest 가 더 이상
+    // ARROW 에 대해 'HANDLE' 을 내지 않는다). 남는 것은 AREA_RECT · AREA_ELLIPSE 뿐이다
     let next: MarkGeometry = origin;
-    if (origin.k === 'ARROW') {
-      next =
-        handle === 'FROM'
-          ? { k: 'ARROW', from: at, to: origin.to }
-          : { k: 'ARROW', from: origin.from, to: at };
-    } else if (origin.k === 'AREA_RECT' || origin.k === 'AREA_ELLIPSE') {
+    if (origin.k === 'AREA_RECT' || origin.k === 'AREA_ELLIPSE') {
       // 리사이즈는 **스크린에서** 계산한다. 정규화 공간에서 Shift 정사각을 하면 화면에서 안 반듯하다
       const o = toScreen({ x: origin.x, y: origin.y }, state.viewport, iw, ih);
       const rectS = {
@@ -1281,7 +1300,6 @@ function onPointerUp(
     // 이동 없는 클릭
     if (drag.pointToolCandidate && state.drawing) {
       if (state.tool === 'POINT') return createDefectAt(cleared, ev.screen, ctx);
-      if (state.tool === 'ARROW') return createArrowAt(cleared, ev.screen, ctx);
     }
     return ok({ ...cleared, selection: { ...NO_SELECTION } }, ctx);
   }
@@ -1453,65 +1471,7 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
   );
 }
 
-// ── 방향(화살표) 클릭 생성 (F2) ────────────────────────────────────────────
-/**
- * 화살표를 **점과 동일하게** 클릭 한 번으로 만든다(F2). 머리(TO)는 기본 방향·길이로
- * 놓고, 사용자가 나중에 머리 핸들을 끌어 조정한다(§2-4 히트 우선순위의 HANDLE 판정을
- * 그대로 재사용한다 — 이 함수는 생성만 하고 편집 경로는 기존 그대로다).
- */
-function createArrowAt(state: CanvasState, screen: SPoint, ctx: ReduceContext): ReduceResult {
-  if (!state.drawing) return ok(state, ctx);
-  const iw = state.drawing.imageWidth;
-  const ih = state.drawing.imageHeight;
-  const n = toNorm(screen, state.viewport, iw, ih);
-
-  // 마크는 [0,1] 클램프 대상이다. 도면 밖 클릭은 결함의 실제 위치가 될 수 없으므로 무시한다
-  if (n.x < 0 || n.x > 1 || n.y < 0 || n.y > 1) {
-    return ok(state, ctx, [], [{ k: 'TOAST', kind: 'warn', text: '도면 안쪽을 클릭해 주세요' }]);
-  }
-
-  const from = roundNorm(n);
-  const to = roundNorm(defaultArrowTo(from, iw, ih));
-  const geometry: MarkGeometry = { k: 'ARROW', from, to };
-
-  const defectId = ctx.makeId();
-  const markId = ctx.makeId();
-
-  let maxSeq = 0;
-  for (const d of ctx.defects) if (d.seq > maxSeq) maxSeq = d.seq;
-
-  const anchor = centerOfGeometry(geometry) ?? from;
-  const auto = roundNorm(autoLabelNorm(anchor, ctx.globalStyle.balloonRadius, iw, ih));
-
-  const defect: Defect = {
-    id: defectId,
-    projectId: ctx.projectId ?? '',
-    drawingId: state.drawing.id,
-    floorId: ctx.floorId ?? '',
-    seq: maxSeq + 1,
-    status: 'CURRENT',
-    prevDefectId: null, // 새로 만든 결함 — 전회차 참조 없음 (F7)
-    marks: [{ id: markId, defectId, type: 'ARROW', geometry, sortOrder: 0 }],
-    label: { defectId, x: auto.x, y: auto.y, anchorMarkId: markId, placed: false },
-    sketch: [],
-    style: null,
-    // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
-    ...EMPTY_DEFECT_ATTRS,
-    ...(ctx.defectSeed ?? {}),
-  };
-
-  return ok(
-    { ...state, selection: { defectId, part: 'MARK', markId } },
-    ctx,
-    [{ k: 'CREATE_DEFECT', defect }],
-    [
-      { k: 'TOAST', kind: 'info', text: '표기가 추가되었습니다', undoable: true },
-      { k: 'REVEAL_DEFECT', defectId },
-    ],
-  );
-}
-
-// ── 영역 생성 커밋 (§S2a-2) ─────────────────────────────────────────────────
+// ── 영역 생성 커밋 (§S2a-2) — 방향(화살표)도 여기서 만든다(2026-08-24 재개정) ──
 function commitCreateShape(
   state: CanvasState,
   drag: DragState,
@@ -1525,19 +1485,24 @@ function commitCreateShape(
 
   // 드래그 거리가 최소 임계값 미만이면 **생성을 취소한다.** 실수 클릭 방지 (§S2a-2)
   const g = drag.geomPreview;
-  const a = g.k === 'ARROW' ? g.from : { x: g.k === 'POINT' ? g.x : g.x, y: g.k === 'POINT' ? g.y : g.y };
-  const b =
-    g.k === 'ARROW'
-      ? g.to
-      : g.k === 'AREA_RECT' || g.k === 'AREA_ELLIPSE'
-        ? { x: g.x + g.w, y: g.y + g.h }
-        : a;
-  const aS = toScreen(a, state.viewport, iw, ih);
-  const bS = toScreen(b, state.viewport, iw, ih);
-  if (dist(aS, bS) < CREATE_MIN_DRAG_PX) {
-    return ok(state, ctx, [], [
-      { k: 'TOAST', kind: 'warn', text: '끌어서 크기를 지정해 주세요' },
-    ]);
+  if (g.k === 'ARROW') {
+    // 방향이 아직 안 잡혔으면(점 1개뿐) 취소 — advanceArrowDrag 가 최소 이동량을 넘겨야
+    // 두 번째 점을 낸다
+    if (g.points.length < 2) {
+      return ok(state, ctx, [], [
+        { k: 'TOAST', kind: 'warn', text: '끌어서 방향을 정해 주세요' },
+      ]);
+    }
+  } else {
+    const a = { x: g.x, y: g.y };
+    const b = g.k === 'AREA_RECT' || g.k === 'AREA_ELLIPSE' ? { x: g.x + g.w, y: g.y + g.h } : a;
+    const aS = toScreen(a, state.viewport, iw, ih);
+    const bS = toScreen(b, state.viewport, iw, ih);
+    if (dist(aS, bS) < CREATE_MIN_DRAG_PX) {
+      return ok(state, ctx, [], [
+        { k: 'TOAST', kind: 'warn', text: '끌어서 크기를 지정해 주세요' },
+      ]);
+    }
   }
 
   const defectId = ctx.makeId();
@@ -1548,7 +1513,13 @@ function commitCreateShape(
 
   let maxSeq = 0;
   for (const d of ctx.defects) if (d.seq > maxSeq) maxSeq = d.seq;
-  const auto = roundNorm(autoLabelNorm(anchor, ctx.globalStyle.balloonRadius, iw, ih));
+  // 방향 결함은 번호가 마지막 구간 방향을 따라 이어서 시작한다 — 그래야 번호로 가는
+  // 리더선이 화살표 몸통과 한 줄로 보인다. 다른 타입은 기존 기본 각도(우상단 45도)
+  const angleOverride =
+    geometry.k === 'ARROW' ? (arrowLastLegAngleDeg(geometry.points, iw, ih) ?? undefined) : undefined;
+  const auto = roundNorm(
+    autoLabelNorm(anchor, ctx.globalStyle.balloonRadius, iw, ih, angleOverride),
+  );
 
   const defect: Defect = {
     id: defectId,
@@ -1602,71 +1573,21 @@ function commitCreateSketch(
     width: ctx.globalStyle.sketchWidth,
   };
 
-  const target = findDefect(ctx, state.selection.defectId);
-  if (!target || isLocked(target)) {
-    // 붙일 곳이 없다(또는 전회차라 못 붙인다) → **버리지 않고 대기**시킨다 (F2)
-    const prev = state.pendingSketch?.paths ?? [];
-    const pending = { paths: [...prev, path0] };
-    const text =
-      target && isLocked(target)
-        ? '전회차 표기에는 붙일 수 없습니다. 다른 결함을 고르거나 [새 결함으로]를 누르세요'
-        : prev.length === 0
-          ? '붙일 결함을 클릭하거나 [새 결함으로]를 누르세요'
-          : `그리기 ${pending.paths.length}획 대기 중`;
-    return ok({ ...state, pendingSketch: pending }, ctx, [], [
-      { k: 'TOAST', kind: 'info', text },
-    ]);
-  }
-  return ok(
-    {
-      ...state,
-      selection: { ...NO_SELECTION, defectId: target.id, part: 'SKETCH', pathId: path0.id },
-    },
-    ctx,
-    [{ k: 'ADD_SKETCH', defectId: target.id, path: path0, index: sketchOf(target).length }],
-    [{ k: 'TOAST', kind: 'info', text: '그리기가 추가되었습니다', undoable: true }],
-  );
+  // 그리기는 **항상 새 결함을 만든다** — 지금 다른 결함이 선택돼 있어도 몰래 거기
+  // 붙지 않는다(2026-08-24, 사용자 지시로 F2 사후연결의 "붙이기" 경로를 없앴다).
+  // "이 도형이 무슨 결함인지"는 그리기 자체가 답이지, 그리기 전에 우연히 선택돼
+  // 있던 다른 결함이 아니다. 여러 획을 모아 한 결함으로 만들 수 있게 대기만 시키고,
+  // 완료는 [그리기 완료]로 한다(→ pendingSketchToNewDefect).
+  const prev = state.pendingSketch?.paths ?? [];
+  const pending = { paths: [...prev, path0] };
+  const text =
+    prev.length === 0
+      ? '그리기 1획 — 계속 그리거나 [그리기 완료]를 누르세요'
+      : `그리기 ${pending.paths.length}획 대기 중`;
+  return ok({ ...state, pendingSketch: pending }, ctx, [], [{ k: 'TOAST', kind: 'info', text }]);
 }
 
-// ── F2 사후연결 — 붙이기 / 새 결함으로 ─────────────────────────────────────
-/** 대기 중인 획 전부를 한 결함에 붙인다 */
-function attachPendingSketch(
-  state: CanvasState,
-  defectId: string,
-  ctx: ReduceContext,
-): ReduceResult {
-  const pending = state.pendingSketch;
-  if (!pending || pending.paths.length === 0) return ok(state, ctx);
-  const target = findDefect(ctx, defectId);
-  if (!target) return ok(state, ctx);
-  if (isLocked(target)) {
-    return ok(state, ctx, [], [
-      { k: 'TOAST', kind: 'warn', text: '전회차 표기는 편집할 수 없습니다' },
-    ]);
-  }
-  const base = sketchOf(target).length;
-  const commands: Command[] = pending.paths.map((path, i) => ({
-    k: 'ADD_SKETCH',
-    defectId: target.id,
-    path,
-    index: base + i,
-  }));
-  const first = pending.paths[0]!;
-  return ok(
-    {
-      ...state,
-      pendingSketch: null,
-      selection: { ...NO_SELECTION, defectId: target.id, part: 'SKETCH', pathId: first.id },
-    },
-    ctx,
-    commands,
-    [
-      { k: 'TOAST', kind: 'info', text: '그리기를 결함에 붙였습니다', undoable: true },
-      { k: 'REVEAL_DEFECT', defectId: target.id },
-    ],
-  );
-}
-
+// ── F2 사후연결 — 그리기 완료(항상 새 결함) ─────────────────────────────────
 /**
  * 대기 중인 획의 **중심**에 새 결함(POINT 마크)을 만들고 그 획을 함께 넣는다.
  * 상세기획 §3-3 에서 `marks` 는 1개 이상이 필수라 스케치만으로는 결함이 될 수 없다.
@@ -1790,7 +1711,7 @@ function roundGeometry(g: MarkGeometry): MarkGeometry {
       return { k: 'POINT', x: p.x, y: p.y };
     }
     case 'ARROW':
-      return { k: 'ARROW', from: roundNorm(g.from), to: roundNorm(g.to) };
+      return { k: 'ARROW', points: g.points.map((p) => roundNorm(p)) };
     case 'AREA_RECT':
     case 'AREA_ELLIPSE': {
       const a = roundNorm({ x: g.x, y: g.y });
@@ -1807,7 +1728,18 @@ function isDegenerate(g: MarkGeometry): boolean {
   const TINY = 0.001;
   if (g.k === 'AREA_RECT' || g.k === 'AREA_ELLIPSE') return g.w < TINY && g.h < TINY;
   if (g.k === 'ARROW') {
-    return Math.abs(g.to.x - g.from.x) < TINY && Math.abs(g.to.y - g.from.y) < TINY;
+    // 꺾은선 전체가 한 점처럼 작은가 — 점들을 감싸는 bbox 로 판정한다
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of g.points) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return maxX - minX < TINY && maxY - minY < TINY;
   }
   return false;
 }
@@ -1819,9 +1751,14 @@ function onResetLabel(state: CanvasState, defectId: string, ctx: ReduceContext):
   const style = resolveStyle(d, ctx.globalStyle);
   const a = anchorNorm(d);
   if (!a) return ok(state, ctx);
-  const to = roundNorm(
-    autoLabelNorm(a, style.balloonRadius, state.drawing.imageWidth, state.drawing.imageHeight),
-  );
+  const iw = state.drawing.imageWidth;
+  const ih = state.drawing.imageHeight;
+  // 방향(화살표) 결함은 초기화도 마지막 구간 방향을 따라간다 — 생성 직후와 같은 규칙
+  const angleOverride =
+    d.marks.length === 1 && d.marks[0]!.geometry.k === 'ARROW'
+      ? (arrowLastLegAngleDeg(d.marks[0]!.geometry.points, iw, ih) ?? undefined)
+      : undefined;
+  const to = roundNorm(autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride));
   if (!d.label.placed) {
     return ok(state, ctx, [], [{ k: 'TOAST', kind: 'info', text: '이미 자동 배치 상태입니다' }]);
   }
@@ -1886,15 +1823,11 @@ function onDelete(state: CanvasState, ctx: ReduceContext): ReduceResult {
     ]);
   }
 
-  if (sel.part === 'LABEL') {
-    return ok(state, ctx, [], [
-      {
-        k: 'TOAST',
-        kind: 'warn',
-        text: '번호 풍선은 지울 수 없습니다. [번호 위치 초기화]를 쓰세요',
-      },
-    ]);
-  }
+  // 번호 풍선(LABEL)을 선택한 채 삭제하면 — 이것이 결함을 선택하는 가장 흔한 방법이다
+  // (SELECT_DEFECT 가 항상 part:'LABEL' 로 선택한다) — **결함 자체**를 지운다.
+  // 예전에는 여기서 거부하고 토스트만 냈는데, 그러면 잘못 찍은 결함을 지울 방법이
+  // 사실상 없었다(2026-08-24 사용자 신고). 아래 공통 흐름(확인 후 결함 전체 삭제)으로
+  // 그대로 떨어뜨린다 — part !== 'MARK' 이므로 reason 은 'EXPLICIT'.
 
   if (sel.part === 'MARK' && sel.markId && d.marks.length > 1) {
     const idx = d.marks.findIndex((m) => m.id === sel.markId);
@@ -1940,7 +1873,8 @@ function onKeyDown(
   const s = { ...state, keys };
 
   if (key === 'Escape') {
-    // F2 — 대기 중인 그리기가 있으면 그것부터 버린다(선택 해제보다 먼저)
+    // F2 — 대기 중인 자유그리기가 있으면 그것부터 버린다(선택 해제보다 먼저).
+    // 방향(화살표)은 이제 드래그 한 번으로 끝나므로(생성 중 Escape 는 drag 분기가 처리) 여기 없다
     if (s.pendingSketch && !s.drag) {
       return ok({ ...s, pendingSketch: null }, ctx, [], [
         { k: 'TOAST', kind: 'info', text: '그리기를 취소했습니다' },

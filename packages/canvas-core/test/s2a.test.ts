@@ -140,65 +140,114 @@ describe('S2a-2 · 생성 조작', () => {
   });
 });
 
-// ── F2 · 화살표는 점과 동일하게 클릭 한 번으로 만든다 ───────────────────────
-describe('F2 · 화살표 — 점과 동일한 클릭 생성 (드래그가 아니다)', () => {
-  it('클릭 한 번으로 결함이 만들어진다 — 드래그가 필요 없다', () => {
+// ── 방향(화살표) — S2a-2 3차 재개정(2026-08-24). 마우스가 실제로 지나간 대로 그린다.
+// 세부 라우팅 순수 함수(advanceArrowDrag)는 arrowPolyline.test.ts, 여기는 도구 조작 통합만 본다.
+describe('방향(화살표) — 드래그로 직접 그린다 (최대 2번 꺾임)', () => {
+  const dragPath = (pts: SPoint[]): InputEvent[] => {
+    const evs: InputEvent[] = [{ k: 'POINTER_DOWN', pointerId: 1, screen: pts[0]!, button: 0, keys: NO_KEYS }];
+    for (let i = 1; i < pts.length; i += 1) {
+      evs.push({ k: 'POINTER_MOVE', pointerId: 1, screen: pts[i]!, keys: NO_KEYS });
+    }
+    evs.push({ k: 'POINTER_UP', pointerId: 1, screen: pts[pts.length - 1]!, keys: NO_KEYS });
+    return evs;
+  };
+
+  it('누른 지점이 화살촉(첫 점)이 된다', () => {
     const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, [
-      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 100, y: 100 }, button: 0, keys: NO_KEYS },
-      { k: 'POINTER_UP', pointerId: 1, screen: { x: 100, y: 100 }, keys: NO_KEYS },
-    ]);
+    const r = run(baseState('ARROW'), ctx, dragPath([{ x: 100, y: 100 }, { x: 300, y: 100 }]));
     const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
-    expect(c?.k).toBe('CREATE_DEFECT');
     const g = c && c.k === 'CREATE_DEFECT' ? c.defect.marks[0]!.geometry : null;
-    expect(g?.k).toBe('ARROW');
-    if (g?.k !== 'ARROW') throw new Error('unreachable');
-    // 클릭한 지점이 꼬리(from) 이다
-    expect(g.from.x).toBeCloseTo(100 / 4000, 5);
-    expect(g.from.y).toBeCloseTo(100 / 1000, 5);
-    // 머리(to)는 꼬리와 다른 기본 방향·길이를 갖는다 — 사용자가 나중에 조정한다
-    expect(g.to.x).not.toBeCloseTo(g.from.x, 5);
+    if (g?.k !== 'ARROW') throw new Error('expected ARROW');
+    expect(g.points[0]!.x).toBeCloseTo(100 / 4000, 5);
+    expect(g.points[0]!.y).toBeCloseTo(100 / 1000, 5);
   });
 
-  it('생성 직후 선택 상태가 된다 (점 도구와 동일)', () => {
+  it('한 방향으로만 끌면 구간 1개(안 꺾인다)', () => {
     const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, [
-      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 300, y: 200 }, button: 0, keys: NO_KEYS },
-      { k: 'POINTER_UP', pointerId: 1, screen: { x: 300, y: 200 }, keys: NO_KEYS },
-    ]);
+    const r = run(baseState('ARROW'), ctx, dragPath([{ x: 100, y: 100 }, { x: 300, y: 100 }]));
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    const g = c && c.k === 'CREATE_DEFECT' ? c.defect.marks[0]!.geometry : null;
+    if (g?.k !== 'ARROW') throw new Error('expected ARROW');
+    expect(g.points).toHaveLength(2);
+    expect(g.points[1]!.y).toBeCloseTo(g.points[0]!.y, 6); // 0도 — 수평 유지
+  });
+
+  it('중간에 방향을 바꾸면 90도로 한 번 꺾인다', () => {
+    const ctx = ctxOf();
+    // 오른쪽으로 200 갔다가, 아래로 방향을 튼다
+    const r = run(baseState('ARROW'), ctx, dragPath([
+      { x: 100, y: 100 },
+      { x: 300, y: 100 }, // 0도 구간 확정
+      { x: 300, y: 250 }, // 아래로 벗어남 → 90도 굴절
+    ]));
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    const g = c && c.k === 'CREATE_DEFECT' ? c.defect.marks[0]!.geometry : null;
+    if (g?.k !== 'ARROW') throw new Error('expected ARROW');
+    expect(g.points).toHaveLength(3);
+    expect(g.points[1]!.x).toBeCloseTo(g.points[0]!.x + 200 / 4000, 5); // 굴절점
+  });
+
+  it('두 번 방향을 바꾸면 두 번 꺾인다 — 그 이상은 안 꺾인다(최대 2번)', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, dragPath([
+      { x: 100, y: 100 },
+      { x: 300, y: 100 }, // 0도
+      { x: 300, y: 250 }, // 1차 굴절(90도)
+      { x: 150, y: 250 }, // 2차 굴절(180도)
+      { x: 150, y: 400 }, // 더 꺾으려 해도 무시된다
+    ]));
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    const g = c && c.k === 'CREATE_DEFECT' ? c.defect.marks[0]!.geometry : null;
+    if (g?.k !== 'ARROW') throw new Error('expected ARROW');
+    expect(g.points).toHaveLength(4); // 시작 + 굴절점 2 + 끝 = 4점(구간 3개 = 꺾임 2번)
+  });
+
+  it('드래그가 클릭 수준으로 짧으면 방향을 못 정한 것으로 보고 만들지 않는다', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, dragPath([{ x: 100, y: 100 }, { x: 101, y: 100 }]));
+    expect(r.commands).toHaveLength(0);
+    expect(r.effects.some((e) => e.k === 'TOAST' && e.kind === 'warn')).toBe(true);
+  });
+
+  it('도면 밖에서 시작하면 만들지 않는다', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, dragPath([{ x: -50, y: -50 }, { x: 200, y: 200 }]));
+    expect(r.commands).toHaveLength(0);
+  });
+
+  it('생성 직후 선택 상태가 된다 (다른 표기 도구와 동일)', () => {
+    const ctx = ctxOf();
+    const r = run(baseState('ARROW'), ctx, dragPath([{ x: 100, y: 100 }, { x: 300, y: 100 }]));
     const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
     expect(r.state.selection.defectId).toBe(c && c.k === 'CREATE_DEFECT' ? c.defect.id : null);
     expect(r.state.selection.part).toBe('MARK');
   });
 
-  it('도면 밖을 클릭하면 만들지 않는다 (점 도구와 동일한 안내)', () => {
+  it('번호는 마지막 구간 방향을 따라 이어서 자동 배치된다 (한 줄로 보이도록)', () => {
     const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, [
-      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: -50, y: -50 }, button: 0, keys: NO_KEYS },
-      { k: 'POINTER_UP', pointerId: 1, screen: { x: -50, y: -50 }, keys: NO_KEYS },
-    ]);
-    expect(r.commands).toHaveLength(0);
-    expect(r.effects.some((e) => e.k === 'TOAST' && e.kind === 'warn')).toBe(true);
+    const r = run(baseState('ARROW'), ctx, dragPath([{ x: 100, y: 100 }, { x: 300, y: 100 }])); // 0도(오른쪽)
+    const c = r.commands.find((x) => x.k === 'CREATE_DEFECT');
+    if (!c || c.k !== 'CREATE_DEFECT') throw new Error('CREATE_DEFECT');
+    const g = c.defect.marks[0]!.geometry;
+    if (g.k !== 'ARROW') throw new Error('ARROW');
+    const tail = g.points[g.points.length - 1]!;
+    // 0도(오른쪽)로 이어지면 라벨은 화살표 끝보다 x 만 커지고 y 는 그대로다
+    expect(c.defect.label.x).toBeGreaterThan(tail.x);
+    expect(c.defect.label.y).toBeCloseTo(tail.y, 6);
+    expect(c.defect.label.placed).toBe(false);
   });
 
-  it('그 자리에서 드래그하면(클릭이 아니라 이동) 팬으로 처리되고 아무것도 만들지 않는다', () => {
-    const ctx = ctxOf();
-    const r = run(baseState('ARROW'), ctx, drag({ x: 100, y: 100 }, { x: 300, y: 250 }));
-    expect(r.commands).toHaveLength(0);
-  });
-
-  it('머리(TO) 핸들은 클릭 생성 이후에도 기존 히트 테스트로 그대로 잡힌다 (§2-4 HANDLE)', () => {
+  it('생성된 화살표는 핸들이 없다 — 화살촉 위치를 찍어도 MARK 만 잡힌다', () => {
     const d = withGeometry(
       defect('a1', 1, { x: 0.1, y: 0.1 }, { x: 0.05, y: 0.05 }),
-      { k: 'ARROW', from: { x: 0.1, y: 0.1 }, to: { x: 0.3, y: 0.2 } },
+      { k: 'ARROW', points: [{ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.1 }] },
       'ARROW',
     );
     const screens = buildScreens({ drawing: DRAWING, viewport: VP, defects: [d], globalStyle: GS, preview: null });
-    const to = screens[0]!.marks[0]!.to;
-    if (!to) throw new Error('expected arrow head');
-    const hit = hitTest(to, screens, { defectId: 'a1', part: 'MARK', markId: 'a1-m0' });
-    expect(hit?.part).toBe('HANDLE');
-    expect(hit?.handle).toBe('TO');
+    const at = { x: 0.1 * DRAWING.imageWidth, y: 0.1 * DRAWING.imageHeight };
+    const hit = hitTest(at, screens, { defectId: 'a1', part: 'MARK', markId: 'a1-m0' });
+    expect(hit?.part).toBe('MARK');
+    expect(hit?.handle).toBeUndefined();
   });
 });
 
@@ -260,7 +309,12 @@ describe('F4 · 번호 풍선은 도구가 켜져 있어도 항상 먼저 잡힌
 
 // ── 자유그리기 ──────────────────────────────────────────────────────────────
 describe('S2a-1 · 자유그리기는 마크가 아니라 결함 종속 스케치다', () => {
-  it('선택된 결함에 Path 가 붙는다. 번호 라벨·리더선은 생기지 않는다', () => {
+  /**
+   * 2026-08-24 재결정 — 예전에는 다른 결함이 선택돼 있으면 그 결함에 곧장 붙었다.
+   * 지금은 **그리기가 항상 새 결함을 만든다.** 선택 상태는 더 이상 그리기의 목적지에
+   * 영향을 주지 않는다 — 아래 F2 블록에서 이 동작을 고정한다.
+   */
+  it('다른 결함이 선택돼 있어도 곧바로 붙지 않고 대기 상태로 넘어간다', () => {
     const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
     const ctx = ctxOf([d]);
     const s: CanvasState = {
@@ -268,37 +322,33 @@ describe('S2a-1 · 자유그리기는 마크가 아니라 결함 종속 스케�
       selection: { defectId: 'd1', part: 'MARK', markId: 'd1-m0' },
     };
     const r = run(s, ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
-    const c = r.commands.find((x) => x.k === 'ADD_SKETCH');
-    expect(c?.k).toBe('ADD_SKETCH');
-    if (c?.k !== 'ADD_SKETCH') throw new Error('unreachable');
-    expect(c.path.points.length).toBeGreaterThanOrEqual(2);
-    // 마크는 그대로 1개 — 스케치는 마크가 아니다
-    const after = applyCommand([d], c);
-    expect(after[0]!.marks).toHaveLength(1);
-    expect(after[0]!.sketch).toHaveLength(1);
-    // 좌표는 전부 정규화
-    for (const p of c.path.points) {
+    expect(r.commands.some((c) => c.k === 'ADD_SKETCH')).toBe(false);
+    expect(r.state.pendingSketch?.paths).toHaveLength(1);
+  });
+
+  it('선택된 결함이 없어도 커맨드를 내지 않고 대기 상태로 넘어간다', () => {
+    const ctx = ctxOf([]);
+    const r = run(baseState('SKETCH'), ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
+    expect(r.commands).toHaveLength(0);
+    expect(r.state.pendingSketch?.paths).toHaveLength(1);
+  });
+
+  it('좌표는 전부 정규화된다', () => {
+    const ctx = ctxOf([]);
+    const r = run(baseState('SKETCH'), ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
+    const path = r.state.pendingSketch!.paths[0]!;
+    expect(path.points.length).toBeGreaterThanOrEqual(2);
+    for (const p of path.points) {
       expect(p.x).toBeGreaterThanOrEqual(0);
       expect(p.x).toBeLessThanOrEqual(1);
       expect(p.y).toBeGreaterThanOrEqual(0);
       expect(p.y).toBeLessThanOrEqual(1);
     }
   });
-
-  /**
-   * F2 (Q16 재결정) — 예전에는 "선택된 결함이 없으면 만들지 않고 안내"였다.
-   * 지금은 **버리지 않고 사후연결 대기**로 넘어간다. 아래 F2 블록이 그 동작을 고정한다.
-   */
-  it('선택된 결함이 없으면 커맨드를 내지 않고 대기 상태로 넘어간다', () => {
-    const ctx = ctxOf([]);
-    const r = run(baseState('SKETCH'), ctx, drag({ x: 100, y: 100 }, { x: 400, y: 300 }));
-    expect(r.commands).toHaveLength(0);
-    expect(r.state.pendingSketch?.paths).toHaveLength(1);
-  });
 });
 
-// ── F2 자유그리기 사후연결 ─────────────────────────────────────────────────
-describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () => {
+// ── F2 자유그리기 사후연결 — 그리기는 항상 새 결함을 만든다 ─────────────────
+describe('F2 · 그리기는 그린 뒤 [그리기 완료]로 새 결함을 만든다', () => {
   const stroke = () => drag({ x: 100, y: 100 }, { x: 400, y: 300 });
 
   it('대기 중에 더 그리면 획이 쌓인다 (버리지 않는다)', () => {
@@ -309,7 +359,7 @@ describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () 
     expect(b.commands).toHaveLength(0);
   });
 
-  it('[새 결함으로] 는 CREATE_DEFECT 하나로 끝난다 (Undo 한 번에 통째로 되돌아간다)', () => {
+  it('[그리기 완료] 는 CREATE_DEFECT 하나로 끝난다 (Undo 한 번에 통째로 되돌아간다)', () => {
     const ctx = ctxOf([]);
     const a = run(baseState('SKETCH'), ctx, stroke());
     const r = run(a.state, ctx, [{ k: 'PENDING_SKETCH_TO_NEW_DEFECT' }]);
@@ -322,6 +372,16 @@ describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () 
     expect(c.defect.marks[0]!.type).toBe('POINT');
     expect(c.defect.sketch).toHaveLength(1);
     expect(r.state.pendingSketch).toBeNull();
+  });
+
+  it('두 획을 그리고 완료하면 두 획 모두 새 결함의 sketch 에 실린다', () => {
+    const ctx = ctxOf([]);
+    const a = run(baseState('SKETCH'), ctx, stroke());
+    const b = run(a.state, ctx, drag({ x: 150, y: 150 }, { x: 300, y: 350 }));
+    const r = run(b.state, ctx, [{ k: 'PENDING_SKETCH_TO_NEW_DEFECT' }]);
+    const c = r.commands[0]!;
+    if (c.k !== 'CREATE_DEFECT') throw new Error('CREATE_DEFECT');
+    expect(c.defect.sketch).toHaveLength(2);
   });
 
   it('새 결함의 POINT 는 획의 중심이고 [0,1] 안이다', () => {
@@ -338,7 +398,7 @@ describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () 
     expect(g.y).toBeLessThanOrEqual(1);
   });
 
-  it('대기 중 결함 표기를 클릭하면 그 결함에 붙는다 (도구를 바꾸지 않아도 된다)', () => {
+  it('대기 중 다른 결함 표기를 클릭해도 붙지 않는다 (붙이기 경로 폐지, 2026-08-24)', () => {
     const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
     const ctx = ctxOf([d]);
     const a = run(baseState('SKETCH'), ctx, stroke());
@@ -347,27 +407,9 @@ describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () 
     const r = run(a.state, ctx, [
       { k: 'POINTER_DOWN', pointerId: 9, screen: { x: 2000, y: 500 }, button: 0, keys: NO_KEYS },
     ]);
-    expect(r.commands.filter((c) => c.k === 'ADD_SKETCH')).toHaveLength(1);
-    expect(r.state.pendingSketch).toBeNull();
-  });
-
-  it('두 획을 그린 뒤 붙이면 ADD_SKETCH 가 획 수만큼 나온다', () => {
-    const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
-    const ctx = ctxOf([d]);
-    const a = run(baseState('SKETCH'), ctx, stroke());
-    const b = run(a.state, ctx, drag({ x: 150, y: 150 }, { x: 300, y: 350 }));
-    const r = run(b.state, ctx, [{ k: 'ATTACH_PENDING_SKETCH', defectId: 'd1' }]);
-    expect(r.commands.filter((c) => c.k === 'ADD_SKETCH')).toHaveLength(2);
-  });
-
-  it('전회차 결함에는 붙지 않고 경고만 낸다', () => {
-    const d = { ...defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 }), status: 'PREV_PENDING' as const };
-    const ctx = ctxOf([d]);
-    const a = run(baseState('SKETCH'), ctx, stroke());
-    const r = run(a.state, ctx, [{ k: 'ATTACH_PENDING_SKETCH', defectId: 'd1' }]);
-    expect(r.commands).toHaveLength(0);
-    expect(r.effects.some((e) => e.k === 'TOAST' && e.kind === 'warn')).toBe(true);
-    expect(r.state.pendingSketch?.paths).toHaveLength(1); // 버리지 않는다
+    expect(r.commands.some((c) => c.k === 'ADD_SKETCH')).toBe(false);
+    // 대기는 그대로 남는다 — 클릭은 그리기를 방해하지 않는다
+    expect(r.state.pendingSketch?.paths).toHaveLength(1);
   });
 
   it('Escape 로 대기를 버린다', () => {
@@ -385,13 +427,13 @@ describe('F2 · 그리기는 그린 뒤 결함을 고른다 (사후연결)', () 
     expect(r.state.pendingSketch?.paths).toHaveLength(1);
   });
 
-  it('선택된 결함이 있으면 예전처럼 곧바로 붙는다 (대기하지 않는다)', () => {
+  it('다른 결함이 선택돼 있어도 대기로 넘어간다 (곧바로 붙지 않는다)', () => {
     const d = defect('d1', 1, { x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 });
     const ctx = ctxOf([d]);
     const st = { ...baseState('SKETCH'), selection: { defectId: 'd1', part: 'MARK' as const, markId: 'm-d1' } };
     const r = run(st, ctx, stroke());
-    expect(r.commands.filter((c) => c.k === 'ADD_SKETCH')).toHaveLength(1);
-    expect(r.state.pendingSketch).toBeNull();
+    expect(r.commands.some((c) => c.k === 'ADD_SKETCH')).toBe(false);
+    expect(r.state.pendingSketch?.paths).toHaveLength(1);
   });
 });
 

@@ -49,6 +49,15 @@ export const SKETCH_MIN_STEP_PX = 2.5;
 /** 자유그리기 한 획의 최대 점 수. 넘으면 그만 받는다 (저장 크기 상한) */
 export const SKETCH_MAX_POINTS = 600;
 
+/**
+ * 방향(화살표) 드래그 — S2a-2 3차 재개정(2026-08-24). 그리는 동안 마우스가 실제로
+ * 지나간 방향을 그대로 꺾은선으로 기록한다(번호 위치에서 역산하지 않는다).
+ */
+/** 구간 최대 개수(=꺾임 최대 2번). 시작 구간 1 + 굴절 2 */
+export const ARROW_MAX_LEGS = 3;
+/** 지금 구간 축에서 이만큼(스크린 px) 옆으로 벗어나야 새로 꺾는다. 떨림 방지 */
+export const ARROW_BEND_THRESHOLD_PX = 18;
+
 // ── 스마트 정렬 가이드 (§2-6) ───────────────────────────────────────────────
 /** 정렬 스냅 진입 */
 export const ALIGN_ENTER_PX = 6;
@@ -83,15 +92,6 @@ export const SNAP_PRIORITY: SnapPriority = 'ANGLE_FIRST';
 export const LABEL_AUTO_DIST_FACTOR = 3.0;
 /** 자동 배치 방향(우상단). 스크린/이미지 좌표계는 y가 아래로 증가하므로 -45 = 우상단 */
 export const LABEL_AUTO_ANGLE_DEG = -45;
-
-/**
- * F2 — 화살표를 점처럼 클릭 한 번으로 만들 때의 기본 머리(TO) 위치.
- * 라벨 자동배치와 겹쳐 보이지 않도록 다른 방향(오른쪽 수평)을 쓴다.
- * 사용자가 머리 핸들을 끌어 나중에 방향을 조정한다.
- */
-export const ARROW_DEFAULT_ANGLE_DEG = 0;
-/** 이미지 px. 풍선 반지름(34)의 약 2.4배 — 화면에서 방향이 뚜렷이 보이는 길이 */
-export const ARROW_DEFAULT_LEN_IMG = 80;
 
 // ── 저장 정밀도 (§2-2-b) ────────────────────────────────────────────────────
 /** 정규화 좌표 저장 소수 자리 */

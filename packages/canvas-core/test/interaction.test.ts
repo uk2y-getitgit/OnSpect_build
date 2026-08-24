@@ -233,13 +233,15 @@ describe('삭제 (§2-8-e)', () => {
     expect(r.commands[0]!.k).toBe('DELETE_DEFECT');
   });
 
-  it('라벨은 삭제할 수 없다', () => {
+  it('라벨(번호 풍선)을 선택한 채 삭제하면 결함 전체 삭제를 확인한다 (버그 수정 2026-08-24)', () => {
+    // SELECT_DEFECT 는 항상 part:'LABEL' 로 선택한다 — 결함을 고르는 가장 흔한 방법이다.
+    // 예전에는 여기서 "번호 풍선은 지울 수 없습니다" 토스트만 내고 아무 일도 안 했다.
     const d = defect('a', 1, { x: 0.3, y: 0.5 }, { x: 0.6, y: 0.4 });
     const { state, ctx } = boot([d]);
     const s: CanvasState = { ...state, selection: { defectId: 'a', part: 'LABEL', markId: null } };
     const r = reduce(s, { k: 'DELETE_SELECTION' }, ctx);
     expect(r.commands).toHaveLength(0);
-    expect(r.effects[0]).toMatchObject({ k: 'TOAST', kind: 'warn' });
+    expect(r.effects[0]).toMatchObject({ k: 'CONFIRM_DELETE_DEFECT', defectId: 'a', reason: 'EXPLICIT' });
   });
 });
 
@@ -326,7 +328,7 @@ describe('T4 · 렌더 모델', () => {
           id: 'arrow',
           defectId: 'a',
           type: 'ARROW',
-          geometry: { k: 'ARROW', from: { x: 0.1, y: 0.1 }, to: { x: 0.2, y: 0.2 } },
+          geometry: { k: 'ARROW', points: [{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.2 }] },
           sortOrder: 1,
         },
       ],

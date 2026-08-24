@@ -96,7 +96,7 @@ describe('transformDefect — 좌표를 하나도 빠뜨리지 않는다', () =>
         id: 'm-a',
         defectId: 'd1',
         type: 'ARROW',
-        geometry: { k: 'ARROW', from: { x: 0.1, y: 0.1 }, to: { x: 0.3, y: 0.2 } },
+        geometry: { k: 'ARROW', points: [{ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.2 }] },
         sortOrder: 1,
       },
       {

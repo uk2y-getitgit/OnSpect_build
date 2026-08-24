@@ -22,10 +22,29 @@ import { angularDistance, degrees, radians } from './geometry.js';
 import type { AngleHit, SPoint } from './types.js';
 
 const SET_4 = [0, 90, 180, 270];
-const SET_8 = [0, 45, 90, 135, 180, 225, 270, 315];
+/** 8방향(45도 배수). 방향(화살표) 그리기의 첫 구간이 여기서 고른다 */
+export const SET_8 = [0, 45, 90, 135, 180, 225, 270, 315];
 
 export function angleSnapSet(with45 = ANGLE_SNAP_45): number[] {
   return with45 ? SET_8 : SET_4;
+}
+
+/**
+ * 방향(화살표) 그리기 전용 — **항상** 가장 가까운 45도 배수로 강제 스냅한다(하드 스냅).
+ * 위의 `computeAngleSnap` 은 라벨을 끄는 동안의 "가까우면 붙는" 부드러운 스냅이고,
+ * 이건 그것과 다르다 — 방향 표기는 처음부터 8방향 중 하나로 **확정**돼야 한다.
+ */
+export function nearestAngle(deg: number, set: readonly number[] = SET_8): number {
+  let best = set[0]!;
+  let bestDist = angularDistance(deg, best);
+  for (const s of set) {
+    const d = angularDistance(deg, s);
+    if (d < bestDist) {
+      best = s;
+      bestDist = d;
+    }
+  }
+  return best;
 }
 
 export type AngleSnapOpts = {
