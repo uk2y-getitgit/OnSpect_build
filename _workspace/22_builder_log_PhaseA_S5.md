@@ -136,3 +136,76 @@
 
 `ASSUMPTIONS.md` **L 계열**에 기록했다 (L1~L7). 전부 비차단이고 K 계열을 뒤집지 않는다.
 새로 남긴 질문은 없다 — 스펙 §7 이 이미 Q32~Q35 로 정리해 뒀고, 구현 중 그 밖의 모순을 만나지 않았다.
+
+---
+
+# 검수 반영 (커밋 3) — 2026-08-25
+
+검수: `_workspace/23_code-reviewer_findings_PhaseA.md` (조건부 통과 — 심각 1 · 보통 2 · 경미 4)
+
+## 심각 1 — 결함 삭제 되돌리기가 사진을 잃던 문제 ⭐
+
+**무엇이 틀렸나.** 지적사항 §6("결함을 지울 때 사진이 남는다")만 보고 `deleteDefects` 안에
+즉시 연쇄삭제를 넣었는데, **이 프로젝트에서 결함 삭제는 Ctrl+Z 로 되돌릴 수 있는 조작**이다.
+화면도 `되돌리기로 되살릴 수 있습니다` 라고 약속한다. 결과:
+250ms 뒤 flush → 사진 레코드·Blob 영구 삭제 → Ctrl+Z → **결함만 돌아온다.**
+메모리 목록은 그대로라 화면에는 사진이 남아 보이고, 사라진 것은 새로고침해야 안다.
+
+**고친 방식 — 고아의 수명을 한 세션으로 묶는다.**
+
+| 파일 | 변경 |
+|---|---|
+| `apps/web/src/data/idb/repo.ts` `deleteDefects` | 사진 연쇄삭제 **제거**. 트랜잭션도 `[defects]` 단독으로 되돌림 |
+| `apps/web/src/data/idb/repo.ts` (신규) | **`purgeOrphanPhotos(projectId): Promise<number>`** — `by_project` 로 사진을 훑어 `defectId` 의 결함이 없는 것만 레코드+Blob 정리. 결함 조회는 `Map` 캐시(같은 결함 사진 N장) |
+| `apps/web/src/routes/CanvasRoute.tsx` 묶음 로드 | `setLoadedPhotos(...)` **바로 뒤**에 `void guard(() => storage.repo.purgeOrphanPhotos(projectId))`. 결과를 기다리지 않는다 — 실패해도 캔버스는 뜬다 |
+| `packages/project-core/src/repo.ts` | `ProjectRepo` 사진 섹션 주석을 개정 내용으로 교체 (다음 사람이 옛 주석을 믿고 또 넣지 않게) |
+| `_workspace/ASSUMPTIONS.md` K13 | **개정** — 되돌릴 수 있는 삭제/없는 삭제를 나눈다 |
+
+**`deleteFloor` · `deleteBuilding` 은 손대지 않았다.** 확인 대화상자만 있고 되돌리기가 없는
+조작이므로 즉시 연쇄삭제가 맞다. `purgePhotosOfDefectsIn` 도 그대로 남아 두 경로가 계속 쓴다.
+
+**§6 의 목적은 그대로 달성된다** — 새로고침하면 되돌리기 스택도 함께 죽으므로,
+용역을 여는 시점에 지우는 사진은 **아무도 되살릴 수 없는 것**뿐이다.
+
+## 보통 2 — Firefox 에서 썸네일 드래그가 시작되지 않던 문제
+
+`PhotoSection.tsx` — `onDragStart` 에 `effectAllowed = 'move'` + `setData('text/plain', p.id)` 추가,
+`onDragOver` 에 `dropEffect = 'move'` 추가. 같은 저장소의 기존 드래그 정렬
+(`ProjectSetup.tsx:1318` · `settings/parts.tsx:270`)과 같은 모양으로 맞췄다.
+`setData` 가 없으면 Firefox 는 드래그를 시작조차 하지 않고, Chrome 은 커서가 `copy`(＋)로 뜬다.
+
+## 보통 3 — 미리보기가 떠 있어도 `Delete` 가 캔버스 결함을 지우던 문제
+
+`PhotoPreviewDialog.tsx` — capture 단계 keydown 에서 `Escape` 만 막던 것을 넓혔다.
+`ArrowLeft/Right` 도 `stopPropagation` 하고, `CANVAS_SHORTCUT_KEYS`
+(`Delete`·`Backspace`·`0`·`+`·`=`·`-`·`_`)와 `Ctrl/⌘+Z/Y` 는 `stopPropagation` + `preventDefault`.
+
+하단에 빨간 `[삭제]` 버튼이 있어 `Delete` 를 누르는 것이 자연스러운 화면인데,
+그 키가 캔버스로 새면 **사진이 아니라 선택된 결함이 지워졌다.**
+`Delete` 를 사진 삭제에 연결하지는 않았다(오조작 위험) — **막기만** 했다.
+
+## 경미 — 이번에 한 것 / 안 한 것
+
+| # | 내용 | 처리 |
+|---|---|---|
+| 4 | `Photo.mime`·`byteSize` 는 원본 기준, `width`/`height` 는 렌더본 기준 | **필드 주석만 추가**(동작 변경 0). 렌더본은 원본이 PNG 여도 항상 JPEG 이라 T15 가 `mime` 으로 분기하면 조용히 틀린다 |
+| 5 | 삭제 대기 10초 중 DB 에 대표가 2장인 순간 | 코드 변경 없음(읽기 정규화가 덮는다). **`ASSUMPTIONS.md` L4 문구를 사실에 맞게 정정** |
+| 6 | `exportRuns.ts` 가 `db` 를 직접 받음 | 이번 범위 밖. **Phase B 는 `openDb()` 를 화면에서 부르지 말고 `IdbProjectRepo` 에 위임 메서드 5개를 얹어야 한다** — 연결이 두 개가 되면 `deleteDatabase`·버전 업그레이드가 막힌다 |
+| 7 | `deleteExportRunsOfProject` 미사용 | 용역 삭제가 소프트 삭제뿐이라 지금은 새는 곳이 없다. 하드 삭제가 생기면 연결 |
+
+## 재검증
+
+| 항목 | 결과 |
+|---|---|
+| 타입 검사 | ✅ 통과 |
+| 단위 테스트 | ✅ **181개 통과** (신규 테스트 없음 — 고친 3건은 전부 웹 어댑터·UI 라 `apps/web` 에 러너가 없다. 한계 #6 그대로) |
+| 프로덕션 빌드 | ✅ 통과 · `430.82KB / gzip 129.62KB` |
+
+## 체크리스트 추가 항목
+
+앞의 `## 직접 확인해주실 것` 에 아래 3개를 더한다.
+
+- [ ] ⭐ **사진이 붙은 결함을 삭제 → 곧바로 `Ctrl+Z`** → 결함이 돌아오고, **새로고침해도 사진이 그대로** 있는가
+- [ ] 결함을 삭제하고 **되돌리지 않은 채 새로고침** → 그 사진이 사라져 있는가 (고아 청소)
+- [ ] 사진 미리보기를 열고 **`Delete` 키** → 아무 일도 일어나지 않는가 (뒤에서 결함이 지워지면 안 된다)
+- [ ] (Firefox 를 쓴다면) 썸네일 **드래그 정렬**이 되는가

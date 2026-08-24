@@ -175,7 +175,13 @@ export function PhotoSection(props: PhotoSectionProps) {
                   data-over={overId === p.id ? '1' : undefined}
                   data-dragging={dragId === p.id ? '1' : undefined}
                   draggable={!disabled}
-                  onDragStart={() => setDragId(p.id)}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    // ⚠️ `setData` 가 없으면 **Firefox 는 드래그를 시작조차 하지 않는다.**
+                    //    같은 저장소의 기존 드래그 정렬(ProjectSetup · settings/parts)과 같은 모양
+                    e.dataTransfer.setData('text/plain', p.id);
+                    setDragId(p.id);
+                  }}
                   onDragEnd={() => {
                     setDragId(null);
                     setOverId(null);
@@ -183,6 +189,7 @@ export function PhotoSection(props: PhotoSectionProps) {
                   onDragOver={(e) => {
                     if (!dragId) return;
                     e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
                     setOverId(p.id);
                   }}
                   onDragLeave={() => setOverId((cur) => (cur === p.id ? null : cur))}

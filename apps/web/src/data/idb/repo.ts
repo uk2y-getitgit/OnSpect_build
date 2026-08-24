@@ -46,6 +46,7 @@ import {
 } from './blobs.js';
 import {
   purgePhotoIdsIn,
+  purgePhotoRecordsIn,
   purgePhotosOfDefectsIn,
   putPhotoUploadIn,
   type PhotoUpload,
@@ -414,16 +415,23 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
   }
 
   /**
-   * ⚠️ **결함을 지우면 그 결함의 사진도 함께 지운다** (K13 · 지적사항 §6).
-   * 안 넣으면 고아 사진 레코드와 고아 Blob 이 **조용히** 쌓여 용량만 먹는다.
-   * 사진 Blob 은 refCount 를 낮추고 0 이 되면 실제로 지워진다.
+   * ⚠️ **여기서 사진을 지우지 않는다.** 결함 삭제는 Ctrl+Z 로 되돌릴 수 있고(`store.ts::UNDO`),
+   *    화면도 `되돌리기로 되살릴 수 있습니다` 라고 약속한다. 사진 Blob 을 여기서 지우면
+   *    되돌렸을 때 **결함만 돌아오고 사진은 영원히 못 돌아온다** — 사용자는 화면에 남은
+   *    메모리 목록을 보고 복구됐다고 믿고, 잃은 것은 며칠 뒤 보고서를 뽑을 때 안다.
+   *
+   *    고아 사진은 `purgeOrphanPhotos()` 가 **용역을 열 때** 쓸어 담는다.
+   *    새로고침하면 되돌리기 스택도 함께 죽으므로 그 시점엔 되살릴 사람이 없다 —
+   *    지적사항 §6("고아 Blob 이 조용히 쌓이지 않게")의 목적은 그대로 달성된다.
+   *
+   *    `deleteFloor` · `deleteBuilding` 은 되돌리기가 없는 조작(확인 대화상자)이라
+   *    **즉시 연쇄삭제를 유지한다.**
    */
   async deleteDefects(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
-    const tx = this.db.transaction([STORE.defects, STORE.photos, STORE.blobs], 'readwrite');
+    const tx = this.db.transaction(STORE.defects, 'readwrite');
     const store = tx.objectStore(STORE.defects);
     for (const id of ids) store.delete(id);
-    await purgePhotosOfDefectsIn(tx, ids);
     await txDone(tx);
   }
 
@@ -461,6 +469,37 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     const tx = this.db.transaction([STORE.photos, STORE.blobs], 'readwrite');
     await purgePhotoIdsIn(tx, ids);
     await txDone(tx);
+  }
+
+  /**
+   * 주인 없는 사진을 쓸어 담는다 — 결함이 지워졌는데 Ctrl+Z 로 안 돌아온 것들.
+   *
+   * **용역을 열 때 한 번** 부른다. 그 시점엔 되돌리기 스택이 이미 비어 있으므로
+   * 여기서 지우는 것은 아무도 되살릴 수 없는 사진이다.
+   * 이것이 `deleteDefects` 의 즉시 연쇄삭제를 대신한다 (검수 지적 1 · K13).
+   */
+  async purgeOrphanPhotos(projectId: string): Promise<number> {
+    const tx = this.db.transaction([STORE.photos, STORE.defects, STORE.blobs], 'readwrite');
+    const rows = await getAllByIndex<Photo>(tx.objectStore(STORE.photos), 'by_project', projectId);
+    if (rows.length === 0) {
+      await txDone(tx);
+      return 0;
+    }
+    const xs = tx.objectStore(STORE.defects);
+    const orphans: Photo[] = [];
+    // 같은 결함의 사진이 여러 장이므로 결함 조회 결과를 캐시한다
+    const alive = new Map<string, boolean>();
+    for (const p of rows) {
+      let ok = alive.get(p.defectId);
+      if (ok === undefined) {
+        ok = (await reqAsPromise<Defect | undefined>(xs.get(p.defectId))) !== undefined;
+        alive.set(p.defectId, ok);
+      }
+      if (!ok) orphans.push(p);
+    }
+    await purgePhotoRecordsIn(tx, orphans);
+    await txDone(tx);
+    return orphans.length;
   }
 
   /**

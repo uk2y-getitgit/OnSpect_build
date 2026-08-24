@@ -88,9 +88,14 @@ export interface ProjectRepo<TDefect = unknown, TMemo = unknown, TPhoto = unknow
    * Blob 은 여기 등장하지 않는다(경계 규칙 9). 등록은 어댑터 전용
    * `registerPhotos(uploads)` 가 맡는다 — `registerDrawings` 와 같은 모양이다.
    *
-   * ⚠️ **결함을 지우면 그 결함의 사진도 함께 지워진다** (`deleteDefects` · K13).
-   *    `deleteFloor` · `deleteBuilding` 도 같다. 안 넣으면 고아 사진과 고아 Blob 이
-   *    조용히 쌓여 용량만 먹는다. 반대로 **`copyStructure` 는 사진을 복사하지 않는다**
+   * ⚠️ **`deleteDefects` 는 사진을 지우지 않는다** (K13 개정).
+   *    결함 삭제는 Ctrl+Z 로 되돌릴 수 있는 조작이라, 그 자리에서 사진 Blob 을 지우면
+   *    되돌렸을 때 결함만 돌아오고 사진은 영원히 못 돌아온다.
+   *    고아 사진은 **어댑터가 용역을 열 때 한 번** 쓸어 담는다(`purgeOrphanPhotos`) —
+   *    새로고침하면 되돌리기 스택도 함께 죽으므로 그때는 되살릴 사람이 없다.
+   *
+   *    반대로 `deleteFloor` · `deleteBuilding` 은 **되돌리기가 없는 조작**(확인 대화상자)이라
+   *    사진까지 **즉시 연쇄삭제**한다. `copyStructure` 는 사진을 복사하지 않는다
    *    (전회차 승계는 Phase 2-D 소관).
    */
   listPhotos(projectId: string): Promise<TPhoto[]>;

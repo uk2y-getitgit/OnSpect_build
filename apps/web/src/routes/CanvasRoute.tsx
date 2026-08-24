@@ -134,6 +134,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       setDrawings(b.drawings);
       setSettings(s);
       setLoadedPhotos(b.photos.length > 0 ? b.photos : EMPTY_PHOTOS);
+      // 지난 세션에 결함과 함께 지워졌어야 할 **고아 사진**을 이때 쓸어 담는다.
+      // 결함 삭제는 Ctrl+Z 로 되돌릴 수 있어 그 자리에서 사진을 지우면 안 되고,
+      // 새로고침한 지금은 되돌리기 스택이 이미 비어 있다 (검수 지적 1).
+      // 화면에 목록을 넘긴 **뒤에** 돌리고, 결과를 기다리지 않는다 — 실패해도 캔버스는 뜬다
+      void guard(() => storage.repo.purgeOrphanPhotos(projectId));
       dispatch({
         t: 'LOAD',
         projectId,

@@ -67,9 +67,14 @@ export type Photo = RecordBase & {
   remoteUrl: string | null;
 
   fileName: string;
+  /**
+   * ⚠️ **원본 파일 기준**이다. `renderBlobKey` 의 렌더본은 원본이 PNG 여도 **항상 JPEG** 이므로
+   * 이 값으로 렌더본을 분기하면 조용히 틀린다.
+   */
   mime: string;
+  /** ⚠️ **원본 파일 기준**. 렌더본·썸네일 용량이 아니다 */
   byteSize: number;
-  /** 렌더 래스터 픽셀 (EXIF 방향 적용 후) */
+  /** ⚠️ **렌더 래스터 픽셀** (장변 2048 이하 · EXIF 방향 적용 후). 원본 해상도가 아니다 */
   width: number;
   height: number;
 

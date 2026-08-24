@@ -10,6 +10,9 @@
 import { useEffect, useRef } from 'react';
 import { displaySize, type Photo } from '@onspect/project-core';
 
+/** `CanvasView` 가 window 에서 가로채는 키 — 이 다이얼로그가 떠 있는 동안 막는다 */
+const CANVAS_SHORTCUT_KEYS = new Set(['Delete', 'Backspace', '0', '+', '=', '-', '_']);
+
 export type PhotoPreviewDialogProps = {
   photo: Photo;
   /** 0-based. 좌우 이동 버튼의 활성 판정에 쓴다 */
@@ -62,8 +65,27 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
         onClose();
         return;
       }
-      if (e.key === 'ArrowLeft') onPrev();
-      if (e.key === 'ArrowRight') onNext();
+      if (e.key === 'ArrowLeft') {
+        e.stopPropagation();
+        onPrev();
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.stopPropagation();
+        onNext();
+        return;
+      }
+      // ⚠️ 다이얼로그가 떠 있는 동안 **캔버스 단축키가 뒤에서 도는 것을 막는다.**
+      //    `CanvasView` 는 window 에 keydown 을 걸고 Delete·Backspace·Ctrl+Z·0·+·- 를 처리하는데,
+      //    차단 조건이 `isTypingTarget` 하나뿐이라 이 화면의 포커스(닫기 버튼)는 통과한다.
+      //    특히 **Delete — 사진이 아니라 캔버스에서 선택된 결함이 지워진다.**
+      //    하단에 빨간 [삭제] 버튼이 있어 Delete 를 누르는 것이 자연스러운 화면이다.
+      const blocked =
+        CANVAS_SHORTCUT_KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && 'zZyY'.includes(e.key));
+      if (blocked) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
