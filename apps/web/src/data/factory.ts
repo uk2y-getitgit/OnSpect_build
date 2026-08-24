@@ -124,6 +124,7 @@ export function makeDrawing(
     titleBlock: null, // F5-1 — 도곽은 사용자가 켜기 전까지 없다
     legend: null, // F5-2 — 범례도 마찬가지
     renormalizedAt: null, // F1 — [A4로 맞추기] 를 쓴 적 없다
+    labelScale: null, // F6 — 번호 크기는 기본(1)에서 시작한다
 
     ...base(deviceId, now),
   };

@@ -14,6 +14,7 @@ import {
   type CanvasState,
   type Defect,
   type GhostShape,
+  type GlobalStyle,
   type InputEvent,
   type MemoScreen,
   type LegendConfig,
@@ -47,6 +48,8 @@ export type CanvasViewProps = {
   titleBlock: TitleBlockConfig | null;
   /** F5-2 범례. null = 그리지 않는다 */
   legend: LegendConfig | null;
+  /** F6 — 번호 풍선 크기 등 전역 렌더 스타일. 생략하면 `DEFAULT_GLOBAL_STYLE` */
+  globalStyle?: GlobalStyle;
   send: (ev: InputEvent) => void;
   drawingUrl: string | null;
   /** 도면 없는 층의 빈 상태에서 P4 로 보낸다 (§2-10-c) */
@@ -69,6 +72,7 @@ export function CanvasView({
   displayNumbers,
   titleBlock,
   legend,
+  globalStyle = DEFAULT_GLOBAL_STYLE,
   send,
   drawingUrl,
   onUploadDrawing,
@@ -185,7 +189,7 @@ export function CanvasView({
       canvas: state.canvas,
       defects,
       displayNumbers,
-      globalStyle: DEFAULT_GLOBAL_STYLE,
+      globalStyle,
       selection: state.selection,
       hover: state.hover,
       guides: state.guides,
@@ -197,7 +201,18 @@ export function CanvasView({
       titleBlock,
       legend,
     };
-  }, [drawing, state, defects, displayNumbers, memoScreens, ghost, pending, titleBlock, legend]);
+  }, [
+    drawing,
+    state,
+    defects,
+    displayNumbers,
+    memoScreens,
+    ghost,
+    pending,
+    titleBlock,
+    legend,
+    globalStyle,
+  ]);
 
   // 배경 — 뷰포트/크기/이미지가 바뀔 때만
   useLayoutEffect(() => {

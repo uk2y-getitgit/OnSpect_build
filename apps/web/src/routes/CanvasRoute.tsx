@@ -29,6 +29,8 @@ import {
   sortByOrder,
   type Building,
   type Drawing,
+  type DrawingLegend,
+  type DrawingTitleBlock,
   type Floor,
   type ItemSettings,
   type Project,
@@ -39,6 +41,7 @@ import { MemoEditor } from '../canvas/MemoEditor';
 import { ToolPalette } from '../canvas/ToolPalette';
 import { revokeAll } from '../canvas/imageLoader';
 import { legendConfigFor, titleBlockConfigFor } from '../canvas/pageDecor';
+import { TitleBlockDialog } from './TitleBlockDialog';
 import {
   cachedCompositeUrl,
   clearCompositeCache,
@@ -62,6 +65,11 @@ import { useToast } from '../ui/ToastHost';
 
 const FLUSH_DEBOUNCE_MS = 250;
 
+// F6 — 번호 풍선 크기. 도곽·범례의 크기 슬라이더(0.5~2배)와 같은 범위를 쓴다
+const LABEL_SCALE_MIN = 0.5;
+const LABEL_SCALE_MAX = 2;
+const LABEL_SCALE_STEP = 0.1;
+
 export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId: string | null }) {
   const { storage, guard } = useAppData();
   const toast = useToast();
@@ -79,6 +87,10 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [notFound, setNotFound] = useState(false);
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  /** F5-1·F5-2 — 도곽·범례 설정. 캔버스에서도 켜고 끌 수 있어야 한다는 사용자 지적(2026-08-24) —
+   * 예전에는 용역 구성 화면에만 있었다. 다이얼로그·저장 로직은 그대로, 진입점만 하나 늘렸다 */
+  const [titling, setTitling] = useState(false);
+  const [titleBusy, setTitleBusy] = useState(false);
 
   const [state, dispatch] = useReducer(
     appReducer,
@@ -362,6 +374,62 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     ],
   );
 
+  // F6 — 번호 풍선 크기. 도면마다 결함 밀도가 달라 도면 단위로 둔다(도곽·범례와 같은 스코프).
+  // 좌표·자동배치 거리 계산에는 관여하지 않는다 — **화면·출력 크기만** 바꾼다.
+  const globalStyle = useMemo(() => {
+    const s = currentDrawing?.labelScale ?? 1;
+    if (s === 1) return DEFAULT_GLOBAL_STYLE;
+    return { ...DEFAULT_GLOBAL_STYLE, balloonRadius: DEFAULT_GLOBAL_STYLE.balloonRadius * s };
+  }, [currentDrawing?.labelScale]);
+
+  // TitleBlockDialog 미리보기용 — 이 도면에 실제로 등장한 결함유형 이름 (중복 없이, seq 순)
+  const legendTypeNames = useMemo(() => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const d of [...defects].sort((a, b) => a.seq - b.seq)) {
+      const name = (d.defectTypeName ?? '').trim();
+      if (name === '' || seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+    }
+    return out;
+  }, [defects]);
+
+  /** F5-1·F5-2 — 도곽·범례 설정 저장. ProjectSetup 의 같은 이름 함수와 동일한 로직 */
+  const applyTitleBlock = useCallback(
+    (dw: Drawing, tb: DrawingTitleBlock, lg: DrawingLegend) => {
+      setTitleBusy(true);
+      const updated: Drawing = { ...dw, titleBlock: tb, legend: lg, updatedAt: Date.now() };
+      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
+      void (async () => {
+        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        setTitleBusy(false);
+        setTitling(false);
+        toast('도곽 · 범례 설정을 저장했습니다');
+      })();
+    },
+    [storage, guard, toast],
+  );
+
+  /** F6 — 번호 풍선 크기 조절. `imgScale`(F5-3)과 달리 결함 좌표를 전혀 건드리지 않는다 */
+  const setLabelScale = useCallback(
+    (next: number) => {
+      if (!currentDrawing) return;
+      const clamped =
+        Math.round(Math.max(LABEL_SCALE_MIN, Math.min(LABEL_SCALE_MAX, next)) * 100) / 100;
+      const cur = currentDrawing.labelScale ?? 1;
+      if (clamped === cur) return;
+      const updated: Drawing = {
+        ...currentDrawing,
+        labelScale: clamped === 1 ? null : clamped,
+        updatedAt: Date.now(),
+      };
+      setDrawings((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      if (storage.phase === 'READY') void guard(() => storage.repo.putDrawing(updated));
+    },
+    [currentDrawing, storage, guard],
+  );
+
   const selected = useMemo(
     () => defects.find((d) => d.id === state.canvas.selection.defectId) ?? null,
     [defects, state.canvas.selection.defectId],
@@ -468,6 +536,15 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           >
             설정
           </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title="이 도면의 도곽(용역명·도면명·축척) 표시 여부와 크기를 설정합니다"
+            disabled={!currentDrawing}
+            onClick={() => setTitling(true)}
+          >
+            도곽
+          </button>
           <span className="topbar__project" title={displayName}>
             {displayName}
           </span>
@@ -549,6 +626,43 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               전체 맞춤
             </button>
           </div>
+
+          <div className="btngroup" role="group" aria-label="번호 크기">
+            <button
+              type="button"
+              className="btn btn--icon"
+              title="번호 풍선 줄이기"
+              aria-label="번호 풍선 줄이기"
+              disabled={!currentDrawing}
+              onClick={() => setLabelScale((currentDrawing?.labelScale ?? 1) - LABEL_SCALE_STEP)}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <line x1="7.5" y1="10" x2="12.5" y2="10" stroke="currentColor" strokeWidth="1.4" />
+              </svg>
+            </button>
+            <span
+              className="zoom num"
+              title="번호 풍선 크기"
+              aria-label={`번호 풍선 크기 ${Math.round((currentDrawing?.labelScale ?? 1) * 100)}퍼센트`}
+            >
+              {currentDrawing ? `${Math.round((currentDrawing.labelScale ?? 1) * 100)}%` : '—'}
+            </span>
+            <button
+              type="button"
+              className="btn btn--icon"
+              title="번호 풍선 키우기"
+              aria-label="번호 풍선 키우기"
+              disabled={!currentDrawing}
+              onClick={() => setLabelScale((currentDrawing?.labelScale ?? 1) + LABEL_SCALE_STEP)}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <line x1="7.5" y1="10" x2="12.5" y2="10" stroke="currentColor" strokeWidth="1.4" />
+                <line x1="10" y1="7.5" x2="10" y2="12.5" stroke="currentColor" strokeWidth="1.4" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -580,6 +694,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             displayNumbers={displayNumbers}
             titleBlock={titleBlock}
             legend={legend}
+            globalStyle={globalStyle}
             send={send}
             drawingUrl={drawingUrl}
             onUploadDrawing={() => resolvedFloor && goUpload(resolvedFloor.id)}
@@ -640,14 +755,14 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           {pendingCount > 0 && (
             <div className="stage__pending" data-floating role="status">
               <span className="stage__pending-txt">
-                그리기 <b className="num">{pendingCount}</b>획 대기 중 — 붙일 결함을 클릭하세요
+                그리기 <b className="num">{pendingCount}</b>획 — 계속 그리거나 완료하세요
               </span>
               <button
                 type="button"
                 className="btn btn--small btn--primary"
                 onClick={() => send({ k: 'PENDING_SKETCH_TO_NEW_DEFECT' })}
               >
-                새 결함으로
+                그리기 완료
               </button>
               <button
                 type="button"
@@ -706,6 +821,19 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             send({ k: 'CONFIRM_DELETE_DEFECT', defectId: id });
           }}
           onCancel={() => dispatch({ t: 'CLOSE_CONFIRM' })}
+        />
+      )}
+
+      {titling && currentDrawing && (
+        <TitleBlockDialog
+          drawing={currentDrawing}
+          project={project}
+          legendTypes={legendTypeNames}
+          busy={titleBusy}
+          onApply={(tb, lg) => applyTitleBlock(currentDrawing, tb, lg)}
+          onClose={() => {
+            if (!titleBusy) setTitling(false);
+          }}
         />
       )}
 

@@ -8,7 +8,7 @@
  * `RecordBase` 의 `deviceId`·`updatedAt` 은 **여기서 채운다.** 화면은 신경 쓰지 않는다.
  */
 import type { Defect, Memo } from '@onspect/canvas-core';
-import { normalizeDefectAttrs } from '@onspect/canvas-core';
+import { normalizeArrowMarks, normalizeDefectAttrs } from '@onspect/canvas-core';
 import type {
   Building,
   CopyStructureResult,
@@ -609,7 +609,9 @@ function uniqueKeys(d: Drawing): string[] {
  * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (S4 스펙 §3-3 · ASSUMPTIONS E11).
  */
 export function normalizeDefect(d: Defect): Defect {
-  return normalizeDefectAttrs(d);
+  const withAttrs = normalizeDefectAttrs(d);
+  const marks = normalizeArrowMarks(withAttrs.marks);
+  return marks === withAttrs.marks ? withAttrs : { ...withAttrs, marks };
 }
 
 /**
@@ -635,7 +637,8 @@ export function normalizeDrawing(d: Drawing): Drawing {
     d.imgScale !== undefined &&
     d.titleBlock !== undefined &&
     d.legend !== undefined &&
-    d.renormalizedAt !== undefined
+    d.renormalizedAt !== undefined &&
+    d.labelScale !== undefined
   ) {
     return d;
   }
@@ -646,5 +649,7 @@ export function normalizeDrawing(d: Drawing): Drawing {
     titleBlock: d.titleBlock ?? null,
     legend: d.legend ?? null,
     renormalizedAt: d.renormalizedAt ?? null,
+    // 번호 풍선 크기(F6, 2026-08-24). null = 1(기본) — imgScale 과 같은 관례
+    labelScale: d.labelScale ?? null,
   };
 }
