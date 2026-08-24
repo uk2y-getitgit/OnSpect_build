@@ -291,3 +291,17 @@ QUESTIONS.md 의 답이 오면 해당 항목만 바꾸면 된다. **builder가 �
 | **I3** | **새 결함에 용역 기본 구조유형을 얹는다** (`ReduceContext.defectSeed`). 지시서에 없는 항목이지만 스펙 §4-2 의 `seedAttrs()` 가 이 용도로 이미 존재한다 | 없으면 결함마다 구조유형을 다시 골라야 한다. 캔버스는 값을 **해석하지 않고 펼치기만** 하므로 §2-6 경계를 깨지 않는다. `defectSeed` 를 안 넘기면 기존 동작 그대로 → 되돌리는 비용 거의 0 |
 | **I4** | **저장 피드백은 토스트가 아니라 패널 하단의 상시 표시**(`저장 중… / 이 기기에 저장됨`) | 필드마다 토스트를 띄우면 입력 흐름을 가린다. 값은 제목·리스트·미완성 배지에 즉시 반영되므로 그것이 1차 피드백이다. 되돌리는 비용 낮음 |
 | **I5** | **우측 패널 폭을 300 → 320px 로 넓혔다** (1200px 이하 296 · 980px 이하 268) | 폼이 이 패널 안에서 돌게 됐다. 버튼 그리드가 2열은 나와야 `계단참 슬래브` 가 3줄로 접히지 않는다. CSS 변수 한 줄 |
+
+---
+
+## J — S6 직전 입력 기억 (2026-08-24, plan-reviewer)
+
+비차단 가정. **전부 D9 안쪽의 구현 디테일이다 — D9 를 뒤집지 않는다.** 최종 보고에 포함한다.
+
+| # | 가정 | 근거 · 되돌리는 비용 |
+|---|---|---|
+| **J1** | **`defectSeed` 는 "이어받는 필드만 담은 화이트리스트 partial" 이다.** 새로 받는 필드는 `undefined` 로 넣지 않고 **키 자체를 넣지 않는다** | `interaction.ts` 의 `{ ...EMPTY_DEFECT_ATTRS, ...ctx.defectSeed }` 는 스프레드다 — `undefined` 값이 있으면 `EMPTY` 의 `null` 기본값을 덮어써 **저장 레코드에 `widthMm: undefined` 가 들어간다.** 그러면 `changedAttrKeys`(`!==` 비교)가 헛돌고 `normalizeDefectAttrs` 의 조기 반환이 매번 깨진다. 타입은 `Partial<DefectAttrs>` 그대로 두므로 `seedAttrs()`·`ReduceContext` 는 손대지 않는다 |
+| **J2** | **Undo/Redo 는 `defectSeed` 를 되돌리지 않는다.** 세션은 앞으로만 간다 | D9 §2 는 갱신 시점을 "`SET_DEFECT_ATTRS` **커맨드가 커밋될 때**" 로 못박았고, `UNDO`/`REDO` 는 별개 액션이다. D9 의 근거("별도 판정 로직이 필요 없다")와도 맞다. `defectSeed` 는 저장 데이터가 아니라 다음 입력의 시작값일 뿐이라 틀려도 폼에서 바로 고칠 수 있다. 되돌리는 비용 낮음(UNDO/REDO 케이스에서 `r.command.k === 'SET_DEFECT_ATTRS'` 일 때 `from`/`to` 를 집어넣는 4줄) |
+| **J3** | **이어받는 필드 목록을 `Record<keyof DefectAttrs, boolean>` 으로 선언한다** (`DEFECT_SEED_CARRY`) | 배열로 두면 `DefectAttrs` 에 필드가 늘 때 아무도 모르게 "새로 받음"으로 떨어진다. `Record<keyof …>` 는 **모든 키를 요구**하므로 필드가 늘면 타입 검사가 깨지고 그 자리에서 이어받을지 정하게 된다. `EMPTY_DEFECT_ATTRS` 옆(`canvas-core/defectAttrs.ts`)에 둔다 — D13 이 "필드별 초기값은 canvas-core 소관" 을 이미 정해 뒀다 |
+| **J4** | **`surveyKind` 는 이어받지 않는다** (D9 표의 어느 칸에도 없음 → `EMPTY_DEFECT_ATTRS` 의 `EXTERIOR`) | 폼에 노출되지 않고 현재 어느 화면도 이 값을 바꾸지 않아 실질 차이가 없다. 나중에 내부조사 모드가 생기면 J3 의 표에서 `true` 로 한 글자만 바꾸면 된다 |
+| **J5** | **단위테스트는 `apps/web` 이 아니라 `canvas-core` 에 쓴다** | `npm test` 는 `canvas-core`·`project-core` 만 돈다 — **`apps/web` 에는 테스트 러너 자체가 없다**(테스트 파일 0개). S6 하나 때문에 vitest 를 새로 설치하는 것은 범위 초과다. 위험한 로직(어느 필드를 이어받는가 · `undefined` 금지)을 전부 `canvas-core` 로 빼면 그 자리에서 검증된다. `store.ts` 쪽에 남는 것은 배선 한 줄이라 타입 검사 + 사용자 확인으로 덮는다 |
