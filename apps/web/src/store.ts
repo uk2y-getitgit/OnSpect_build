@@ -22,6 +22,7 @@ import {
   initialCanvasState,
   isLocked,
   memoTargetOf,
+  pickDefectSeed,
   pushHistory,
   redo as redoStack,
   reduce,
@@ -83,8 +84,16 @@ export type AppState = {
   /** 텍스트 편집기를 열어야 할 메모. `EDIT_MEMO` 이펙트가 채운다 */
   editingMemoId: string | null;
   /**
-   * 새 결함에 얹을 속성 초기값 (S2b) — 이 용역의 **설정 스냅샷**에서 온다(D6).
-   * `project-core` 의 `seedAttrs()` 결과를 라우트가 `LOAD` 로 넣어 준다.
+   * 새 결함에 얹을 속성 초기값.
+   *
+   * · **최초값**은 이 용역의 **설정 스냅샷**에서 온다(S2b · D6) —
+   *   `project-core` 의 `seedAttrs()` 결과를 라우트가 `LOAD` 로 넣어 준다.
+   * · 그 뒤로는 **직전 커밋이 덮어쓴다**(S6 · D9) — `SET_DEFECT_ATTRS` 가 커밋될 때마다
+   *   `pickDefectSeed(to)` 로 "분류·판정" 필드만 골라 갈아 끼운다.
+   *   측정값·위치보조·메모는 담기지 않으므로 새 결함에서 매번 비어 있다.
+   *
+   * ⚠️ **세션 상태다. 영속화하지 않는다** — 새로고침·용역 나가기에서 리셋된다(D9 §3).
+   *    층 전환(`SET_FLOOR`)에서는 유지된다. Undo/Redo 로 되돌아가지도 않는다(J2).
    */
   defectSeed: Partial<DefectAttrs>;
   idSeed: number;
@@ -356,6 +365,7 @@ function runInput(state: AppState, ev: InputEvent): AppState {
  * · **잠긴 결함(전회차)은 거부한다** — 폼도 `disabled` 지만 마지막 관문을 여기 둔다
  * · 병합 키는 바뀐 필드 묶음이다. 같은 필드를 800ms 안에 또 고치면 Undo 한 단계로 합쳐진다
  *   (`pushHistory` 안의 `mergeAttrCommand`)
+ * · **커밋된 값이 다음 결함의 씨앗이 된다** (S6 · D9) — 완성 여부와 무관하게 즉시 갱신한다
  */
 function setDefectAttrs(state: AppState, defectId: string, next: DefectAttrs): AppState {
   const d = state.defects.find((x) => x.id === defectId);
@@ -364,7 +374,7 @@ function setDefectAttrs(state: AppState, defectId: string, next: DefectAttrs): A
   const to = attrsOf(next);
   const changed = changedAttrKeys(from, to);
   if (changed.length === 0) return state;
-  return applyAndPush(state, {
+  const committed = applyAndPush(state, {
     k: 'SET_DEFECT_ATTRS',
     defectId,
     from,
@@ -373,6 +383,10 @@ function setDefectAttrs(state: AppState, defectId: string, next: DefectAttrs): A
     // 코어는 시간을 모른다. 어댑터가 넣어 준다 (경계 규칙 1)
     at: Date.now(),
   });
+  // ⚠️ 씨앗 갱신은 **조기 반환 두 개를 통과한 뒤**여야 한다 (D9 §2).
+  //    위에 두면 전회차(PREV_PENDING)·보수완료 결함을 클릭만 해도 씨앗이 오염된다.
+  //    출처는 `next` 가 아니라 `to` — 이미 attr 키로 정규화된 값이다.
+  return { ...committed, defectSeed: pickDefectSeed(to) };
 }
 
 function applyAndPush(state: AppState, c: Command): AppState {
