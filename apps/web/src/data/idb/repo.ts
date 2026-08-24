@@ -15,12 +15,15 @@ import type {
   Drawing,
   Floor,
   ItemSettings,
+  Photo,
   Project,
   ProjectRepo,
   ProjectSummary,
 } from '@onspect/project-core';
 import {
   createOrgSettings,
+  groupPhotosByDefect,
+  normalizePhotos,
   ORG_SETTINGS_ID,
   snapshotForProject,
 } from '@onspect/project-core';
@@ -41,6 +44,12 @@ import {
   revokeUrl,
   type BlobRecord,
 } from './blobs.js';
+import {
+  purgePhotoIdsIn,
+  purgePhotosOfDefectsIn,
+  putPhotoUploadIn,
+  type PhotoUpload,
+} from './photos.js';
 
 /** 도면 1장 등록에 필요한 것 전부. Blob 3종이 **함께** 커밋된다 (§2-9-d) */
 export type DrawingUpload = {
@@ -60,9 +69,15 @@ export type ProjectBundle = {
   defects: Defect[];
   /** 메모 레이어. **결함이 아니다** — 결함 집계에 섞지 않는다 (상세기획 §2) */
   memos: Memo[];
+  /**
+   * S5 — 이 용역의 사진 전부. **읽기 정규화(불변식 #8)를 통과한 상태**다.
+   * 결함을 고를 때마다 저장소를 다시 두드리지 않는다 — 로컬 우선(불변식 #3).
+   * Blob 은 여기 없다. 썸네일은 `objectUrl(thumbBlobKey)` 로 따로 가져온다.
+   */
+  photos: Photo[];
 };
 
-export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
+export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
   constructor(
     private readonly db: IDBDatabase,
     private readonly deviceId: string,
@@ -171,7 +186,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     const project = await this.getProject(projectId);
     if (!project || project.deletedAt !== null) return null;
     const tx = this.db.transaction(
-      [STORE.buildings, STORE.floors, STORE.drawings, STORE.defects, STORE.memos],
+      [STORE.buildings, STORE.floors, STORE.drawings, STORE.defects, STORE.memos, STORE.photos],
       'readonly',
     );
     const buildings = await getAllByIndex<Building>(
@@ -193,9 +208,17 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     const memos = (
       await getAllByIndex<Memo>(tx.objectStore(STORE.memos), 'by_project', projectId)
     ).map(normalizeMemo);
+    const rawPhotos = await getAllByIndex<Photo>(
+      tx.objectStore(STORE.photos),
+      'by_project',
+      projectId,
+    );
     // S1 에 저장된 레코드에는 `sketch` 가 없다. 읽는 즉시 채워 화면 코드가 분기하지 않게 한다
     const defects = rawDefects.map(normalizeDefect);
-    return { project, buildings, floors, drawings, defects, memos };
+    // 사진은 **결함별로 묶어** 정규화한다 — 대표 정확히 1장(불변식 #8 · K16)
+    const photos: Photo[] = [];
+    for (const group of groupPhotosByDefect(rawPhotos).values()) photos.push(...group);
+    return { project, buildings, floors, drawings, defects, memos, photos };
   }
 
   // ── 동 ──────────────────────────────────────────────────────────────────
@@ -214,7 +237,16 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
 
   async deleteBuilding(buildingId: string): Promise<void> {
     const tx = this.db.transaction(
-      [STORE.buildings, STORE.floors, STORE.drawings, STORE.defects, STORE.blobs, STORE.memos],
+      // 사진까지 같은 트랜잭션에 연다 — 결함이 사라지면 사진도 함께 간다 (K13)
+      [
+        STORE.buildings,
+        STORE.floors,
+        STORE.drawings,
+        STORE.defects,
+        STORE.blobs,
+        STORE.memos,
+        STORE.photos,
+      ],
       'readwrite',
     );
     const floors = await getAllByIndex<Floor>(
@@ -243,7 +275,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
 
   async deleteFloor(floorId: string): Promise<void> {
     const tx = this.db.transaction(
-      [STORE.floors, STORE.drawings, STORE.defects, STORE.blobs, STORE.memos],
+      [STORE.floors, STORE.drawings, STORE.defects, STORE.blobs, STORE.memos, STORE.photos],
       'readwrite',
     );
     await this.purgeFloorIn(tx, floorId);
@@ -275,6 +307,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     }
     const defects = await getAllByIndex<Defect>(xs, 'by_floor', floorId);
     for (const x of defects) xs.delete(x.id);
+    // 결함이 사라지면 그 결함의 사진도 갈 곳이 없다 (K13). Blob refCount 까지 정리한다
+    await purgePhotosOfDefectsIn(tx, defects.map((x) => x.id));
 
     if (tx.objectStoreNames.contains(STORE.floors)) tx.objectStore(STORE.floors).delete(floorId);
   }
@@ -379,11 +413,67 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
     await txDone(tx);
   }
 
+  /**
+   * ⚠️ **결함을 지우면 그 결함의 사진도 함께 지운다** (K13 · 지적사항 §6).
+   * 안 넣으면 고아 사진 레코드와 고아 Blob 이 **조용히** 쌓여 용량만 먹는다.
+   * 사진 Blob 은 refCount 를 낮추고 0 이 되면 실제로 지워진다.
+   */
   async deleteDefects(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
-    const tx = this.db.transaction(STORE.defects, 'readwrite');
+    const tx = this.db.transaction([STORE.defects, STORE.photos, STORE.blobs], 'readwrite');
     const store = tx.objectStore(STORE.defects);
     for (const id of ids) store.delete(id);
+    await purgePhotosOfDefectsIn(tx, ids);
+    await txDone(tx);
+  }
+
+  // ── 사진 (S5 §2-3) ──────────────────────────────────────────────────────
+  /**
+   * **읽기 정규화로 불변식 #8 을 강제한다** (K16).
+   * 결함별로 묶어 `normalizePhotos` 를 통과시키므로, 저장된 레코드에 대표가 0장이거나
+   * 2장이어도 화면·출력이 보는 목록에는 **정확히 1장**이다.
+   */
+  async listPhotos(projectId: string): Promise<Photo[]> {
+    const tx = this.db.transaction(STORE.photos, 'readonly');
+    const rows = await getAllByIndex<Photo>(tx.objectStore(STORE.photos), 'by_project', projectId);
+    const out: Photo[] = [];
+    for (const group of groupPhotosByDefect(rows).values()) out.push(...group);
+    return out;
+  }
+
+  async listPhotosOfDefect(defectId: string): Promise<Photo[]> {
+    const tx = this.db.transaction(STORE.photos, 'readonly');
+    const rows = await getAllByIndex<Photo>(tx.objectStore(STORE.photos), 'by_defect', defectId);
+    return normalizePhotos(rows);
+  }
+
+  /** 레코드 단위 upsert — 대표 지정·순서변경·회전이 전부 이 경로다 */
+  async upsertPhotos(items: readonly Photo[]): Promise<void> {
+    if (items.length === 0) return;
+    const tx = this.db.transaction(STORE.photos, 'readwrite');
+    const store = tx.objectStore(STORE.photos);
+    for (const p of items) store.put(this.stamp(p));
+    await txDone(tx);
+  }
+
+  async deletePhotos(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const tx = this.db.transaction([STORE.photos, STORE.blobs], 'readwrite');
+    await purgePhotoIdsIn(tx, ids);
+    await txDone(tx);
+  }
+
+  /**
+   * 사진 등록 — 어댑터 전용(경계 규칙 9). `registerDrawings` 를 그대로 본떴다.
+   * **Blob 3종과 레코드가 한 트랜잭션에서 커밋된다** (K4).
+   */
+  async registerPhotos(uploads: readonly PhotoUpload[]): Promise<void> {
+    if (uploads.length === 0) return;
+    const tx = this.db.transaction([STORE.photos, STORE.blobs], 'readwrite');
+    const now = Date.now();
+    for (const up of uploads) {
+      await putPhotoUploadIn(tx, { ...up, photo: this.stamp(up.photo, now) });
+    }
     await txDone(tx);
   }
 
@@ -447,6 +537,9 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo> {
    *
    * Blob 은 **복사하지 않고 같은 키를 참조**한다(refCount++).
    * 그래서 원본 용역을 지워도 복사본의 도면이 살아 있다.
+   *
+   * ⚠️ **사진은 복사하지 않는다** (K13). 전회차 사진 승계는 Phase 2-D 소관이고,
+   *    여기서 반쪽으로 만들면 갈아엎는다. 복사된 결함은 사진 0장으로 시작한다.
    */
   async copyStructure(
     fromProjectId: string,

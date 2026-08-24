@@ -33,6 +33,7 @@ import {
   type DrawingTitleBlock,
   type Floor,
   type ItemSettings,
+  type Photo,
   type Project,
 } from '@onspect/project-core';
 import { CanvasView } from '../canvas/CanvasView';
@@ -49,7 +50,9 @@ import {
   needsCompose,
 } from '../canvas/drawingComposite';
 import { useAppData } from '../data/appData';
+import { usePhotos } from '../data/usePhotos';
 import { revokeProjectUrls } from '../data/idb/blobs';
+import { PhotoSection } from '../ui/photos/PhotoSection';
 import {
   appReducer,
   defectsOfDrawing,
@@ -64,6 +67,9 @@ import { ConfirmDialog, ContextMenu, Toasts } from '../ui/Overlays';
 import { useToast } from '../ui/ToastHost';
 
 const FLUSH_DEBOUNCE_MS = 250;
+
+/** 참조가 매 렌더 바뀌면 `usePhotos` 가 상태를 계속 리셋한다 */
+const EMPTY_PHOTOS: Photo[] = [];
 
 // F6 — 번호 풍선 크기. 도곽·범례의 크기 슬라이더(0.5~2배)와 같은 범위를 쓴다
 const LABEL_SCALE_MIN = 0.5;
@@ -83,6 +89,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
    * 전역(ORG) 문서가 아니다. 다른 용역의 설정을 바꿔도 여기 결함은 흔들리지 않는다.
    */
   const [settings, setSettings] = useState<ItemSettings | null>(null);
+  /** S5 — 이 용역의 사진 전부(묶음 로드에서 한 번에 온다). 조작은 `usePhotos` 가 맡는다 */
+  const [loadedPhotos, setLoadedPhotos] = useState<Photo[]>(EMPTY_PHOTOS);
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
@@ -125,6 +133,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       setFloors(b.floors);
       setDrawings(b.drawings);
       setSettings(s);
+      setLoadedPhotos(b.photos.length > 0 ? b.photos : EMPTY_PHOTOS);
       dispatch({
         t: 'LOAD',
         projectId,
@@ -434,6 +443,10 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     () => defects.find((d) => d.id === state.canvas.selection.defectId) ?? null,
     [defects, state.canvas.selection.defectId],
   );
+
+  // ── S5 사진 ─────────────────────────────────────────────────────────────
+  const photoOps = usePhotos(projectId, loadedPhotos, toast);
+  const selectedPhotos = photoOps.photosOf(selected?.id ?? null);
 
   // 컨텍스트 플로팅 툴바 위치 — 선택된 표기 아래. 대상을 덮지 않는다
   const toolbarAt = useMemo(() => {
@@ -785,6 +798,27 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           defect={selected}
           settings={settings}
           saving={state.writes.seq > 0}
+          photoSlot={
+            selected ? (
+              <PhotoSection
+                defectId={selected.id}
+                photos={selectedPhotos}
+                urls={photoOps.urls}
+                ensureUrls={photoOps.ensureUrls}
+                // 전회차 표기는 이 화면에서 값을 고칠 수 없다 — 사진도 마찬가지다
+                disabled={isLocked(selected)}
+                busy={photoOps.busy}
+                rejected={photoOps.rejected}
+                onClearRejected={photoOps.clearRejected}
+                onAdd={(files) => void photoOps.addFiles(selected.id, files)}
+                onSetPrimary={(photoId) => photoOps.setPrimary(selected.id, photoId)}
+                onRotate={photoOps.rotate}
+                onReplace={(photoId, file) => void photoOps.replaceFile(photoId, file)}
+                onRemove={photoOps.remove}
+                onReorder={(ids) => photoOps.reorder(selected.id, ids)}
+              />
+            ) : null
+          }
           onAttrsChange={(attrs) => {
             if (!selected) return;
             dispatch({ t: 'SET_DEFECT_ATTRS', defectId: selected.id, attrs });

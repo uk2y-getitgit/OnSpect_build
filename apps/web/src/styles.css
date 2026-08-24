@@ -3112,3 +3112,309 @@ select.input { cursor: pointer; }
   font-size: 12.5px;
   color: var(--text);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+ * S5 — 결함 사진 (§2-5). 우측 패널 안, 결함정보 폼 아래
+ * ══════════════════════════════════════════════════════════════════════ */
+.photos {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-2);
+}
+
+.photos__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.photos__title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.photos__count {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.photos__empty {
+  margin: 0;
+  padding: 12px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.photos__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photos__hint {
+  margin: 8px 0 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ── 썸네일 타일 ──────────────────────────────────────────────────────── */
+.photoTile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.photoTile[data-primary='1'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.photoTile[data-dragging='1'] { opacity: 0.4; }
+
+.photoTile[data-over='1'] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.photoTile__btn {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.photoTile__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.photoTile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 회전은 비파괴 보정이다 — 원본 Blob 은 손대지 않는다 (§2-1) */
+  transition: transform 120ms ease;
+}
+
+.photoTile__ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(100deg, var(--surface-2) 30%, var(--surface-3) 50%, var(--surface-2) 70%);
+}
+
+.photoTile__badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  pointer-events: none;
+}
+
+.photoTile__more {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(31, 39, 52, 0.55);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.photoTile__more:disabled { display: none; }
+
+@media (hover: hover) {
+  .photoTile__more:hover { background: rgba(31, 39, 52, 0.8); }
+}
+
+/* ── 거절된 파일 (토스트가 아니라 인라인 경고 — §2-4) ─────────────────── */
+.photos__rejects {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #f3c3bf;
+  border-radius: var(--radius);
+  background: #fdecea;
+  color: #8a201a;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.photos__rejectsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.photos__rejects ul {
+  margin: 0;
+  padding-left: 14px;
+}
+
+.photos__rejectBadge {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: #f3c3bf;
+  font-weight: 700;
+}
+
+/* ── 미리보기 다이얼로그 (T8) ────────────────────────────────────────── */
+.photoScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  animation: fade-in 140ms ease;
+}
+
+.photoScrim__hit {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 25, 33, 0.72);
+}
+
+.photoView {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, calc(100vw - 48px));
+  height: min(820px, calc(100vh - 48px));
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+}
+
+.photoView__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-2);
+}
+
+.photoView__titles {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.photoView__name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.photoView__meta {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.photoView__stage {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 12px 56px;
+  background: #14191f;
+}
+
+.photoView__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 140ms ease;
+}
+
+.photoView__loading {
+  color: #cbd2dc;
+  font-size: 12.5px;
+}
+
+.photoView__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 64px;
+  border: 0;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.photoView__nav--prev { left: 8px; }
+.photoView__nav--next { right: 8px; }
+
+.photoView__nav:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .photoView__nav:not(:disabled):hover { background: rgba(255, 255, 255, 0.24); }
+}
+
+.photoView__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-2);
+}
+
+.photoView__spacer { flex: 1; }
+
+/* Q33 · K3 — 1차 범위 밖. 자리만 잡아 둔다 */
+.tag--soon {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+}

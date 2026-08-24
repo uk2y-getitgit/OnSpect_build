@@ -8,7 +8,7 @@
  * `marks`·`label`·`style` 은 폼이 볼 수 없고, 저장·커맨드는 이 컴포넌트가 아니라
  * 호출자(`CanvasRoute` → `store`)가 한다. 이 패널은 값을 받아 올릴 뿐이다.
  */
-import { forwardRef } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import {
   attrsOf,
   describeMissing,
@@ -35,13 +35,21 @@ export type InspectorProps = {
   settings: ItemSettings | null;
   /** 저장 대기 중인 변경이 있는가. 패널 하단 저장 표시에 쓴다 */
   saving: boolean;
+  /**
+   * S5 사진 섹션 (`ui/photos/PhotoSection`).
+   *
+   * ⚠️ 여기서 직접 렌더하지 않고 **호출자가 만든 노드를 받는다.**
+   * 사진은 Blob·objectURL·저장소를 다뤄야 하는데 `Inspector` 는 폼 경계 쪽에 가깝다(K15).
+   * 슬롯으로 두면 이 파일이 `data/*` 를 import 하지 않아도 된다.
+   */
+  photoSlot?: ReactNode;
   onAttrsChange: (attrs: DefectAttrs) => void;
   onResetLabel: () => void;
   onDelete: () => void;
 };
 
 export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Inspector(
-  { defect, settings, saving, onAttrsChange, onResetLabel, onDelete },
+  { defect, settings, saving, photoSlot, onAttrsChange, onResetLabel, onDelete },
   ref,
 ) {
   if (!defect) {
@@ -122,6 +130,8 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
             </dl>
           </>
         )}
+        {/* S5 — 결함정보 폼 **아래**에 사진 섹션이 온다 (§2-5) */}
+        {photoSlot}
       </div>
 
       <div className="inspector__actions">

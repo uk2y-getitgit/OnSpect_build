@@ -37,7 +37,7 @@ export type CopyStructureResult = {
  * `project-core` 는 `canvas-core` 를 import 하지 않는다(경계 규칙 8) —
  * 두 코어를 잇는 것은 `apps/web` 의 책임이다.
  */
-export interface ProjectRepo<TDefect = unknown, TMemo = unknown> {
+export interface ProjectRepo<TDefect = unknown, TMemo = unknown, TPhoto = unknown> {
   // ── 용역 ────────────────────────────────────────────────────────────────
   /** 삭제되지 않은 용역만. `lastOpenedAt DESC` */
   listProjects(): Promise<Project[]>;
@@ -82,6 +82,23 @@ export interface ProjectRepo<TDefect = unknown, TMemo = unknown> {
   listMemos(projectId: string): Promise<TMemo[]>;
   upsertMemos(items: readonly TMemo[]): Promise<void>;
   deleteMemos(ids: readonly string[]): Promise<void>;
+
+  // ── 사진 (S5 §2-3) ──────────────────────────────────────────────────────
+  /**
+   * Blob 은 여기 등장하지 않는다(경계 규칙 9). 등록은 어댑터 전용
+   * `registerPhotos(uploads)` 가 맡는다 — `registerDrawings` 와 같은 모양이다.
+   *
+   * ⚠️ **결함을 지우면 그 결함의 사진도 함께 지워진다** (`deleteDefects` · K13).
+   *    `deleteFloor` · `deleteBuilding` 도 같다. 안 넣으면 고아 사진과 고아 Blob 이
+   *    조용히 쌓여 용량만 먹는다. 반대로 **`copyStructure` 는 사진을 복사하지 않는다**
+   *    (전회차 승계는 Phase 2-D 소관).
+   */
+  listPhotos(projectId: string): Promise<TPhoto[]>;
+  listPhotosOfDefect(defectId: string): Promise<TPhoto[]>;
+  /** 레코드 단위 upsert. 대표 지정·순서변경·회전이 전부 이 경로다 */
+  upsertPhotos(items: readonly TPhoto[]): Promise<void>;
+  /** Blob refCount 를 낮추고 0 이 되면 실제로 지운다 */
+  deletePhotos(ids: readonly string[]): Promise<void>;
 
   // ── 항목 설정 (S3 §2-1 · §2-4) ──────────────────────────────────────────
   /**
