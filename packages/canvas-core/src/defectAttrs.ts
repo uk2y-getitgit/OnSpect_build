@@ -6,6 +6,8 @@
  * 신규 생성 2곳(`interaction.ts`) · 테스트 헬퍼 · 샘플 데이터 · 저장소 읽기.
  *
  * ⚠️ `canvas-core` 는 이 값을 **해석하지 않는다.** 초기화와 정규화만 한다.
+ *    다만 **필드별 메타데이터(초기값 · 키 목록 · 이어받기 여부)의 정본은 이 파일이다** (D13).
+ *    `project-core` 는 이 상수들을 모른다 — 필드가 늘면 여기부터 고친다.
  */
 import type { Defect, DefectAttrs, DefectSizeMode } from './types.js';
 
@@ -39,6 +41,71 @@ export const EMPTY_DEFECT_ATTRS: DefectAttrs = {
 
   memo: null,
 };
+
+/**
+ * 직전 입력을 다음 결함으로 **이어받을지** 여부 (S6 · D9).
+ *
+ * `true` 는 "분류·판정" — 같은 부재·결함유형·원인·보수방안이 반복되는 것은
+ * *"이 결함이 무엇인가"* 의 반복이다.
+ * `false` 는 "측정값·개별정보" — 폭·길이·개소·위치보조·메모는 *"이 한 건이 어디에 얼마나"* 라
+ * 결함마다 다르다. 이어받으면 엉뚱한 수치가 새 결함에 몰래 남는다.
+ *
+ * ⚠️ 배열이 아니라 **`Record<keyof DefectAttrs, boolean>`** 인 이유(J3):
+ * 모든 키를 강제하므로 `DefectAttrs` 에 필드가 늘면 **타입 검사가 깨지고**
+ * "이건 이어받나?" 를 그 자리에서 정하게 된다. 배열이면 새 필드가 아무도 모르게
+ * "새로 받음" 으로 떨어진다.
+ */
+export const DEFECT_SEED_CARRY: Record<keyof DefectAttrs, boolean> = {
+  // 폼에 노출되지 않고 어느 화면도 이 값을 바꾸지 않는다 — 이어받을 것이 없다 (J4)
+  surveyKind: false,
+  locationNote: false,
+  structureType: true,
+
+  memberId: true,
+  memberName: true,
+  structural: true,
+
+  defectTypeId: true,
+  defectTypeName: true,
+
+  // 모드는 이어받고 **측정값은 매번 새로 받는다**
+  sizeMode: true,
+  widthMm: false,
+  lengthMm: false,
+  areaM2: false,
+  areaWMm: false,
+  areaHMm: false,
+  countEa: false,
+
+  progress: true,
+  leak: true,
+
+  causeId: true,
+  causeName: true,
+  repairId: true,
+  repairName: true,
+
+  memo: false,
+};
+
+/**
+ * 직전 결함의 속성에서 **이어받는 필드만 골라 담는다** (S6 · D9).
+ *
+ * ⚠️ 이어받지 않는 필드는 `undefined` 를 넣는 것이 아니라 **키 자체를 만들지 않는다**(J1).
+ * 결함 생성 자리는 전부 `{ ...EMPTY_DEFECT_ATTRS, ...(ctx.defectSeed ?? {}) }` 스프레드고,
+ * 스프레드는 **값이 `undefined` 라도 키가 있으면 덮어쓴다.** 키를 만들면
+ * `EMPTY_DEFECT_ATTRS.widthMm = null` 이 지워지고 `widthMm: undefined` 가 그대로
+ * 저장 레코드까지 실려 간다 → `changedAttrKeys` 가 헛돌고 `normalizeDefectAttrs` 의
+ * 조기 반환이 매번 깨진다.
+ *
+ * `memberId: null` 같은 **명시적 `null` 은 그대로 실린다** — 사용자가 부재를 비운 것을
+ * "안 바뀜" 으로 되돌리면 안 된다.
+ */
+export function pickDefectSeed(a: DefectAttrs): Partial<DefectAttrs> {
+  const out: Record<string, unknown> = {};
+  for (const k of DEFECT_ATTR_KEYS) if (DEFECT_SEED_CARRY[k]) out[k] = a[k];
+  return out as Partial<DefectAttrs>;
+}
 
 /**
  * `sizeMode` 가 없는 옛 레코드의 모드 추론 (§3-3).
