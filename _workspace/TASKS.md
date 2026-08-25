@@ -16,8 +16,8 @@
 | A-Fix | Phase A 지적사항 수정 (심각1+보통2) | builder | A-R | ✅ 커밋 3 — 22_builder_log 하단 `검수 반영` 절 |
 | B | Phase B 빌드 — T9~T16 (출력화면 P6 + 엑셀어댑터 + 4종 산출물 + 출력이력) | builder | A-Fix | ✅ `24_builder_log_PhaseB_Export.md` · 브랜치 `feat/s5-phase4-a` 커밋 4~6 (`33859d9` · `d00a97f` · `f7452a0`) · 타입 ✅ / 테스트 212 ✅ / 빌드 ✅ · 신규 가정 M1~M12 · 비차단 질문 Q36 · Q37 |
 | B-R | Phase B 검수 | code-reviewer | B | ✅ `25_code-reviewer_findings_PhaseB.md` — 심각0·보통3·경미4, 재현성 검증 전부 통과 |
-| B-Fix | Phase B 지적사항 수정 (보통3) | builder | B-R | 🟦 (agent a5fd577336cec568a 재개) |
-| C | 통합 판정 — 타입/테스트/빌드, 개발서버 기동, NEXT.md 갱신 | 리더 | A-R,B-R | ⬜ |
+| B-Fix | Phase B 지적사항 수정 (보통3) | builder | B-R | ✅ 커밋 `a6e5ab6` — 재현성 경고 오탐·사진첩 대표사진 우회·반복행 안내문구 |
+| C | 통합 판정 — 타입/테스트/빌드, 개발서버 기동, NEXT.md 갱신 | 리더 | A-R,B-R | ✅ main 병합(`a6e5ab6`, fast-forward) · 타입/테스트463/빌드 재확인 통과 · 서버 `localhost:5173` · `NEXT.md` 갱신 |
 
 세부 작업 T1~T16 정의: `_workspace/21_plan-reviewer_spec_S5_Phase4.md` §5
 
