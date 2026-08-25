@@ -8,3 +8,6 @@
  */
 export * from './numbering.js';
 export * from './params.js';
+export * from './damageTable.js';
+export * from './defectList.js';
+export * from './photoBook.js';
