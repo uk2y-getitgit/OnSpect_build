@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-08-25 (S5 사진 + Phase 4 산출물 4종 완료 시점)
+마지막 갱신: 2026-08-25 (Phase 5 트랙A 코어 터치 지원 완료 시점)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -11,7 +11,8 @@
 
 **PC 웹에서 용역을 만들고 도면을 올리고 결함을 찍고 정보·사진을 입력한 뒤,
 손상결함표·결함리스트·사진첩·조사위치도까지 뽑을 수 있다. 실물 서식 대조와
-사용자 실행 검증만 남았다.**
+사용자 실행 검증만 남았다. `canvas-core`에는 태블릿 터치(핀치줌 등)를 위한
+코어 배선도 이미 들어가 있다(화면엔 아직 안 붙음 — 아래 참조).**
 
 ```
 cd C:\Users\samsung\Desktop\OnSpect
@@ -19,8 +20,26 @@ npm install
 npm run dev      →  http://localhost:5173/
 ```
 
-테스트 **463개**(canvas-core 251 · project-core 212) · 타입 검사 · 프로덕션 빌드 전부 통과.
+테스트 **489개**(canvas-core 277 · project-core 212) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
+
+### 2026-08-25 완료 — Phase 5 착수 전 점검 + 태블릿 UI 목업 + 트랙A(코어 터치 지원)
+
+1. **태블릿 UI 목업 13화면** — https://claude.ai/code/artifact/b2a7f632-018a-48d4-8824-358250f7b6f5
+   소스: `_workspace/mobile_mockup/*.dc.html`. 과업목록·오프라인준비(G3)·캔버스·정밀표기 두 안 비교(Q6)·
+   결함입력(사이드시트/바텀시트3단/면적모드)·사진촬영·전회차대조·결함리스트.
+2. **Phase 5 스펙 확정** — `_workspace/26_plan-reviewer_spec_Phase5_Mobile.md`. 사용자 결정 D10~D13
+   (`_workspace/DECISIONS.md`): 태블릿 가로=우측 사이드시트 / 런타임 PWA 먼저 / 동기화 자체서버 구축 /
+   정밀표기(Q6)는 목업 두 안(조준 크로스헤어 vs 롱프레스 루페) 보고 최종 선택 대기 중.
+3. **트랙A 구현 완료** — `packages/canvas-core`에 핀치줌 이벤트 3종(`GESTURE_PINCH_*`)·
+   두 번째 포인터 드래그취소 버그 수정(마우스에선 안 드러나던 기존 결함)·`CENTER_ON_NORM`(미니맵 이동)·
+   터치용 히트 프로파일(`ReduceContext.hitProfile`, optional) 추가. **PC 웹 동작은 전혀 안 바뀐다**
+   (기존 251개 테스트 그대로 통과 + 신규 26개). `apps/web`은 한 줄도 안 건드림 — 화면엔 아직 안 붙어 있다.
+   로그: `_workspace/27_builder_log_Phase5_TrackA.md` · 검수: `_workspace/28_code-reviewer_findings_Phase5_TrackA.md`
+
+**다음 트랙(T1 터치 어댑터·T6~T8 화면 배선)은 착수 안 함** — 런타임은 PWA로 정했지만
+서버·동기화 프로토콜(D12)이 아직 설계 전이고, 정밀표기(Q6)도 최종 확정 전이라 화면에 실제로
+붙이는 작업은 그 다음이다.
 
 ### 2026-08-25 완료 — S5(사진) + Phase 4(산출물 4종) · 원격/비대화형 라운드
 
