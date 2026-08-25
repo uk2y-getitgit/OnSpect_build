@@ -35,6 +35,7 @@ import {
   planFromRun,
   type ExportSource,
 } from '../export/exportModel';
+import { DAMAGE_REPEAT_ROWS } from '../export/damageTableFile';
 import { FILE_ARTIFACTS, produceArtifacts } from '../export/produce';
 import { CSV_FALLBACK_NOTICE } from '../export/xlsx';
 import { hrefOf, navigate, type PrintKind } from '../router';
@@ -50,9 +51,22 @@ const ALL_KINDS: readonly ExportArtifactKind[] = [
   'LOCATION_MAP',
 ];
 
+/**
+ * 엑셀 인쇄 반복 행 안내 (M2 · Q36).
+ *
+ * 채택한 `write-excel-file` 은 `printTitles` 를 노출하지 않아 **머리말 5행이 첫 페이지에만**
+ * 나온다. 실측 보고서는 NO 96 까지 가므로 손상결함표는 대개 여러 페이지다 —
+ * `<계 속>` 이라는 문구 자체가 페이지마다 반복된다는 전제 위에서 뜻이 통한다.
+ * 라이브러리를 바꾸는 대신 **사용자에게 한 줄로 알린다.** `$1:$5` 는 상수에서 만든다.
+ */
+const REPEAT_ROW_RANGE = `$1:$${DAMAGE_REPEAT_ROWS}`;
+const REPEAT_ROW_NOTICE =
+  `손상결함표가 여러 페이지로 나뉘면 엑셀에서 [페이지 레이아웃 → 인쇄 제목 → 반복할 행]에 ` +
+  `${REPEAT_ROW_RANGE} 를 한 번 지정해 주세요 — 머리말이 페이지마다 반복됩니다.`;
+
 /** 산출물별 안내 — 무엇이 파일로 나오고 무엇이 인쇄 뷰인지 (M3 · K1) */
 const KIND_HINT: Record<ExportArtifactKind, string> = {
-  DAMAGE_TABLE: '엑셀 파일로 내려받습니다 (13열 · 층 섹션 · 원인 범례)',
+  DAMAGE_TABLE: `엑셀 파일로 내려받습니다 (13열 · 층 섹션 · 원인 범례). ${REPEAT_ROW_NOTICE}`,
   DEFECT_LIST: '엑셀 파일로 내려받습니다 (9열 축약). PDF 는 아래 이력에서 [PDF로 인쇄]',
   PHOTO_BOOK: '파일이 아니라 인쇄 뷰로 냅니다 — 생성 후 [사진첩 PDF] 를 누르세요',
   LOCATION_MAP: '층마다 PNG 1장을 내려받습니다',
@@ -132,6 +146,22 @@ export function Export({ projectId }: { projectId: string }) {
     if (storage.phase !== 'READY') return;
     setRuns(await storage.repo.listExportRuns(projectId));
   }, [storage, projectId]);
+
+  /**
+   * 이력의 데이터 변경 경고가 볼 **비교 대상** — 지금 데이터를 **그 이력의 파라미터로** 다시 거른 것.
+   *
+   * `run.mapping` 은 그 출력의 필터를 통과한 결함만 담는다. 여기에 `bundle.defects` 전체를
+   * 맞대면 층 선택·`includeRepaired: false` 로 빠진 결함이 전부 "추가됨"으로 세어져
+   * **아무것도 안 바꿔도 경고가 뜬다**(검수 보통 1).
+   *
+   * `planExport` 를 재사용하므로 "번호는 한 곳에서만 센다"는 규칙을 깨지 않는다 —
+   * 결과에서 **id 목록만** 쓰고 번호는 버린다. 출력에는 관여하지 않는다.
+   */
+  const currentIdsFor = useCallback(
+    (r: ExportRun): string[] =>
+      source ? planExport(source, r.params).rows.map((x) => x.defectId) : [],
+    [source],
+  );
 
   // ── 생성 ────────────────────────────────────────────────────────────────
   const run = useCallback(
@@ -419,6 +449,11 @@ export function Export({ projectId }: { projectId: string }) {
             PDF 는 <b>인쇄 대화상자에서 &quot;PDF로 저장&quot;</b> 을 고르는 방식입니다 —
             앱이 PDF 파일을 직접 만들지 않습니다.
           </p>
+          {/*
+            M2 · Q36 — `title` 속성은 마우스를 올려야 보인다. 이건 파일을 열어 본 뒤에야
+            알아차리는 종류의 제약이라 **상시 노출**한다 (검수 보통 3).
+          */}
+          {kindSet.has('DAMAGE_TABLE') && <p className="xp-hint">{REPEAT_ROW_NOTICE}</p>}
         </section>
 
         <section className="panel xp-section">
@@ -433,7 +468,7 @@ export function Export({ projectId }: { projectId: string }) {
           )}
           <RunHistory
             runs={runs}
-            currentDefectIds={bundle.defects.map((d) => d.id)}
+            currentIdsFor={currentIdsFor}
             busyRunId={busy && busy !== '생성' ? busy : null}
             onRedownload={(r) => void run(r.id, { existing: r })}
             onPrint={(r, kind) => openPrint(r.id, kind as PrintKind)}

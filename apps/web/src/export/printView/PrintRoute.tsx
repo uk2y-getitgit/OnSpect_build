@@ -11,7 +11,12 @@
  * ⭐ **모든 `<img>` 의 `decode()` 를 기다린 뒤 인쇄한다.** 안 기다리면 빈 칸이 인쇄된다.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ARTIFACT_LABEL, type ExportRun, type ItemSettings } from '@onspect/project-core';
+import {
+  ARTIFACT_LABEL,
+  type ExportRun,
+  type ItemSettings,
+  type PhotoBookPage,
+} from '@onspect/project-core';
 import { useAppData } from '../../data/appData';
 import type { PrintKind } from '../../router';
 import { defectListModel, photoBookModel, planFromRun, type ExportSource } from '../exportModel';
@@ -38,6 +43,8 @@ type Loaded = {
   run: ExportRun;
   photoUrls: Record<string, string>;
   maps: LocationMapPage[];
+  /** 사진첩 페이지 — `photoUrls` 와 **같은 계산 결과**여야 한다(검수 보통 2). 여기서 한 번만 만든다 */
+  bookPages: PhotoBookPage[];
 };
 
 export function PrintRoute({
@@ -90,9 +97,15 @@ export function PrintRoute({
 
         let photoUrls: Record<string, string> = {};
         let maps: LocationMapPage[] = [];
+        let bookPages: PhotoBookPage[] = [];
 
         if (kind === 'PHOTO_BOOK') {
-          photoUrls = await loadPhotoUrls(repo, projectId, source, plan.rows);
+          // ⭐ **사진첩 셀이 고른 키만 로드한다.** `isPrimary` 를 직접 훑지 않는다 —
+          //    `primaryOf()`(읽기 정규화)는 대표가 0장인 저장 상태에서 **첫 장을 대표로 선출**하는데,
+          //    원본 플래그를 그대로 필터하면 그 칸의 URL 이 없어 빈 칸이 인쇄된다(검수 보통 2).
+          //    `photo.ts` 가 "각자 find(isPrimary) 하지 않는다"고 못박은 바로 그 규칙이다.
+          bookPages = photoBookModel(source, plan);
+          photoUrls = await loadPhotoUrls(repo, projectId, bookPages);
         } else if (kind === 'LOCATION_MAP') {
           const r = await renderLocationMaps({
             project: bundle.project,
@@ -115,7 +128,7 @@ export function PrintRoute({
           releaseLocationMaps(created);
           return;
         }
-        setData({ source, run, photoUrls, maps });
+        setData({ source, run, photoUrls, maps, bookPages });
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : String(e));
       }
@@ -133,10 +146,6 @@ export function PrintRoute({
     return defectListModel(data.source, planFromRun(data.source, data.run), data.run.params);
   }, [data, kind]);
 
-  const bookPages = useMemo(() => {
-    if (!data || kind !== 'PHOTO_BOOK') return null;
-    return photoBookModel(data.source, planFromRun(data.source, data.run));
-  }, [data, kind]);
 
   // 렌더가 끝나고 **모든 이미지가 디코드된 뒤** 인쇄한다
   useEffect(() => {
@@ -180,8 +189,8 @@ export function PrintRoute({
       {!error && !data && <p className="pv-status">문서를 만드는 중…</p>}
 
       {data && kind === 'DEFECT_LIST' && listModel && <PrintDefectList model={listModel} />}
-      {data && kind === 'PHOTO_BOOK' && bookPages && (
-        <PrintPhotoBook pages={bookPages} urls={data.photoUrls} />
+      {data && kind === 'PHOTO_BOOK' && (
+        <PrintPhotoBook pages={data.bookPages} urls={data.photoUrls} />
       )}
       {data && kind === 'LOCATION_MAP' && <PrintLocationMap pages={data.maps} />}
     </div>
@@ -195,17 +204,20 @@ function displayNumbersOf(run: ExportRun): Record<string, string> {
   return out;
 }
 
+/**
+ * 사진첩이 **실제로 그릴 칸**의 Blob 키만 objectURL 로 바꾼다.
+ *
+ * ⚠️ `photos` 를 다시 훑어 `isPrimary` 를 필터하지 않는다 — `buildPhotoBook` 은
+ * `primaryOf()`(읽기 정규화)를 쓰므로 대표가 0장인 저장 상태에서 **첫 장을 대표로 선출**한다.
+ * 두 경로가 갈리면 그 칸만 조용히 빈 채로 인쇄된다(검수 보통 2 · `photo.ts` 의 금지 조항).
+ */
 async function loadPhotoUrls(
   repo: { objectUrl: (key: string, projectId: string) => Promise<string | null> },
   projectId: string,
-  source: ExportSource,
-  rows: readonly { defectId: string }[],
+  pages: readonly PhotoBookPage[],
 ): Promise<Record<string, string>> {
-  const wanted = new Set(rows.map((r) => r.defectId));
   const keys = new Set<string>();
-  for (const p of source.bundle.photos) {
-    if (p.isPrimary && wanted.has(p.defectId)) keys.add(p.renderBlobKey);
-  }
+  for (const p of pages) for (const c of p.cells) keys.add(c.renderBlobKey);
   const out: Record<string, string> = {};
   for (const key of keys) {
     const u = await repo.objectUrl(key, projectId);

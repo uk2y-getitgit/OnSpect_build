@@ -18,8 +18,15 @@ import {
 
 export type RunHistoryProps = {
   runs: readonly ExportRun[];
-  /** 지금 이 용역에 있는 결함 id 전부 — 변경 감지의 기준 */
-  currentDefectIds: readonly string[];
+  /**
+   * ⭐ **이력마다 따로 물어본다** — `지금 그 이력의 조건이면 대상이 되었을 결함 id`.
+   *
+   * `run.mapping` 에는 **그 출력의 필터를 통과한 결함만** 들어 있다. 비교 대상을
+   * `bundle.defects` 전체로 잡으면 층 선택·상태 필터·조사구분으로 빠진 결함이 전부
+   * `added` 로 세어져, **데이터를 하나도 안 건드려도 경고가 뜬다**(검수 보통 1).
+   * 그러면 사용자가 이 경고를 무시하게 되고, **진짜 결함이 추가됐을 때도 못 본다.**
+   */
+  currentIdsFor: (run: ExportRun) => readonly string[];
   busyRunId: string | null;
   onRedownload: (run: ExportRun) => void;
   onPrint: (run: ExportRun, kind: ExportArtifactKind) => void;
@@ -32,7 +39,7 @@ const PRINTABLE: readonly ExportArtifactKind[] = ['DEFECT_LIST', 'PHOTO_BOOK', '
 
 export function RunHistory({
   runs,
-  currentDefectIds,
+  currentIdsFor,
   busyRunId,
   onRedownload,
   onPrint,
@@ -51,7 +58,8 @@ export function RunHistory({
   return (
     <ul className="xp-runs">
       {runs.map((run) => {
-        const drift = diffExportRun(run, currentDefectIds);
+        // 그 이력의 파라미터로 다시 거른 현재 결함과 비교한다 — 필터로 빠진 결함이 섞이지 않는다
+        const drift = diffExportRun(run, currentIdsFor(run));
         const changed = drift.added.length > 0 || drift.removed.length > 0;
         const busy = busyRunId === run.id;
         return (
