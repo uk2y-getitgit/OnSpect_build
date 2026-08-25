@@ -13,6 +13,8 @@ import type {
   Building,
   CopyStructureResult,
   Drawing,
+  ExportArtifact,
+  ExportRun,
   Floor,
   ItemSettings,
   Photo,
@@ -44,6 +46,14 @@ import {
   revokeUrl,
   type BlobRecord,
 } from './blobs.js';
+import {
+  appendArtifact,
+  deleteExportRun,
+  getExportRun,
+  listExportRuns,
+  pruneExportRuns,
+  putExportRun,
+} from './exportRuns.js';
 import {
   purgePhotoIdsIn,
   purgePhotoRecordsIn,
@@ -708,6 +718,42 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     const snap = snapshotForProject(org, { projectId, deviceId: this.deviceId, now });
     await this.putItemSettings(snap);
     return snap;
+  }
+
+  // ── 출력 이력 `ExportRun` (Phase 4 §3-3 · K2) ───────────────────────────
+  /**
+   * ⚠️ **화면은 `openDb()` 를 직접 부르지 않는다.** 연결이 두 개가 되면
+   * `deleteDatabase` 와 버전 업그레이드가 막힌다(검수 경미 6). `exportRuns.ts` 의
+   * 모듈 함수는 첫 인자로 `db` 를 받으므로, 여기서 **위임 메서드로만** 노출한다.
+   * UI 는 `storage.repo.xxx()` 만 부른다.
+   *
+   * 저장 위치는 `meta` KV 재사용이고 **DB_VERSION 은 1 그대로**다 — 새 스토어를 만들지 않는다.
+   */
+  putExportRun(run: ExportRun): Promise<void> {
+    return putExportRun(this.db, run);
+  }
+
+  getExportRun(id: string): Promise<ExportRun | null> {
+    return getExportRun(this.db, id);
+  }
+
+  /** `createdAt DESC` */
+  listExportRuns(projectId: string): Promise<ExportRun[]> {
+    return listExportRuns(this.db, projectId);
+  }
+
+  /** 다운로드한 산출물을 이력에 덧붙인다. **번호는 다시 계산하지 않는다** */
+  appendExportArtifact(runId: string, artifact: ExportArtifact): Promise<void> {
+    return appendArtifact(this.db, runId, artifact);
+  }
+
+  /** 오래된 것부터 삭제. 무한히 쌓이지 않게 한다 */
+  pruneExportRuns(projectId: string, keep?: number): Promise<number> {
+    return pruneExportRuns(this.db, projectId, keep);
+  }
+
+  deleteExportRun(id: string): Promise<void> {
+    return deleteExportRun(this.db, id);
   }
 
   // ── Blob 읽기 (캔버스·썸네일) ───────────────────────────────────────────
