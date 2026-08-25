@@ -21,14 +21,7 @@
  * 영역 **내부**가 맨 아래인 이유(§S2a-3): 큰 영역이 그 위에 놓인 작은 표기를
  * 전부 삼키면 도면이 잠긴다. 큰 것보다 작은 것이, 뒤보다 앞이 이긴다.
  */
-import {
-  HIT_HANDLE_PX,
-  HIT_LEADER_PX,
-  HIT_MIN_LABEL_PX,
-  HIT_MIN_MARK_PX,
-  HIT_PAD_PX,
-  HIT_STROKE_PX,
-} from './constants.js';
+import { DEFAULT_HIT_PROFILE, type HitProfile } from './constants.js';
 import { dist, distPointSegment, sub, unit } from './geometry.js';
 import type { DefectScreen } from './defectGeom.js';
 import type { MemoScreen } from './memoGeom.js';
@@ -60,13 +53,25 @@ export type HitInput = {
 
 /**
  * @param screens z-order **오름차순**(seq 오름차순). 내부에서 역순 탐색한다
+ * @param profile 히트 허용치(T5). 생략하면 `DEFAULT_HIT_PROFILE`(마우스) — 기존 동작 그대로
  */
 export function hitTest(
   p: SPoint,
   screens: readonly DefectScreen[],
   selection: Selection,
   memos: readonly MemoScreen[] = [],
+  profile: HitProfile = DEFAULT_HIT_PROFILE,
 ): HitTarget | null {
+  // 아래 본문은 예전과 한 글자도 다르지 않다 — 모듈 상수를 프로파일 값으로 **바꿔 끼우기만** 한다.
+  // 이름을 그대로 둔 것은 의도적이다: 히트 판정 로직의 diff 를 0 으로 만들어야
+  // "PC 동작 변화 0" 을 코드로 확인할 수 있다
+  const HIT_PAD_PX = profile.pad;
+  const HIT_MIN_LABEL_PX = profile.minLabel;
+  const HIT_MIN_MARK_PX = profile.minMark;
+  const HIT_LEADER_PX = profile.leader;
+  const HIT_STROKE_PX = profile.stroke;
+  const HIT_HANDLE_PX = profile.handle;
+
   // 1. 라벨
   const labelHits: HitTarget[] = [];
   for (const s of screens) {

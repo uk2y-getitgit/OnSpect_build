@@ -7,8 +7,8 @@
  * 시간·난수도 모른다 — id 생성기는 ctx 로 받는다.
  */
 import {
-  CLICK_SLOP_PX,
   CREATE_MIN_DRAG_PX,
+  DEFAULT_HIT_PROFILE,
   LABEL_SOFT_MAX,
   LABEL_SOFT_MIN,
   MEMO_INK,
@@ -16,6 +16,7 @@ import {
   SKETCH_MAX_POINTS,
   SKETCH_MIN_STEP_PX,
   ZOOM_WHEEL_STEP,
+  type HitProfile,
 } from './constants.js';
 import type { Command } from './commands.js';
 import { EMPTY_DEFECT_ATTRS } from './defectAttrs.js';
@@ -99,6 +100,14 @@ export type ReduceContext = {
    * 무엇을 넣을지는 `project-core` 의 `seedAttrs()` 가 정한다.
    */
   defectSeed?: Partial<DefectAttrs>;
+  /**
+   * 히트 허용치 (Phase 5 T5). **생략하면 `DEFAULT_HIT_PROFILE`(= 지금까지의 마우스 값)** 이라
+   * PC 동작은 한 픽셀도 바뀌지 않는다. 손가락으로 쓰는 화면에서만 넓은 값을 주입한다.
+   *
+   * 코어가 플랫폼을 판별하지 않는 이유: 코어는 `window` 도 `navigator` 도 모른다(경계 규칙 1).
+   * 무엇이 마우스이고 무엇이 손가락인지는 **어댑터만 안다.**
+   */
+  hitProfile?: HitProfile;
 };
 
 export type ReduceResult = {
@@ -277,6 +286,11 @@ export function pendingGhostsOf(state: CanvasState, ctx: ReduceContext): GhostSh
     }));
 }
 
+/** 히트 허용치 — 주입 없으면 마우스 값 (T5) */
+function hitProfileOf(ctx: ReduceContext): HitProfile {
+  return ctx.hitProfile ?? DEFAULT_HIT_PROFILE;
+}
+
 function findDefect(ctx: ReduceContext, id: string | null | undefined): Defect | null {
   if (!id) return null;
   return ctx.defects.find((d) => d.id === id) ?? null;
@@ -379,6 +393,22 @@ function keepSelectionVisible(state: CanvasState, ctx: ReduceContext): CanvasSta
   return applyEnsureVisible(state, ctx.defects, ctx.globalStyle, state.selection.defectId);
 }
 
+/**
+ * 진행 중인 드래그를 **롤백**한다 (Phase 5 T3 · Escape 와 같은 규칙).
+ *
+ * 드래그는 커밋(POINTER_UP) 전까지 문서(Defect[])를 한 글자도 건드리지 않는다
+ * — 위치는 `drag.previewNorm` / `drag.geomPreview` 안에만 있다. 그래서 **버리는 것이 곧 원위치**다:
+ *   · 생성 중이던 임시 표기 → 커밋된 적이 없으니 아무것도 안 남는다
+ *   · 이동 중이던 표기      → 미리보기가 사라지고 원래 좌표가 다시 보인다
+ *   · 팬 드래그             → 지금까지 민 뷰포트는 **그대로 둔다** (시작 위치로 되감으면 화면이 튄다)
+ *
+ * 선택(selection)은 건드리지 않는다 — Escape 취소도 선택은 남긴다.
+ */
+function cancelDrag(state: CanvasState): CanvasState {
+  if (!state.drag) return state;
+  return { ...state, drag: null, guides: [] };
+}
+
 function fitState(state: CanvasState): CanvasState {
   if (!state.drawing || state.canvas.w <= 0 || state.canvas.h <= 0) return state;
   return withViewport(
@@ -455,6 +485,55 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
       return ok(withViewport(state, zoomAt(state.viewport, ev.screen, factor, min, max)), ctx);
     }
 
+    // ── Phase 5 T2 · 핀치 ─────────────────────────────────────────────────
+    // 신규 수학 없음. 기존 `zoomAt`(커서 고정 줌) + `clampPan`(팬 한계) 재사용이다.
+    case 'GESTURE_PINCH_START':
+      // 두 번째 손가락이 얹히는 순간 진행 중이던 드래그는 버린다 (T3 와 같은 규칙).
+      // 커밋 전이라 드래그를 버리면 곧 원위치다 — 문서는 아직 손대지 않았다
+      return ok(cancelDrag(state), ctx);
+
+    case 'GESTURE_PINCH': {
+      if (!state.drawing) return ok(state, ctx);
+      // 요소 드래그가 남아 있으면(START 를 놓친 어댑터) 여기서라도 버린다.
+      // 정렬 스냅샷이 스크린 좌표라 뷰포트가 움직이면 유효성이 깨진다 (WHEEL 과 같은 이유)
+      const base = cancelDrag(state);
+      const { imageWidth, imageHeight } = state.drawing;
+      const { min, max } = zoomLimits(imageWidth, imageHeight, base.canvas);
+      const factor = Number.isFinite(ev.factor) && ev.factor > 0 ? ev.factor : 1;
+      // ① 두 접점의 중점을 고정한 채 배율을 바꾸고 ② 그 중점이 움직인 만큼 민다.
+      //    순서가 중요하다 — 줌을 먼저 해야 손가락 아래 도면 지점이 안 미끄러진다
+      const zoomed = zoomAt(base.viewport, ev.center, factor, min, max);
+      const panned: Viewport = {
+        zoom: zoomed.zoom,
+        tx: zoomed.tx + ev.pan.x,
+        ty: zoomed.ty + ev.pan.y,
+      };
+      return ok(withViewport(base, panned), ctx); // withViewport 안에서 clampPan
+    }
+
+    case 'GESTURE_PINCH_END':
+      // 코어는 제스처 상태를 들고 있지 않다 — END 를 잃어버려도 코어가 잠기지 않는다.
+      // 활성 포인터 추적은 어댑터(T1)의 몫이다
+      return ok(state, ctx);
+
+    // ── Phase 5 T4 ────────────────────────────────────────────────────────
+    case 'CENTER_ON_NORM': {
+      if (!state.drawing) return ok(state, ctx);
+      return ok(
+        withViewport(
+          state,
+          centerOn(
+            state.viewport,
+            ev.n,
+            state.drawing.imageWidth,
+            state.drawing.imageHeight,
+            state.canvas,
+          ),
+        ),
+        ctx,
+      );
+    }
+
     case 'POINTER_DOWN':
       return onPointerDown(state, ev, ctx);
 
@@ -473,7 +552,13 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
     case 'DOUBLE_CLICK': {
       if (!state.drawing) return ok(state, ctx);
       const screens = screensOf(state, ctx);
-      const hit = hitTest(ev.screen, screens, state.selection, memoScreensOf(state, ctx));
+      const hit = hitTest(
+        ev.screen,
+        screens,
+        state.selection,
+        memoScreensOf(state, ctx),
+        hitProfileOf(ctx),
+      );
       if (!hit) return ok(fitState(state), ctx);
       // 메모 더블클릭 = 글 고치기 (§S2a-4).
       // F2 — **필기 메모는 글로 고칠 수 없다.** 옛 텍스트 메모만 편집기를 연다
@@ -506,7 +591,13 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
     case 'CONTEXT_MENU': {
       if (!state.drawing) return ok(state, ctx);
       const screens = screensOf(state, ctx);
-      const hit = hitTest(ev.screen, screens, state.selection, memoScreensOf(state, ctx));
+      const hit = hitTest(
+        ev.screen,
+        screens,
+        state.selection,
+        memoScreensOf(state, ctx),
+        hitProfileOf(ctx),
+      );
       if (!hit || !hit.defectId) return ok(state, ctx); // 빈 도면: 기본 메뉴만 차단
       return ok(
         { ...state, selection: selectionFromHit(hit) },
@@ -689,6 +780,23 @@ function onPointerDown(
   ctx: ReduceContext,
 ): ReduceResult {
   if (!state.drawing || state.busy) return ok(state, ctx);
+
+  /**
+   * Phase 5 T3 — **두 번째 포인터는 새 드래그를 시작하지 않는다.**
+   *
+   * 마우스는 포인터가 하나(pointerId 고정)라 이 분기에 걸리지 않는다 — PC 동작은 그대로다.
+   * 터치에서는 다르다: 한 손가락으로 영역을 그리는 중에 두 번째 손가락이 닿으면
+   * 예전 코드는 진행 중이던 `state.drag` 를 확인하지 않고 새 드래그로 **덮어써서**
+   * 그리던 도형이 엉뚱한 곳에 남거나 옮기던 표기가 손가락을 따라가 버렸다.
+   *
+   * 여기서는 진행 중이던 드래그를 롤백하고 이 포인터는 **버린다.**
+   * 어댑터(T1)는 이 직후 `GESTURE_PINCH_START` 를 보내 핀치로 이어간다 —
+   * 즉 두 손가락은 "그리기" 가 아니라 항상 "화면 조작" 이다.
+   */
+  if (state.drag && state.drag.pointerId !== ev.pointerId) {
+    return ok(cancelDrag({ ...state, keys: ev.keys }), ctx);
+  }
+
   const next0 = { ...state, keys: ev.keys };
 
   const startPan = (pointToolCandidate: boolean): ReduceResult =>
@@ -709,7 +817,7 @@ function onPointerDown(
 
   const screens = screensOf(next0, ctx);
   const memos = memoScreensOf(next0, ctx);
-  const hit = hitTest(ev.screen, screens, next0.selection, memos);
+  const hit = hitTest(ev.screen, screens, next0.selection, memos, hitProfileOf(ctx));
 
   /**
    * 생성 도구가 켜져 있으면 **기존 표기를 잡기 전에** 생성을 시작한다.
@@ -984,7 +1092,13 @@ function onPointerMove(
 
   if (!drag) {
     const screens = screensOf(state, ctx);
-    const hit = hitTest(ev.screen, screens, state.selection, memoScreensOf(state, ctx));
+    const hit = hitTest(
+      ev.screen,
+      screens,
+      state.selection,
+      memoScreensOf(state, ctx),
+      hitProfileOf(ctx),
+    );
     const hover = hit
       ? {
           defectId: hit.defectId,
@@ -1010,7 +1124,7 @@ function onPointerMove(
 
   if (drag.pointerId !== ev.pointerId) return ok(state, ctx);
 
-  const moved = drag.moved || dist(ev.screen, drag.startScreen) > CLICK_SLOP_PX;
+  const moved = drag.moved || dist(ev.screen, drag.startScreen) > hitProfileOf(ctx).clickSlop;
   const iw = state.drawing.imageWidth;
   const ih = state.drawing.imageHeight;
 

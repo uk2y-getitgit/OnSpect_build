@@ -40,6 +40,43 @@ export const HIT_STROKE_PX = 6;
 export const HIT_HANDLE_PX = 8;
 
 /**
+ * 히트 프로파일 (Phase 5 · T5).
+ *
+ * 위 상수들은 **마우스 기준**이다. 손가락은 접촉면이 8~10mm 라 같은 값으로는 아무것도 못 잡는다.
+ * 그렇다고 상수를 키우면 PC 정밀도가 망가진다 — 그래서 **값을 주입 가능하게** 만든다.
+ *
+ * 코어는 어느 프로파일이 "터치용" 인지 모른다. 주면 그걸 쓰고, 안 주면
+ * `DEFAULT_HIT_PROFILE`(= 지금까지의 마우스 값)을 쓴다. **PC 동작 변화 0.**
+ */
+export type HitProfile = {
+  /** 히트 여유 (= HIT_PAD_PX) */
+  pad: number;
+  /** 마크 최소 히트 반경 (= HIT_MIN_MARK_PX) */
+  minMark: number;
+  /** 라벨 최소 히트 반경 (= HIT_MIN_LABEL_PX) */
+  minLabel: number;
+  /** 리더선 히트 허용 거리 (= HIT_LEADER_PX) */
+  leader: number;
+  /** 테두리 · 화살표 · 그리기 선 히트 허용 거리 (= HIT_STROKE_PX) */
+  stroke: number;
+  /** 리사이즈 핸들 히트 반경 (= HIT_HANDLE_PX) */
+  handle: number;
+  /** 클릭/드래그 구분 (= CLICK_SLOP_PX) */
+  clickSlop: number;
+};
+
+/** 마우스 프로파일 — 위 모듈 상수 그대로. 프로파일을 주지 않으면 이것이 쓰인다 */
+export const DEFAULT_HIT_PROFILE: HitProfile = {
+  pad: HIT_PAD_PX,
+  minMark: HIT_MIN_MARK_PX,
+  minLabel: HIT_MIN_LABEL_PX,
+  leader: HIT_LEADER_PX,
+  stroke: HIT_STROKE_PX,
+  handle: HIT_HANDLE_PX,
+  clickSlop: CLICK_SLOP_PX,
+};
+
+/**
  * 방향 · 영역 생성 최소 드래그 거리 (스크린 px, §S2a-2).
  * 이보다 짧으면 **생성을 취소한다.** 실수 클릭으로 0크기 도형이 쌓이면 지우기도 어렵다.
  */

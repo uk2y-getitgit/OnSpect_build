@@ -504,6 +504,29 @@ export type InputEvent =
   | { k: 'SELECT_DEFECT'; defectId: string | null; reveal: boolean }
   | { k: 'FIT' }
   | { k: 'ZOOM_BUTTON'; factor: number }
+  // ── Phase 5 T2 · 핀치 (두 손가락) ─────────────────────────────────────────
+  /**
+   * 두 손가락이 얹혔다. `center` = 두 접점의 중점(스크린 px).
+   * 진행 중이던 한 손가락 드래그는 여기서 **취소**된다 (T3 와 같은 규칙).
+   */
+  | { k: 'GESTURE_PINCH_START'; center: SPoint }
+  /**
+   * 핀치 진행. **직전 프레임 대비 상대값**이다 (누적값이 아니다).
+   *   · `factor` — 두 접점 사이 거리의 배율 (1 = 배율 변화 없음)
+   *   · `center` — 지금 두 접점의 중점. 이 지점을 고정한 채 줌한다
+   *   · `pan`    — 중점이 직전 프레임에서 움직인 양. 줌과 **동시에** 적용된다
+   *
+   * `WHEEL`(고정 스텝 1.1) · `ZOOM_BUTTON`(화면 중앙 고정)으로는
+   * "연속 배율 + 동시 팬" 을 표현할 수 없어서 따로 둔다.
+   */
+  | { k: 'GESTURE_PINCH'; center: SPoint; factor: number; pan: SPoint }
+  /** 손가락이 떨어졌다. 코어는 제스처 상태를 들고 있지 않으므로 정리할 것이 없다 */
+  | { k: 'GESTURE_PINCH_END' }
+  /**
+   * Phase 5 T4 — 정규화 좌표(0~1)를 화면 중앙으로. 배율은 그대로 둔다.
+   * 미니맵 탭 · 리스트에서 위치 찾기용.
+   */
+  | { k: 'CENTER_ON_NORM'; n: NPoint }
   | { k: 'RESET_LABEL'; defectId: string }
   | { k: 'DELETE_SELECTION' }
   | { k: 'CONFIRM_DELETE_DEFECT'; defectId: string }
