@@ -188,7 +188,7 @@ export type ResolvedStyle = {
 
 /** 규모 입력 방식 — 폭×길이 / 면적 (S4 스펙 §3-5) */
 export type DefectSizeMode = 'WL' | 'AREA';
-/** 조사구분. 폼에 노출하지 않는다. Phase 4 출력 필터가 쓴다 */
+/** 조사구분. 결함정보 폼 최상단에 노출된다(§2-7). Phase 4 출력 필터가 쓴다 */
 export type SurveyKind = 'EXTERIOR' | 'DETAIL';
 /** 진행 없음 / 진행 중 */
 export type DefectProgress = 'NONE' | 'ONGOING';
@@ -207,7 +207,7 @@ export type DefectStructural = 'STRUCTURAL' | 'NON_STRUCTURAL';
  */
 export type DefectAttrs = {
   // ── 분류 ────────────────────────────────────────────────────────────────
-  /** 폼 미노출. 기본 EXTERIOR */
+  /** 폼 최상단 세그먼트. 기본 EXTERIOR · **직전 입력에서 이어받는다** */
   surveyKind: SurveyKind;
   /** 위치보조 — 거실 · 복도 · 계단실 */
   locationNote: string | null;

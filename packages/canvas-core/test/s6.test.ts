@@ -22,7 +22,9 @@ import { GS } from './helpers.js';
 /** 직전 결함 — 사용자가 폼을 다 채운 상태 */
 const PREV: DefectAttrs = {
   ...EMPTY_DEFECT_ATTRS,
-  surveyKind: 'EXTERIOR',
+  // ⭐ 이어받음으로 바뀐 필드(PhotoPolish §2-7 · Q44). 기본값과 다른 값을 넣어야
+  //    "이어받는다" 를 실제로 증명한다 — EXTERIOR 로 두면 이어받든 말든 결과가 같다
+  surveyKind: 'DETAIL',
   locationNote: '거실',
   structureType: 'RC',
 
@@ -52,9 +54,8 @@ const PREV: DefectAttrs = {
   memo: '3층 계단 옆',
 };
 
-/** 이어받지 않는 9개 — D9 표의 오른쪽 칸 + surveyKind(J4) */
+/** 이어받지 않는 8개 — D9 표의 오른쪽 칸 */
 const FRESH_KEYS = [
-  'surveyKind',
   'locationNote',
   'widthMm',
   'lengthMm',
@@ -65,8 +66,9 @@ const FRESH_KEYS = [
   'memo',
 ] as const satisfies readonly (keyof DefectAttrs)[];
 
-/** 이어받는 13개 — D9 표의 왼쪽 칸 */
+/** 이어받는 14개 — D9 표의 왼쪽 칸 + 조사구분(§2-7 · Q44) */
 const CARRY_KEYS = [
+  'surveyKind',
   'structureType',
   'memberId',
   'memberName',
@@ -87,7 +89,7 @@ describe('DEFECT_SEED_CARRY — 이어받는 필드 표', () => {
     expect(Object.keys(DEFECT_SEED_CARRY).sort()).toEqual([...DEFECT_ATTR_KEYS].sort());
   });
 
-  it('D9 표 그대로다 — 이어받음 13 · 새로 받음 9', () => {
+  it('D9 표 그대로다 — 이어받음 14 · 새로 받음 8 (조사구분 포함)', () => {
     expect(DEFECT_ATTR_KEYS.filter((k) => DEFECT_SEED_CARRY[k]).sort()).toEqual(
       [...CARRY_KEYS].sort(),
     );
@@ -110,13 +112,14 @@ describe('pickDefectSeed — 골라 담기', () => {
     expect(Object.hasOwn(seed, 'areaM2')).toBe(false);
   });
 
-  it('담긴 키는 정확히 이어받는 13개다', () => {
+  it('담긴 키는 정확히 이어받는 14개다', () => {
     expect(Object.keys(pickDefectSeed(PREV)).sort()).toEqual([...CARRY_KEYS].sort());
   });
 
   it('이어받는 값이 그대로 실린다', () => {
     const seed = pickDefectSeed(PREV);
     expect(seed).toEqual({
+      surveyKind: 'DETAIL',
       structureType: 'RC',
       memberId: 'm1',
       memberName: '슬래브',
@@ -198,6 +201,8 @@ describe('실제 생성 경로 — reduce() 로 만든 새 결함', () => {
     expect(d.leak).toBe(true);
     expect(d.causeName).toBe('건조수축');
     expect(d.repairName).toBe('표면처리');
+    // ⭐ 조사구분 — 상세조사 중인 사용자가 매번 다시 누르지 않아도 된다 (§2-7 · Q44)
+    expect(d.surveyKind).toBe('DETAIL');
 
     // 새로 받음 — **null 이지 undefined 가 아니다**
     expect(d.widthMm).toBeNull();
@@ -208,7 +213,6 @@ describe('실제 생성 경로 — reduce() 로 만든 새 결함', () => {
     expect(d.countEa).toBeNull();
     expect(d.locationNote).toBeNull();
     expect(d.memo).toBeNull();
-    expect(d.surveyKind).toBe('EXTERIOR');
     for (const k of FRESH_KEYS) expect(Object.hasOwn(d, k)).toBe(true);
   });
 

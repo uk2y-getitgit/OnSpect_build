@@ -3,6 +3,7 @@
  *
  *   File[]  (input[type=file][multiple][accept=image/*])
  *     → 용량 사전 확인 (도면과 같은 규칙 — 처리를 다 하고 마지막에 실패하지 않는다)
+ *     → 앞 256KB 에서 EXIF 3개 태그(촬영시각·제조사·모델) 파싱 — 자체 파서, 의존성 0
  *     → <img> 디코드          ← **EXIF 방향이 브라우저에서 자동 적용된다** (K5)
  *     → 장변 2048 → JPEG q0.85 = renderBlob
  *     → 장변  320 → JPEG q0.8  = thumbBlob
@@ -14,7 +15,9 @@
  */
 import {
   EMPTY_PHOTO_EDITS,
+  formatDevice,
   nextPhotoSortOrder,
+  parseJpegExif,
   type Photo,
 } from '@onspect/project-core';
 import { estimateStorage, newId } from './idb/db.js';
@@ -52,9 +55,17 @@ export type ReadyPhoto = {
   sourceBlob: Blob;
   renderBlob: Blob;
   thumbBlob: Blob;
-  /** EXIF 미파싱 — `file.lastModified` 를 쓴다 (K5) */
+  /** **EXIF `DateTimeOriginal` → `file.lastModified` → null** 순 (PhotoPolish §2-6) */
   takenAt: number | null;
+  /** 촬영기기 — `"Make Model"`. EXIF 가 없으면 null (메신저를 거친 사진은 정상적으로 비어 있다) */
+  device: string | null;
 };
+
+/**
+ * EXIF 를 읽으려고 파일 앞부분만 떼어 낸다.
+ * ⚠️ **30MB 를 통째로 메모리에 올리지 않는다** — EXIF 는 파일 맨 앞에 있다 (§2-6 배선).
+ */
+export const EXIF_HEAD_BYTES = 262_144;
 
 export type RejectedPhoto = {
   key: string;
@@ -174,6 +185,10 @@ async function ingestOne(file: File): Promise<PhotoCandidate> {
     };
   }
 
+  // EXIF — **JPEG 일 때만.** PNG·WEBP 는 EXIF 가 없거나 다른 컨테이너라 그냥 null 이다.
+  // 실패해도 등록을 막지 않는다 (폴백이 이미 있다)
+  const exif = await readExif(file, mime);
+
   let decoded: Decoded | null = null;
   try {
     decoded = await decodeImage(file);
@@ -191,7 +206,10 @@ async function ingestOne(file: File): Promise<PhotoCandidate> {
       sourceBlob: file,
       renderBlob,
       thumbBlob,
-      takenAt: Number.isFinite(file.lastModified) ? file.lastModified : null,
+      // EXIF → lastModified → null (§2-6)
+      takenAt:
+        exif.takenAt ?? (Number.isFinite(file.lastModified) ? file.lastModified : null),
+      device: formatDevice(exif.make, exif.model),
     };
   } catch (e) {
     return {
@@ -205,6 +223,23 @@ async function ingestOne(file: File): Promise<PhotoCandidate> {
   }
 }
 
+/**
+ * 파일 앞 256KB 에서 EXIF 3개 태그만 읽는다. 파싱은 `project-core` 순수 함수가 한다.
+ * **어떤 실패도 등록을 막지 않는다** — 못 읽으면 `lastModified` 폴백이 그대로 남는다.
+ */
+async function readExif(
+  file: File,
+  mime: string,
+): Promise<{ takenAt: number | null; make: string | null; model: string | null }> {
+  if (mime !== 'image/jpeg') return { takenAt: null, make: null, model: null };
+  try {
+    const head = await file.slice(0, EXIF_HEAD_BYTES).arrayBuffer();
+    return parseJpegExif(new Uint8Array(head));
+  } catch {
+    return { takenAt: null, make: null, model: null };
+  }
+}
+
 function normalizeMime(file: File): string {
   if (file.type) return file.type;
   const ext = file.name.toLowerCase().replace(/^.*\./, '');
@@ -214,14 +249,22 @@ function normalizeMime(file: File): string {
   return '';
 }
 
-type Decoded = { source: CanvasImageSource; width: number; height: number; release: () => void };
+export type Decoded = {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  release: () => void;
+};
 
 /**
  * ⚠️ **`<img>` 로 디코드한다.** `createImageBitmap` 이 아니다 —
  * `<img>` 는 브라우저가 EXIF 방향을 **자동으로 적용**해 준다(CSS `image-orientation: from-image` 가 기본).
- * EXIF 파서를 새 의존성으로 넣지 않고도 세로 사진이 눕지 않는다 (K5).
+ * `createImageBitmap` 은 방향을 적용하지 않아 **쓰면 안 된다.**
+ *
+ * 합성 렌더러(`photoCompose.ts`)도 같은 이유로 이 함수를 재사용한다 — 두 벌로 디코드하면
+ * 한쪽만 세로 사진이 눕는다.
  */
-function decodeImage(file: Blob): Promise<Decoded> {
+export function decodeImage(file: Blob): Promise<Decoded> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -304,7 +347,7 @@ export function toPhotoUploads(
       width: r.width,
       height: r.height,
       takenAt: r.takenAt,
-      device: null,
+      device: r.device,
       edits: { ...EMPTY_PHOTO_EDITS },
       annotations: [],
       caption: null,

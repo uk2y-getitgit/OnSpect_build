@@ -19,9 +19,12 @@ import type { RecordBase } from './types.js';
  */
 export type PhotoEdits = {
   /**
-   * 원본 기준 **0~1 정규화** 사각형. null = 자르지 않음.
+   * **렌더 프레임 0~1 정규화** 사각형. null = 자르지 않음.
+   *
+   * ⭐ 기준 프레임이 확정돼 있다 (PhotoPolish 스펙 §2-1) —
+   *    `renderBlobKey` 의 래스터(= `width`/`height`, EXIF 방향 적용 후)이고
+   *    **`rotate` 를 적용하기 전**이다. 변환은 `photoTransform.ts` 가 정본이다.
    * ⚠️ 픽셀이 아니다 — 불변식 #1(도면 좌표 정규화)과 같은 이유다.
-   * 1차에는 항상 null (K3 · Q33).
    */
   crop: { x: number; y: number; w: number; h: number } | null;
   /** 시계방향. EXIF 방향 보정 **이후**에 추가로 적용된다 */
@@ -30,7 +33,13 @@ export type PhotoEdits = {
 
 export type PhotoRotate = 0 | 90 | 180 | 270;
 
-/** 주석 벡터. 좌표는 **원본 기준 0~1 정규화**. 1차에는 항상 빈 배열 (K3 · Q33) */
+/**
+ * 주석 벡터. 좌표는 `crop` 과 **같은 렌더 프레임 0~1 정규화**다 (§2-1).
+ *
+ * `width` 는 **렌더 프레임 장변 대비 비율(0~1)** 이다 — 픽셀이 아니다.
+ * 픽셀로 두면 자르기·출력 배율이 바뀔 때마다 선 굵기가 상대적으로 달라진다.
+ * 프리셋은 `photoTransform.ts::ANNOTATION_WIDTHS`.
+ */
 export type PhotoAnnotation =
   | {
       k: 'STROKE';
@@ -256,4 +265,44 @@ export function displaySize(p: Pick<Photo, 'width' | 'height' | 'edits'>): {
   return r === 90 || r === 270
     ? { width: p.height, height: p.width }
     : { width: p.width, height: p.height };
+}
+
+// ── 비파괴 보정 setter (전부 순수 · 바뀔 것이 없으면 같은 객체) ──────────────
+//
+// ⚠️ 좌표 규약은 `photoTransform.ts` 가 정본이다 — `crop`·`annotations` 는
+//    **렌더 프레임(EXIF 방향 적용 후 · rotate 적용 전) 0~1 정규화**다.
+//    표시 프레임 ↔ 렌더 프레임 변환은 편집기가 저장 직전에 한다.
+
+/** 자르기 지정·해제. `null` = 자르지 않음 */
+export function setPhotoCrop(p: Photo, crop: PhotoEdits['crop']): Photo {
+  const cur = p.edits?.crop ?? null;
+  if (sameCrop(cur, crop)) return p;
+  return { ...p, edits: { ...(p.edits ?? EMPTY_PHOTO_EDITS), crop } };
+}
+
+function sameCrop(a: PhotoEdits['crop'], b: PhotoEdits['crop']): boolean {
+  if (a === null || b === null) return a === b;
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
+/** 주석 목록 통째 교체 (편집기 `[적용]`). 빈 배열도 유효한 값이다 */
+export function setPhotoAnnotations(p: Photo, annotations: readonly PhotoAnnotation[]): Photo {
+  const cur = p.annotations ?? [];
+  if (cur.length === 0 && annotations.length === 0) return p;
+  return { ...p, annotations: [...annotations] };
+}
+
+/** 사진첩 캡션 수동 덮어쓰기. **빈 문자열은 `null` 로 저장한다** — 파생 캡션으로 되돌아간다 (§2-5) */
+export function setPhotoCaption(p: Photo, caption: string | null): Photo {
+  const next = (caption ?? '').trim() === '' ? null : (caption as string).trim();
+  if ((p.caption ?? null) === next) return p;
+  return { ...p, caption: next };
+}
+
+/**
+ * 자르기·주석이 있는가 — 썸네일 `✎` 배지와 **합성 빠른 경로** 판정이 같은 함수를 쓴다 (§2-2).
+ * 회전은 여기 포함하지 않는다. 회전은 CSS 만으로 정확히 표현되므로 합성이 필요 없다.
+ */
+export function hasPhotoEdits(p: Pick<Photo, 'edits' | 'annotations'>): boolean {
+  return (p.edits?.crop ?? null) !== null || (p.annotations?.length ?? 0) > 0;
 }

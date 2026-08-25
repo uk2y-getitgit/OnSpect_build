@@ -63,6 +63,22 @@ export function DefectInfoForm({ value, settings, onChange, disabled = false }: 
 
   return (
     <div className="idf" aria-disabled={disabled || undefined}>
+      {/* 조사구분 — **폼 최상단.** "이 결함이 어떤 조사에서 나왔는가" 라는 틀이고,
+          직전 입력에서 이어받으므로(DEFECT_SEED_CARRY.surveyKind) 한 번 정하면 계속 따라온다.
+          연동 규칙이 없다 — 다른 필드를 건드리지 않는다 (PhotoPolish §2-7) */}
+      <SegmentField
+        label="조사구분"
+        value={value.surveyKind}
+        options={
+          [
+            { value: 'EXTERIOR', label: '외관조사' },
+            { value: 'DETAIL', label: '상세조사' },
+          ] as const
+        }
+        disabled={disabled}
+        onChange={(v) => onChange({ ...value, surveyKind: v })}
+      />
+
       {/* 구조유형 */}
       <div className="idf-field">
         <div className="idf-field__head">

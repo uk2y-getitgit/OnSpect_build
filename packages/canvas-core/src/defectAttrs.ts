@@ -56,8 +56,13 @@ export const EMPTY_DEFECT_ATTRS: DefectAttrs = {
  * "새로 받음" 으로 떨어진다.
  */
 export const DEFECT_SEED_CARRY: Record<keyof DefectAttrs, boolean> = {
-  // 폼에 노출되지 않고 어느 화면도 이 값을 바꾸지 않는다 — 이어받을 것이 없다 (J4)
-  surveyKind: false,
+  // ⭐ 2026-08-25 `false` → `true`. **J4 의 근거("폼에 노출되지 않는다")가 소멸했다** —
+  //    결함정보 폼에 조사구분 세그먼트가 생겼다(PhotoPolish §2-7).
+  //    그대로 두면 결함을 찍을 때마다 EXTERIOR 로 되돌아가서, 상세조사 중인 사용자가
+  //    매번 다시 눌러야 하고 한 번 잊으면 **조용히 외관조사로 저장된다.**
+  //    D9 표에는 `surveyKind` 가 아예 없으므로 D9 를 뒤집는 것이 아니고,
+  //    D9 의 원칙("분류·판정은 이어받는다")에 대입하면 조사구분은 명백히 분류다 (Q44)
+  surveyKind: true,
   locationNote: false,
   structureType: true,
 

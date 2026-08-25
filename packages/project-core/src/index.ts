@@ -18,5 +18,7 @@ export * from './relativeTime.js';
 export * from './validate.js';
 export * from './repo.js';
 export * from './photo.js';
+export * from './photoExif.js';
+export * from './photoTransform.js';
 export * from './items/index.js';
 export * from './export/index.js';
