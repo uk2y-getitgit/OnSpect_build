@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --radius:3px; --radius-lg:6px;
+      --shadow:0 2px 8px rgba(31,39,52,.08);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .pillbtn{height:44px;padding:0 14px;border-radius:var(--radius);border:1px solid var(--border);
+      background:var(--surface);font-size:14px;font-weight:500;color:var(--text);display:flex;
+      align-items:center;justify-content:center;text-align:center;}
+    .pillbtn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+    .sec-label{font-size:12px;font-weight:700;color:var(--text-dim);margin:16px 0 8px;}
+    .stepbtn{width:44px;height:44px;border-radius:var(--radius);border:1px solid var(--border);
+      background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <div style="height:52px;flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <span style="font-size:15px;font-weight:700;">○○아파트 3차</span>
+    <span style="font-size:14px;color:var(--text-dim);">· 지상2층</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-dim);">가로 · 우측 사이드시트</span>
+  </div>
+
+  <div style="flex:1 1 auto;display:flex;overflow:hidden;">
+
+    <!-- canvas, narrowed by the sheet (safe inset) -->
+    <div style="flex:1 1 auto;position:relative;background:var(--bg);">
+      <div style="position:absolute;left:96px;right:24px;top:24px;bottom:24px;background:var(--paper);
+          border-radius:var(--radius-lg);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 640 640" width="90%" height="90%" preserveAspectRatio="xMidYMid meet" style="font-family:'Noto Sans KR',sans-serif;">
+          <rect x="40" y="40" width="560" height="560" fill="none" stroke="#1f2734" stroke-width="4"/>
+          <line x1="40" y1="260" x2="600" y2="260" stroke="#1f2734" stroke-width="3"/>
+          <line x1="180" y1="40" x2="180" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+          <line x1="320" y1="40" x2="320" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+          <line x1="460" y1="40" x2="460" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+          <text x="248" y="150" font-size="15" fill="#9aa4b0">거실</text>
+          <text x="386" y="150" font-size="15" fill="#9aa4b0">침실 1</text>
+
+          <!-- selected marker: blue selection ring, stays clear of the sheet -->
+          <circle cx="260" cy="150" r="16" fill="none" stroke="#2d6cdf" stroke-width="2.5" stroke-dasharray="3 3"/>
+          <line x1="260" y1="150" x2="300" y2="108" stroke="#e5342a" stroke-width="1.5"/>
+          <circle cx="260" cy="150" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+          <rect x="284" y="90" width="36" height="26" rx="6" fill="#fff" stroke="#e5342a" stroke-width="1.8"/>
+          <text x="302" y="108" font-size="13" font-weight="700" fill="#e5342a" text-anchor="middle" font-family="ui-monospace,monospace">#42</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- side sheet, 400pt -->
+    <div style="flex:0 0 400px;background:var(--surface);border-left:1px solid var(--border);
+        display:flex;flex-direction:column;overflow:hidden;">
+
+      <div style="flex:0 0 auto;padding:16px 20px 12px;border-bottom:1px solid var(--border-2);
+          display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:12px;color:var(--text-dim);" class="num">#42</div>
+          <div style="font-size:17px;font-weight:700;">벽(구조체) · 수직균열</div>
+        </div>
+        <div style="width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-dim);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </div>
+      </div>
+
+      <div style="flex:1 1 auto;overflow:auto;padding:16px 20px 28px;">
+
+        <!-- photos -->
+        <div style="display:flex;gap:8px;">
+          <div style="width:76px;height:76px;border-radius:var(--radius);background:#dfe4ea;position:relative;overflow:hidden;">
+            <svg width="100%" height="100%" viewBox="0 0 76 76"><rect width="76" height="76" fill="#dfe4ea"/><path d="M14 54l16-18 12 12 10-14 10 20z" fill="#c3cad3"/><circle cx="24" cy="26" r="6" fill="#c3cad3"/></svg>
+            <span style="position:absolute;left:4px;bottom:4px;font-size:10px;font-weight:700;color:#fff;
+                background:rgba(31,39,52,.7);border-radius:3px;padding:1px 5px;">대표</span>
+          </div>
+          <div style="width:76px;height:76px;border-radius:var(--radius);background:#dfe4ea;overflow:hidden;">
+            <svg width="100%" height="100%" viewBox="0 0 76 76"><rect width="76" height="76" fill="#e4e8ee"/><path d="M10 58l14-20 12 14 12-16 12 22z" fill="#cdd3da"/></svg>
+          </div>
+          <div style="width:76px;height:76px;border-radius:var(--radius);border:1.5px dashed var(--border);
+              display:flex;align-items:center;justify-content:center;color:var(--text-dim);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+        </div>
+
+        <!-- preset / quick tabs -->
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <div class="pillbtn on" style="flex:1;height:44px;">프리셋</div>
+          <div class="pillbtn" style="flex:1;height:44px;color:var(--text-muted);">빠른입력</div>
+        </div>
+
+        <div class="sec-label">구조 유형</div>
+        <div class="grid3">
+          <div class="pillbtn on">RC</div><div class="pillbtn">SRC</div><div class="pillbtn">SS</div>
+        </div>
+
+        <div class="sec-label">부재</div>
+        <div class="grid3">
+          <div class="pillbtn on">벽(구조체)</div><div class="pillbtn">벽(비구조체)</div><div class="pillbtn">기둥</div>
+          <div class="pillbtn">보</div><div class="pillbtn">바닥슬래브</div><div class="pillbtn">천장슬래브</div>
+        </div>
+
+        <div class="sec-label">결함 유형</div>
+        <div class="grid3">
+          <div class="pillbtn on">균열</div><div class="pillbtn">파손</div><div class="pillbtn">누수흔적</div>
+          <div class="pillbtn">백태</div><div class="pillbtn">박리</div><div class="pillbtn">철근노출</div>
+        </div>
+
+        <div class="sec-label">폭</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="stepbtn">−</div>
+          <div class="num" style="flex:1;text-align:center;font-size:17px;font-weight:700;">0.2 <span style="font-size:12px;font-weight:500;color:var(--text-dim);">mm</span></div>
+          <div class="stepbtn">＋</div>
+        </div>
+        <div class="grid3" style="margin-top:8px;grid-template-columns:repeat(3,minmax(0,1fr));">
+          <div class="pillbtn" style="height:44px;font-size:12.5px;">~0.1미만</div>
+          <div class="pillbtn on" style="height:44px;font-size:12.5px;">0.1~0.2</div>
+          <div class="pillbtn" style="height:44px;font-size:12.5px;">0.2~0.3</div>
+        </div>
+
+        <div class="sec-label">길이</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="stepbtn">−</div>
+          <div class="num" style="flex:1;text-align:center;font-size:17px;font-weight:700;">2000 <span style="font-size:12px;font-weight:500;color:var(--text-dim);">mm</span></div>
+          <div class="stepbtn">＋</div>
+        </div>
+        <div class="grid3" style="margin-top:8px;">
+          <div class="pillbtn" style="height:44px;font-size:12.5px;">1000</div>
+          <div class="pillbtn on" style="height:44px;font-size:12.5px;">2000</div>
+          <div class="pillbtn" style="height:44px;font-size:12.5px;">3000</div>
+        </div>
+
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border-2);
+            display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:13px;">
+          <span>진행여부 · 누수 · 발생원인 · 보수방안 · 위치보조 · 메모</span>
+        </div>
+        <div class="pillbtn" style="width:100%;margin-top:10px;color:var(--text-muted);gap:6px;">
+          더보기 (스타일 포함)
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

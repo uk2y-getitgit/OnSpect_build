@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --defect-current:#e5342a; --defect-prev:#7c4dff; --defect-repaired:#9aa4b0;
+      --guide:#00b8d4; --radius:3px; --radius-lg:6px;
+      --shadow:0 2px 8px rgba(31,39,52,.08);
+      --shadow-float:0 6px 24px rgba(31,39,52,.16);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .icon-btn{width:44px;height:44px;border-radius:var(--radius);border:1px solid var(--border);
+      background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text-muted);}
+    .tool-btn{width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;
+      justify-content:center;color:var(--text-muted);}
+    .tool-btn.active{background:var(--accent-weak);color:var(--accent-ink);}
+    .chip{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:64px;
+      height:52px;border-radius:var(--radius);padding:4px 10px;gap:2px;}
+    .chip .name{font-size:13px;font-weight:600;}
+    .chip .meta{font-size:10.5px;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;position:relative;">
+
+  <!-- top bar -->
+  <div style="height:52px;flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:5;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div class="icon-btn" style="border-color:transparent;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </div>
+      <span style="font-size:15px;font-weight:700;">○○아파트 3차</span>
+      <span style="font-size:14px;color:var(--text-dim);">· 지상2층</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <div class="icon-btn" style="border-color:transparent;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
+      </div>
+      <div class="icon-btn" style="border-color:transparent;color:var(--text-dim);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7V1h-6"/><path d="M21 1a9 9 0 1 1-9 9"/></svg>
+      </div>
+      <div class="icon-btn" style="border-color:transparent;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- canvas area -->
+  <div style="flex:1 1 auto;position:relative;overflow:hidden;">
+
+    <!-- floor plan paper -->
+    <div style="position:absolute;left:96px;right:220px;top:24px;bottom:88px;background:var(--paper);
+        border-radius:var(--radius-lg);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 900 640" width="94%" height="94%" preserveAspectRatio="xMidYMid meet" style="display:block;font-family:'Noto Sans KR',sans-serif;">
+        <rect x="40" y="40" width="820" height="560" fill="none" stroke="#1f2734" stroke-width="4"/>
+        <line x1="40" y1="260" x2="860" y2="260" stroke="#1f2734" stroke-width="3"/>
+        <line x1="40" y1="380" x2="860" y2="380" stroke="#1f2734" stroke-width="3"/>
+        <line x1="180" y1="40" x2="180" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="320" y1="40" x2="320" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="460" y1="40" x2="460" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="600" y1="40" x2="600" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="740" y1="40" x2="740" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="180" y1="380" x2="180" y2="600" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="320" y1="380" x2="320" y2="600" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="460" y1="380" x2="460" y2="600" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="600" y1="380" x2="600" y2="600" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="740" y1="380" x2="740" y2="600" stroke="#1f2734" stroke-width="2.5"/>
+        <rect x="40" y="260" width="140" height="120" fill="none" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="50" y1="370" x2="170" y2="270" stroke="#9aa4b0" stroke-width="1.5"/>
+        <line x1="50" y1="345" x2="145" y2="270" stroke="#9aa4b0" stroke-width="1.5"/>
+        <line x1="50" y1="320" x2="120" y2="270" stroke="#9aa4b0" stroke-width="1.5"/>
+        <line x1="50" y1="295" x2="95" y2="270" stroke="#9aa4b0" stroke-width="1.5"/>
+        <rect x="760" y="260" width="100" height="120" fill="none" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="760" y1="260" x2="860" y2="380" stroke="#9aa4b0" stroke-width="1.5"/>
+        <line x1="860" y1="260" x2="760" y2="380" stroke="#9aa4b0" stroke-width="1.5"/>
+        <text x="102" y="150" font-size="14" fill="#9aa4b0">계단실</text>
+        <text x="248" y="150" font-size="14" fill="#9aa4b0">거실</text>
+        <text x="386" y="150" font-size="14" fill="#9aa4b0">침실 1</text>
+        <text x="522" y="150" font-size="14" fill="#9aa4b0">침실 2</text>
+        <text x="650" y="150" font-size="14" fill="#9aa4b0">다용도실</text>
+        <text x="795" y="153" font-size="13" fill="#9aa4b0">EV</text>
+        <text x="432" y="325" font-size="13" fill="#c3cad3">복도</text>
+        <text x="90" y="500" font-size="14" fill="#9aa4b0">화장실</text>
+        <text x="222" y="500" font-size="14" fill="#9aa4b0">사무실 1</text>
+        <text x="368" y="500" font-size="14" fill="#9aa4b0">사무실 2</text>
+        <text x="520" y="500" font-size="14" fill="#9aa4b0">창고</text>
+        <text x="650" y="500" font-size="14" fill="#9aa4b0">기계실</text>
+
+        <!-- markers: mix of current(red) and prev(purple) -->
+        <g stroke-linecap="round">
+          <line x1="260" y1="120" x2="300" y2="80" stroke="#e5342a" stroke-width="1.5"/>
+          <circle cx="260" cy="120" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+          <rect x="284" y="62" width="36" height="26" rx="6" fill="#fff" stroke="#e5342a" stroke-width="1.8"/>
+          <text x="302" y="80" font-size="13" font-weight="700" fill="#e5342a" text-anchor="middle" font-family="ui-monospace,monospace">#42</text>
+
+          <line x1="600" y1="150" x2="640" y2="190" stroke="#e5342a" stroke-width="1.5"/>
+          <circle cx="600" cy="150" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+          <rect x="624" y="178" width="36" height="26" rx="6" fill="#fff" stroke="#e5342a" stroke-width="1.8"/>
+          <text x="642" y="196" font-size="13" font-weight="700" fill="#e5342a" text-anchor="middle" font-family="ui-monospace,monospace">#41</text>
+
+          <line x1="230" y1="470" x2="190" y2="440" stroke="#7c4dff" stroke-width="1.5"/>
+          <circle cx="230" cy="470" r="7" fill="#7c4dff" stroke="#fff" stroke-width="2"/>
+          <rect x="154" y="424" width="36" height="26" rx="6" fill="#fff" stroke="#7c4dff" stroke-width="1.8"/>
+          <text x="172" y="442" font-size="13" font-weight="700" fill="#7c4dff" text-anchor="middle" font-family="ui-monospace,monospace">#37</text>
+
+          <line x1="560" y1="520" x2="600" y2="560" stroke="#7c4dff" stroke-width="1.5"/>
+          <circle cx="560" cy="520" r="7" fill="#7c4dff" stroke="#fff" stroke-width="2"/>
+          <rect x="584" y="548" width="36" height="26" rx="6" fill="#fff" stroke="#7c4dff" stroke-width="1.8"/>
+          <text x="602" y="566" font-size="13" font-weight="700" fill="#7c4dff" text-anchor="middle" font-family="ui-monospace,monospace">#35</text>
+
+          <line x1="720" y1="470" x2="760" y2="500" stroke="#e5342a" stroke-width="1.5"/>
+          <circle cx="720" cy="470" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+          <rect x="744" y="488" width="36" height="26" rx="6" fill="#fff" stroke="#e5342a" stroke-width="1.8"/>
+          <text x="762" y="506" font-size="13" font-weight="700" fill="#e5342a" text-anchor="middle" font-family="ui-monospace,monospace">#40</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- left floating vertical toolbar -->
+    <div style="position:absolute;left:16px;top:24px;background:var(--surface);border-radius:var(--radius-lg);
+        box-shadow:var(--shadow-float);padding:8px;display:flex;flex-direction:column;gap:4px;">
+      <div class="tool-btn" title="선택">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+      </div>
+      <div class="tool-btn active" title="점">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+      </div>
+      <div class="tool-btn" title="방향">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
+      </div>
+      <div class="tool-btn" title="영역">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+      </div>
+      <div class="tool-btn" title="그리기">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      </div>
+      <div style="height:1px;background:var(--border);margin:4px 2px;"></div>
+      <div class="tool-btn" title="조준">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+      </div>
+    </div>
+
+    <!-- list button -->
+    <div style="position:absolute;right:24px;top:24px;height:44px;padding:0 16px;background:var(--surface);
+        border-radius:var(--radius);box-shadow:var(--shadow-float);display:flex;align-items:center;gap:8px;
+        font-size:14px;font-weight:600;color:var(--text);">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      리스트
+    </div>
+
+    <!-- minimap -->
+    <div style="position:absolute;right:24px;bottom:92px;width:180px;height:130px;background:var(--surface);
+        border-radius:var(--radius-lg);box-shadow:var(--shadow-float);padding:8px;">
+      <svg viewBox="0 0 900 640" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <rect x="40" y="40" width="820" height="560" fill="#f5f7fa" stroke="#c3cad3" stroke-width="6"/>
+        <line x1="40" y1="260" x2="860" y2="260" stroke="#c3cad3" stroke-width="5"/>
+        <line x1="40" y1="380" x2="860" y2="380" stroke="#c3cad3" stroke-width="5"/>
+        <circle cx="260" cy="120" r="10" fill="#e5342a"/>
+        <circle cx="600" cy="150" r="10" fill="#e5342a"/>
+        <circle cx="230" cy="470" r="10" fill="#7c4dff"/>
+        <circle cx="560" cy="520" r="10" fill="#7c4dff"/>
+        <circle cx="720" cy="470" r="10" fill="#e5342a"/>
+        <rect x="230" y="90" width="340" height="260" fill="none" stroke="#2d6cdf" stroke-width="7"/>
+      </svg>
+    </div>
+
+    <!-- floor chip strip -->
+    <div style="position:absolute;left:96px;right:220px;bottom:20px;height:60px;background:var(--surface);
+        border-radius:var(--radius-lg);box-shadow:var(--shadow-float);display:flex;align-items:center;
+        padding:0 10px;gap:6px;overflow:hidden;">
+      <div class="chip" style="color:var(--text-muted);">
+        <span class="name">지하1층</span><span class="meta num" style="color:var(--text-dim);">현0 · 전2</span>
+      </div>
+      <div class="chip" style="color:var(--text-muted);">
+        <span class="name">1층</span><span class="meta num" style="color:var(--text-dim);">현5 · 전9</span>
+      </div>
+      <div class="chip" style="background:var(--accent-weak);color:var(--accent-ink);">
+        <span class="name">2층</span><span class="meta num">현3 · 전7</span>
+      </div>
+      <div class="chip" style="color:var(--text-muted);">
+        <span class="name">3층</span><span class="meta num" style="color:var(--text-dim);">현2 · 전4</span>
+      </div>
+      <div class="chip" style="color:var(--text-muted);">
+        <span class="name">옥탑</span><span class="meta num" style="color:var(--text-dim);">현0 · 전1</span>
+      </div>
+      <div style="width:1px;align-self:stretch;background:var(--border);margin:8px 4px;"></div>
+      <span style="font-size:11px;color:var(--text-dim);font-weight:600;">최근</span>
+      <div class="chip num" style="min-width:48px;background:var(--surface-2);color:var(--text);font-weight:700;">#42</div>
+      <div class="chip num" style="min-width:48px;background:var(--surface-2);color:var(--text);font-weight:700;">#41</div>
+      <div class="chip num" style="min-width:48px;background:var(--surface-2);color:var(--text);font-weight:700;">#40</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

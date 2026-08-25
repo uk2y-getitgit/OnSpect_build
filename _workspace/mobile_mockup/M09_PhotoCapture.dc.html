@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0; --border:#d9dee8;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8; --error:#d0342c;
+      --radius:3px; --radius-lg:6px; --shadow-float:0 6px 24px rgba(31,39,52,.16);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);}
+    .actbtn{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;color:var(--text-muted);}
+    .actbtn .ic{width:48px;height:48px;border-radius:50%;background:var(--surface-2);display:flex;
+      align-items:center;justify-content:center;}
+    .actbtn span{font-size:12px;font-weight:600;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);display:flex;overflow:hidden;">
+
+  <!-- viewfinder -->
+  <div style="flex:1 1 0;position:relative;background:#20242c;">
+    <svg width="100%" height="100%" viewBox="0 0 590 820" preserveAspectRatio="none" style="position:absolute;inset:0;">
+      <rect width="590" height="820" fill="#2a2e37"/>
+      <rect x="0" y="0" width="590" height="820" fill="#333844"/>
+      <line x1="0" y1="380" x2="590" y2="300" stroke="#454b58" stroke-width="10"/>
+      <line x1="590" y1="620" x2="150" y2="520" stroke="#454b58" stroke-width="4"/>
+      <line x1="196" y1="0" x2="196" y2="820" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+      <line x1="393" y1="0" x2="393" y2="820" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+      <line x1="0" y1="273" x2="590" y2="273" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+      <line x1="0" y1="546" x2="590" y2="546" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+    </svg>
+
+    <!-- defect badge overlay -->
+    <div style="position:absolute;left:24px;top:24px;height:44px;padding:0 16px;background:rgba(31,39,52,.72);
+        backdrop-filter:blur(2px);border-radius:22px;display:flex;align-items:center;gap:8px;color:#fff;
+        font-size:13.5px;font-weight:600;">
+      <span style="width:8px;height:8px;border-radius:50%;background:#e5342a;"></span>
+      <span class="num">#42</span> 벽(구조체) · 수직균열에 촬영
+    </div>
+
+    <!-- gallery -->
+    <div style="position:absolute;left:32px;bottom:44px;width:52px;height:52px;border-radius:10px;
+        background:#4a505c;border:2px solid rgba(255,255,255,.6);"></div>
+
+    <!-- shutter -->
+    <div style="position:absolute;left:50%;bottom:34px;transform:translateX(-50%);width:76px;height:76px;
+        border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.14);"></div>
+
+    <!-- flip -->
+    <div style="position:absolute;right:32px;bottom:44px;width:52px;height:52px;border-radius:50%;
+        background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </div>
+
+    <div style="position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:11px;color:rgba(255,255,255,.55);">촬영</div>
+  </div>
+
+  <!-- confirm sheet -->
+  <div style="flex:1 1 0;background:var(--surface);display:flex;flex-direction:column;">
+    <div style="flex:0 0 auto;padding:20px 28px 12px;">
+      <div style="font-size:12px;color:var(--text-dim);" class="num">#42</div>
+      <div style="font-size:18px;font-weight:700;">벽(구조체) · 수직균열 — 사진 확인</div>
+    </div>
+
+    <div style="flex:1 1 auto;display:flex;flex-direction:column;padding:0 28px;">
+      <div style="flex:1 1 auto;border-radius:var(--radius-lg);overflow:hidden;background:#dfe4ea;margin-bottom:16px;
+          display:flex;align-items:center;justify-content:center;min-height:0;">
+        <svg width="70%" height="70%" viewBox="0 0 200 200"><rect width="200" height="200" fill="#dfe4ea"/>
+          <line x1="10" y1="140" x2="190" y2="60" stroke="#aab2bd" stroke-width="4"/>
+          <line x1="140" y1="190" x2="80" y2="20" stroke="#aab2bd" stroke-width="2.5"/>
+        </svg>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:18px;">
+        <span style="font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--accent-weak);
+            border-radius:12px;padding:4px 10px;">대표사진</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-dim);background:var(--surface-2);
+            border-radius:12px;padding:4px 10px;">자르기 — 준비 중</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-dim);background:var(--surface-2);
+            border-radius:12px;padding:4px 10px;">주석 — 준비 중</span>
+      </div>
+
+      <div style="display:flex;gap:4px;margin-bottom:20px;">
+        <div class="actbtn">
+          <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+          <span>대표지정</span>
+        </div>
+        <div class="actbtn">
+          <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></div>
+          <span>회전</span>
+        </div>
+        <div class="actbtn">
+          <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+          <span>재촬영</span>
+        </div>
+        <div class="actbtn">
+          <div class="ic" style="color:var(--error);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
+          <span style="color:var(--error);">삭제</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:0 0 auto;padding:16px 28px 28px;">
+      <button style="width:100%;height:52px;border-radius:var(--radius);border:none;background:var(--accent);
+          color:#fff;font-size:16px;font-weight:700;">등록</button>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0; --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --prev:#7c4dff; --prev-weak:#efe9ff; --ok:#2d8a66; --ok-weak:#e3f3ea;
+      --radius:3px; --radius-lg:6px; --shadow:0 2px 8px rgba(31,39,52,.08);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .kv{display:flex;justify-content:space-between;font-size:13.5px;padding:8px 0;border-bottom:1px solid var(--border-2);}
+    .kv span:first-child{color:var(--text-muted);}
+    .kv span:last-child{font-weight:600;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <div style="height:52px;flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <span style="font-size:15px;font-weight:700;">○○아파트 3차</span>
+    <span style="font-size:14px;color:var(--text-dim);">· 지상2층</span>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <span style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:16px;
+          background:var(--prev-weak);color:var(--prev);font-size:13px;font-weight:700;">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--prev);"></span>
+        전회차 <span class="num">3</span>건
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:16px;
+          background:#fdeceb;color:#c0342a;font-size:13px;font-weight:700;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#e5342a;"></span>
+        현회차 <span class="num">14</span>건
+      </span>
+    </div>
+  </div>
+
+  <div style="flex:1 1 auto;display:flex;overflow:hidden;">
+
+    <div style="flex:1 1 auto;position:relative;background:var(--bg);">
+      <div style="position:absolute;left:96px;right:24px;top:24px;bottom:24px;background:var(--paper);
+          border-radius:var(--radius-lg);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 640 640" width="90%" height="90%" preserveAspectRatio="xMidYMid meet">
+          <rect x="40" y="40" width="560" height="560" fill="none" stroke="#1f2734" stroke-width="4"/>
+          <line x1="40" y1="260" x2="600" y2="260" stroke="#1f2734" stroke-width="3"/>
+          <line x1="180" y1="40" x2="180" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+          <line x1="320" y1="40" x2="320" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+
+          <!-- other current defects -->
+          <circle cx="500" cy="150" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+          <line x1="500" y1="150" x2="540" y2="115" stroke="#e5342a" stroke-width="1.5"/>
+          <rect x="524" y="97" width="34" height="24" rx="6" fill="#fff" stroke="#e5342a" stroke-width="1.8"/>
+          <text x="541" y="113" font-size="12" font-weight="700" fill="#e5342a" text-anchor="middle" font-family="ui-monospace,monospace">#14</text>
+
+          <!-- selected prev(purple) defect -->
+          <circle cx="250" cy="420" r="16" fill="none" stroke="#2d6cdf" stroke-width="2.5" stroke-dasharray="3 3"/>
+          <circle cx="250" cy="420" r="7" fill="#7c4dff" stroke="#fff" stroke-width="2"/>
+          <line x1="250" y1="420" x2="290" y2="460" stroke="#7c4dff" stroke-width="1.5"/>
+          <rect x="274" y="450" width="34" height="24" rx="6" fill="#fff" stroke="#7c4dff" stroke-width="1.8"/>
+          <text x="291" y="466" font-size="12" font-weight="700" fill="#7c4dff" text-anchor="middle" font-family="ui-monospace,monospace">#8</text>
+        </svg>
+      </div>
+    </div>
+
+    <div style="flex:0 0 400px;background:var(--surface);border-left:1px solid var(--border);
+        display:flex;flex-direction:column;overflow:hidden;">
+      <div style="flex:0 0 auto;padding:16px 20px 12px;border-bottom:1px solid var(--border-2);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="num" style="font-size:13px;color:var(--prev);font-weight:700;">#8</span>
+          <span style="font-size:11px;font-weight:700;color:var(--prev);background:var(--prev-weak);
+              border-radius:10px;padding:2px 9px;">전회차</span>
+        </div>
+        <div style="font-size:17px;font-weight:700;margin-top:4px;">벽(구조체) · 수직균열</div>
+      </div>
+
+      <div style="flex:1 1 auto;overflow:auto;padding:16px 20px 24px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:10px;">이전 상태 · 읽기전용</div>
+
+        <div style="width:100%;aspect-ratio:4/3;border-radius:var(--radius-lg);background:#dfe4ea;margin-bottom:14px;
+            display:flex;align-items:center;justify-content:center;position:relative;">
+          <svg width="60%" height="60%" viewBox="0 0 100 100"><line x1="6" y1="80" x2="94" y2="20" stroke="#aab2bd" stroke-width="3"/></svg>
+          <span style="position:absolute;left:10px;bottom:10px;font-size:11px;font-weight:700;color:#fff;
+              background:rgba(31,39,52,.68);border-radius:3px;padding:2px 8px;">전차 2025 하반기</span>
+        </div>
+
+        <div class="kv"><span>폭</span><span class="num">0.2 mm</span></div>
+        <div class="kv"><span>길이</span><span class="num">1800 mm</span></div>
+        <div class="kv"><span>개소</span><span class="num">2 ea</span></div>
+        <div class="kv"><span>발생원인</span><span>건조수축</span></div>
+        <div class="kv" style="border-bottom:none;"><span>메모</span><span style="color:var(--text-dim);font-weight:500;">복도측 창호 하부</span></div>
+
+        <div style="margin-top:20px;padding:12px 14px;border-radius:var(--radius);background:var(--surface-2);
+            font-size:12px;color:var(--text-muted);line-height:1.6;">
+          같은 위치를 찾아 촬영하면 이 결함은 <b style="color:#c0342a;">현회차(빨강)</b>로 자동 전환됩니다.
+          변화가 없으면 수정 없이 사진만 찍어도 보고서가 만들어집니다.
+        </div>
+
+        <button style="width:100%;height:56px;margin-top:16px;border-radius:var(--radius);border:none;
+            background:var(--accent);color:#fff;font-size:16px;font-weight:700;display:flex;align-items:center;
+            justify-content:center;gap:10px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          같은 위치 촬영
+        </button>
+        <button style="width:100%;height:48px;margin-top:10px;border-radius:var(--radius);
+            border:1px solid var(--ok);background:var(--ok-weak);color:var(--ok);font-size:14px;font-weight:700;
+            display:flex;align-items:center;justify-content:center;gap:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          보수완료
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

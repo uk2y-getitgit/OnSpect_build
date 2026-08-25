@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --radius:3px; --radius-lg:6px;
+      --shadow-float:0 6px 24px rgba(31,39,52,.16);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .mini-chip{height:22px;padding:0 8px;border-radius:11px;font-size:10px;font-weight:600;
+      display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--text-muted);}
+    .mini-chip.on{background:var(--accent);color:#fff;}
+    .row{font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;padding:5px 0;
+      border-bottom:1px solid var(--border-2);}
+  </style>
+</helmet>
+
+<div style="width:1000px;height:640px;background:var(--bg);display:flex;flex-direction:column;align-items:center;
+    padding:28px;gap:14px;">
+
+  <div style="font-size:14px;font-weight:700;color:var(--text-muted);">결함 입력 — 세로(portrait) 바텀시트 3단 스냅</div>
+
+  <div style="display:flex;gap:44px;align-items:flex-start;">
+
+    <!-- PEEK -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div style="width:260px;height:462px;background:var(--paper);border-radius:10px;position:relative;
+          overflow:hidden;box-shadow:0 1px 4px rgba(31,39,52,.12);border:1px solid var(--border);">
+        <svg viewBox="0 0 260 388" width="260" height="388" style="position:absolute;top:0;left:0;">
+          <rect x="14" y="14" width="232" height="360" fill="none" stroke="#1f2734" stroke-width="2"/>
+          <line x1="14" y1="150" x2="246" y2="150" stroke="#1f2734" stroke-width="1.4"/>
+          <line x1="100" y1="14" x2="100" y2="150" stroke="#c3cad3" stroke-width="1"/>
+          <circle cx="70" cy="80" r="4" fill="#e5342a" stroke="#fff" stroke-width="1.4"/>
+          <circle cx="180" cy="260" r="4" fill="#7c4dff" stroke="#fff" stroke-width="1.4"/>
+        </svg>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:74px;background:var(--surface);
+            border-top:1px solid var(--border);box-shadow:var(--shadow-float);
+            border-radius:12px 12px 0 0;display:flex;flex-direction:column;align-items:center;padding-top:6px;">
+          <div style="width:34px;height:4px;border-radius:2px;background:var(--border);margin-bottom:8px;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;width:228px;">
+            <div style="display:flex;flex-direction:column;">
+              <span class="num" style="font-size:11px;font-weight:700;">#42 벽(구조체)·수직균열</span>
+              <span class="num" style="font-size:10px;color:var(--text-dim);">0.2×2000mm 2ea</span>
+            </div>
+            <div style="width:30px;height:30px;border-radius:6px;background:var(--accent);display:flex;
+                align-items:center;justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:700;">PEEK · 16%</div>
+      <div style="font-size:10.5px;color:var(--text-dim);text-align:center;width:220px;">한 줄 요약 + 사진 · 시트 밖 캔버스를 탭하면 여기로 내려온다</div>
+    </div>
+
+    <!-- HALF -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div style="width:260px;height:462px;background:var(--paper);border-radius:10px;position:relative;
+          overflow:hidden;box-shadow:0 1px 4px rgba(31,39,52,.12);border:1px solid var(--border);">
+        <svg viewBox="0 0 260 388" width="260" height="176" style="position:absolute;top:0;left:0;">
+          <rect x="14" y="14" width="232" height="360" fill="none" stroke="#1f2734" stroke-width="2"/>
+          <line x1="14" y1="150" x2="246" y2="150" stroke="#1f2734" stroke-width="1.4"/>
+          <circle cx="70" cy="80" r="4" fill="#e5342a" stroke="#fff" stroke-width="1.4"/>
+        </svg>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:253px;background:var(--surface);
+            border-top:1px solid var(--border);box-shadow:var(--shadow-float);border-radius:12px 12px 0 0;
+            padding:8px 16px 12px;">
+          <div style="width:34px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 10px;"></div>
+          <div class="num" style="font-size:12px;font-weight:700;margin-bottom:8px;">#42 벽(구조체)·수직균열</div>
+          <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <div style="width:40px;height:40px;border-radius:5px;background:#dfe4ea;"></div>
+            <div style="width:40px;height:40px;border-radius:5px;background:#e4e8ee;"></div>
+            <div style="width:40px;height:40px;border-radius:5px;border:1.4px dashed var(--border);"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:5px;">부재 · 세로는 4열 그리드</div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-bottom:9px;">
+            <div class="mini-chip on">벽</div><div class="mini-chip">기둥</div><div class="mini-chip">보</div><div class="mini-chip">슬래브</div>
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:5px;">결함유형</div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-bottom:10px;">
+            <div class="mini-chip on">균열</div><div class="mini-chip">파손</div><div class="mini-chip">누수</div><div class="mini-chip">박리</div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);
+              border-radius:6px;padding:6px 10px;">
+            <span style="font-size:10px;color:var(--text-muted);">폭</span>
+            <span class="num" style="font-size:13px;font-weight:700;">0.2mm</span>
+            <span style="font-size:10px;color:var(--text-muted);">길이</span>
+            <span class="num" style="font-size:13px;font-weight:700;">2000mm</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:700;">HALF · 55%</div>
+      <div style="font-size:10.5px;color:var(--text-dim);text-align:center;width:220px;">사진·부재·결함유형·규모 — 90%가 여기서 끝난다</div>
+    </div>
+
+    <!-- FULL -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div style="width:260px;height:462px;background:var(--paper);border-radius:10px;position:relative;
+          overflow:hidden;box-shadow:0 1px 4px rgba(31,39,52,.12);border:1px solid var(--border);">
+        <svg viewBox="0 0 260 388" width="260" height="34" style="position:absolute;top:0;left:0;">
+          <rect x="14" y="14" width="232" height="360" fill="none" stroke="#1f2734" stroke-width="2"/>
+        </svg>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:423px;background:var(--surface);
+            border-top:1px solid var(--border);box-shadow:var(--shadow-float);border-radius:12px 12px 0 0;
+            padding:8px 16px 12px;overflow:hidden;">
+          <div style="width:34px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 8px;"></div>
+          <div class="num" style="font-size:12px;font-weight:700;margin-bottom:6px;">#42 벽(구조체)·수직균열</div>
+          <div style="display:flex;gap:5px;margin-bottom:8px;">
+            <div style="width:34px;height:34px;border-radius:5px;background:#dfe4ea;"></div>
+            <div style="width:34px;height:34px;border-radius:5px;background:#e4e8ee;"></div>
+            <div style="width:34px;height:34px;border-radius:5px;border:1.4px dashed var(--border);"></div>
+          </div>
+          <div class="row"><span>진행 여부</span><span style="color:var(--text);font-weight:600;">진행 없음</span></div>
+          <div class="row"><span>누수 여부</span><span style="color:var(--text);font-weight:600;">X</span></div>
+          <div class="row"><span>발생원인</span><span style="color:var(--text);font-weight:600;">건조수축</span></div>
+          <div class="row"><span>보수방안</span><span style="color:var(--text);font-weight:600;">표면처리공법</span></div>
+          <div class="row"><span>위치보조</span><span style="color:var(--text);font-weight:600;">복도측</span></div>
+          <div class="row" style="border-bottom:none;"><span>메모</span><span style="color:var(--text-dim);">—</span></div>
+          <div style="margin-top:8px;height:28px;border-radius:6px;border:1px solid var(--border);
+              display:flex;align-items:center;justify-content:center;gap:5px;font-size:10.5px;color:var(--text-muted);">
+            더보기 (스타일)
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:700;">FULL · 92%</div>
+      <div style="font-size:10.5px;color:var(--text-dim);text-align:center;width:220px;">전체 필드 + 더보기 · 직접입력 숫자키보드가 뜨면 자동 전환</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

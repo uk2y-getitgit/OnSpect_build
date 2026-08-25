@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --warn:#e3a535; --warn-weak:#fdf2df; --radius:3px; --radius-lg:6px;
+      --shadow-float:0 6px 24px rgba(31,39,52,.16);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .btn{display:flex;align-items:center;justify-content:center;height:48px;padding:0 16px;
+      border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);
+      color:var(--text);font-size:15px;font-weight:600;width:100%;}
+    .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .btn-text{border-color:transparent;color:var(--text-muted);font-weight:500;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);position:relative;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;">
+
+  <div style="position:absolute;inset:0;background:rgba(31,39,52,.4);"></div>
+
+  <!-- dialog -->
+  <div style="position:relative;width:440px;background:var(--surface);border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-float);padding:30px 30px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;">
+    <div style="width:56px;height:56px;border-radius:50%;background:var(--warn-weak);display:flex;
+        align-items:center;justify-content:center;margin-bottom:16px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#b6791c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <div style="font-size:19px;font-weight:700;margin-bottom:10px;">아직 준비되지 않았습니다</div>
+    <div style="font-size:15px;color:var(--text-muted);line-height:1.6;margin-bottom:24px;">
+      도면 13개 중 <span class="num" style="color:var(--text);font-weight:700;">5개</span>가 기기에 없습니다.<br>
+      현장(오프라인)에서는 그 5개 층의 도면이 열리지 않습니다.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
+      <button class="btn btn-primary">지금 준비 <span class="num" style="margin-left:6px;opacity:.85;">(18MB)</span></button>
+      <button class="btn">그래도 열기</button>
+      <button class="btn btn-text" style="height:40px;">취소</button>
+    </div>
+  </div>
+
+  <!-- annotation strip: what the banner looks like after choosing "그래도 열기" -->
+  <div style="position:absolute;left:50%;bottom:56px;transform:translateX(-50%);width:760px;
+      display:flex;flex-direction:column;gap:8px;align-items:center;">
+    <div style="font-size:12px;color:#fff;opacity:.75;">[그래도 열기] 선택 시 — 캔버스 상단에 계속 표시되는 배너</div>
+    <div style="width:100%;height:40px;background:var(--warn-weak);border:1px solid #ecd9ab;border-radius:var(--radius);
+        display:flex;align-items:center;gap:8px;padding:0 16px;color:#8a5a10;font-size:13px;font-weight:600;box-shadow:var(--shadow-float);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b6791c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      오프라인 미준비 — 도면 5개 없음
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

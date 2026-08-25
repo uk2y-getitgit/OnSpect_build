@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --ok:#2d8a66; --radius:3px; --radius-lg:6px;
+      --shadow-float:0 6px 24px rgba(31,39,52,.16);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .btn{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 20px;
+      border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);
+      color:var(--text);font-size:15px;font-weight:600;}
+    .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;font-size:14px;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);position:relative;overflow:hidden;">
+
+  <!-- dimmed backdrop hinting at the task list underneath -->
+  <div style="position:absolute;inset:0;padding:24px;opacity:.35;filter:blur(1px);">
+    <div style="height:72px;background:var(--surface);border-radius:var(--radius-lg);margin-bottom:16px;"></div>
+    <div style="height:120px;background:var(--surface);border-radius:var(--radius-lg);margin-bottom:14px;"></div>
+    <div style="height:120px;background:var(--surface);border-radius:var(--radius-lg);"></div>
+  </div>
+  <div style="position:absolute;inset:0;background:rgba(31,39,52,.35);"></div>
+
+  <!-- sheet -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;
+      background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-float);
+      padding:28px 28px 24px;display:flex;flex-direction:column;">
+    <div style="font-size:19px;font-weight:700;margin-bottom:2px;">오프라인 준비</div>
+    <div style="font-size:14px;color:var(--text-muted);margin-bottom:18px;">△△병원 본관</div>
+
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-dim);
+        font-weight:600;padding-bottom:8px;border-bottom:1px solid var(--border);">
+      <span>받을 것</span><span>크기</span>
+    </div>
+
+    <div class="row" style="border-bottom:1px solid var(--border-2);">
+      <span>도면 8개 <span style="color:var(--text-dim);">(렌더본·썸네일)</span></span>
+      <span class="num" style="font-weight:600;">41 MB</span>
+    </div>
+    <div class="row" style="border-bottom:1px solid var(--border-2);">
+      <span>전회차 결함 0건</span>
+      <span class="num" style="color:var(--text-dim);">—</span>
+    </div>
+    <div class="row" style="border-bottom:1px solid var(--border-2);">
+      <span>전회차 사진 0장</span>
+      <span class="num" style="color:var(--text-dim);">—</span>
+    </div>
+    <div class="row" style="border-bottom:1px solid var(--border);">
+      <span>항목설정 · 프리셋</span>
+      <span class="num" style="font-weight:600;">0.2 MB</span>
+    </div>
+
+    <div class="row" style="padding-top:14px;">
+      <span style="font-size:16px;font-weight:700;">합계</span>
+      <span class="num" style="font-size:18px;font-weight:700;color:var(--accent-ink);">41 MB</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;font-size:13px;color:var(--text-muted);
+        background:var(--surface-2);border-radius:var(--radius);padding:10px 14px;margin:6px 0 22px;">
+      <span class="num">기기 여유 4.2 GB</span>
+      <span style="width:1px;height:14px;background:var(--border);"></span>
+      <span style="display:flex;align-items:center;gap:6px;color:var(--ok);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        Wi-Fi 연결됨
+      </span>
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <button class="btn" style="flex:1;">Wi-Fi 될 때</button>
+      <button class="btn btn-primary" style="flex:1.4;">지금 준비</button>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1180, "h": 820, "title": "M-01 과업 목록" },
+    { "file": "M02_OfflinePrep.dc.html", "x": 1280, "y": 0, "w": 1180, "h": 820, "title": "M-02 오프라인 준비 시트" },
+    { "file": "M03_NotReadyWarning.dc.html", "x": 2560, "y": 0, "w": 1180, "h": 820, "title": "M-03 미준비 경고" },
+
+    { "file": "M04_CanvasBase.dc.html", "x": 0, "y": 970, "w": 1180, "h": 820, "title": "M-04 도면 캔버스 기본" },
+    { "file": "M05a_AimCrosshair.dc.html", "x": 1280, "y": 970, "w": 1180, "h": 820, "title": "M-05A 정밀표기 · 조준 크로스헤어" },
+    { "file": "M05b_LongpressLoupe.dc.html", "x": 2560, "y": 970, "w": 1180, "h": 820, "title": "M-05B 정밀표기 · 롱프레스 루페" },
+
+    { "file": "M06_SideSheet.dc.html", "x": 0, "y": 1940, "w": 1180, "h": 820, "title": "M-06 결함입력 · 가로 사이드시트" },
+    { "file": "M07_BottomSheet.dc.html", "x": 1280, "y": 1940, "w": 1000, "h": 640, "title": "M-07 결함입력 · 세로 바텀시트 3단" },
+    { "file": "M08_AreaMode.dc.html", "x": 2380, "y": 1940, "w": 1180, "h": 820, "title": "M-08 규모 블록 · 면적 모드" },
+
+    { "file": "M09_PhotoCapture.dc.html", "x": 0, "y": 2910, "w": 1180, "h": 820, "title": "M-09 사진 촬영 → 확인" },
+    { "file": "M10_PrevPurple.dc.html", "x": 1280, "y": 2910, "w": 1180, "h": 820, "title": "M-10 전회차 대조 · 보라" },
+    { "file": "M11_PrevToCurrent.dc.html", "x": 2560, "y": 2910, "w": 1180, "h": 820, "title": "M-11 전회차 대조 · 촬영 직후 전환" },
+
+    { "file": "M12_DefectList.dc.html", "x": 0, "y": 3880, "w": 1180, "h": 820, "title": "M-12 결함 리스트 시트" }
+  ],
+  "annotations": [
+    { "id": "brief-summary", "x": 0, "y": -240, "w": 760, "text": "OnSpect 태블릿 현장 입력 앱 — UI 목업 (가로 10~13인치 기준)\nPhase 5 착수 전 점검 스펙(_workspace/26_plan-reviewer_spec_Phase5_Mobile.md) 근거\n정적 목업입니다 — 클릭 동작은 없습니다." },
+    { "id": "row1-label", "x": 0, "y": -90, "w": 700, "text": "1. 과업 목록 · 오프라인 준비 (G3) — M-01 ~ M-03" },
+    { "id": "row2-label", "x": 0, "y": 880, "w": 700, "text": "2. 도면 캔버스 · 위치 찾기(G6) · 정밀 표기 두 안 비교(Q6) — M-04 ~ M-05B" },
+    { "id": "row3-label", "x": 0, "y": 1850, "w": 700, "text": "3. 결함 입력 시트 — 가로 사이드시트 / 세로 바텀시트 3단 / 면적모드 — M-06 ~ M-08" },
+    { "id": "row4-label", "x": 0, "y": 2820, "w": 760, "text": "4. 사진 촬영 · 전회차 대조(보라→빨강 전환) — M-09 ~ M-11" },
+    { "id": "row5-label", "x": 0, "y": 3790, "w": 700, "text": "5. 결함 리스트 — 미완성 · 위치 미지정 배지 — M-12" }
+  ],
+  "launch": { "view": "canvas" }
+}

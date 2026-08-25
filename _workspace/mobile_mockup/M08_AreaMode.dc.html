@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --radius:3px; --radius-lg:6px; --shadow:0 2px 8px rgba(31,39,52,.08);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .pillbtn{height:44px;padding:0 12px;border-radius:var(--radius);border:1px solid var(--border);
+      background:var(--surface);font-size:13.5px;font-weight:500;color:var(--text);display:flex;
+      align-items:center;justify-content:center;}
+    .pillbtn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+    .stepbtn{width:44px;height:44px;border-radius:var(--radius);border:1px solid var(--border);
+      background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);}
+    .sec-label{font-size:12px;font-weight:700;color:var(--text-dim);margin:16px 0 8px;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <div style="height:52px;flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <span style="font-size:15px;font-weight:700;">○○아파트 3차</span>
+    <span style="font-size:14px;color:var(--text-dim);">· 지상2층</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-dim);">규모 블록 — 면적(AREA) 모드</span>
+  </div>
+
+  <div style="flex:1 1 auto;display:flex;overflow:hidden;">
+
+    <div style="flex:1 1 auto;position:relative;background:var(--bg);">
+      <div style="position:absolute;left:96px;right:24px;top:24px;bottom:24px;background:var(--paper);
+          border-radius:var(--radius-lg);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 640 640" width="90%" height="90%" preserveAspectRatio="xMidYMid meet">
+          <rect x="40" y="40" width="560" height="560" fill="none" stroke="#1f2734" stroke-width="4"/>
+          <line x1="40" y1="380" x2="600" y2="380" stroke="#1f2734" stroke-width="3"/>
+          <!-- large hatched defect area (망상균열/박리 typical shape) -->
+          <rect x="240" y="150" width="180" height="140" fill="#e5342a" fill-opacity=".14" stroke="#e5342a" stroke-width="2"/>
+          <g stroke="#e5342a" stroke-width="1" opacity=".4">
+            <line x1="240" y1="170" x2="290" y2="150"/><line x1="240" y1="200" x2="330" y2="150"/>
+            <line x1="240" y1="230" x2="370" y2="150"/><line x1="240" y1="260" x2="410" y2="150"/>
+            <line x1="240" y1="290" x2="420" y2="180"/><line x1="270" y1="290" x2="420" y2="210"/>
+            <line x1="300" y1="290" x2="420" y2="240"/><line x1="330" y1="290" x2="420" y2="270"/>
+          </g>
+          <circle cx="330" cy="220" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+          <line x1="330" y1="220" x2="380" y2="180" stroke="#e5342a" stroke-width="1.5"/>
+          <rect x="364" y="162" width="36" height="26" rx="6" fill="#fff" stroke="#e5342a" stroke-width="1.8"/>
+          <text x="382" y="180" font-size="13" font-weight="700" fill="#e5342a" text-anchor="middle" font-family="ui-monospace,monospace">#43</text>
+        </svg>
+      </div>
+    </div>
+
+    <div style="flex:0 0 400px;background:var(--surface);border-left:1px solid var(--border);
+        display:flex;flex-direction:column;overflow:hidden;">
+      <div style="flex:0 0 auto;padding:16px 20px 12px;border-bottom:1px solid var(--border-2);">
+        <div style="font-size:12px;color:var(--text-dim);" class="num">#43</div>
+        <div style="font-size:17px;font-weight:700;">바닥슬래브 · 망상균열</div>
+      </div>
+
+      <div style="flex:1 1 auto;overflow:auto;padding:16px 20px 24px;">
+
+        <div class="sec-label" style="margin-top:0;">규모 모드 — 현장에서 바로 전환 가능</div>
+        <div style="display:flex;gap:8px;">
+          <div class="pillbtn" style="flex:1;">폭 × 길이</div>
+          <div class="pillbtn on" style="flex:1;">면적</div>
+        </div>
+
+        <div class="sec-label">면적</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="stepbtn">−</div>
+          <div class="num" style="flex:1;text-align:center;font-size:20px;font-weight:700;">0.5 <span style="font-size:12px;font-weight:500;color:var(--text-dim);">㎡</span></div>
+          <div class="stepbtn">＋</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;">
+          <div class="pillbtn" style="height:44px;font-size:13px;">0.1</div>
+          <div class="pillbtn" style="height:44px;font-size:13px;">0.25</div>
+          <div class="pillbtn on" style="height:44px;font-size:13px;">0.5</div>
+          <div class="pillbtn" style="height:44px;font-size:13px;">1</div>
+          <div class="pillbtn" style="height:44px;font-size:13px;">2</div>
+          <div class="pillbtn" style="height:44px;font-size:13px;">3</div>
+          <div class="pillbtn" style="height:44px;font-size:13px;">5</div>
+          <div class="pillbtn" style="height:44px;font-size:13px;">10</div>
+        </div>
+
+        <div class="pillbtn" style="width:100%;margin-top:12px;gap:8px;color:var(--accent-ink);
+            background:var(--accent-weak);border-color:transparent;font-weight:600;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          가로×세로로 입력
+        </div>
+
+        <div style="margin-top:14px;background:var(--surface-2);border-radius:var(--radius);padding:12px 14px;
+            font-size:12px;color:var(--text-muted);line-height:1.6;">
+          가로 1000mm × 세로 500mm 입력 시 자동으로 <span class="num" style="font-weight:700;color:var(--text);">0.5㎡</span>로 계산됩니다.
+          손상결함표의 폭·길이 열은 이 모드에서 <span class="num">0 · 0</span>으로 인쇄되고, 면적 값만 실립니다.
+        </div>
+
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border-2);
+            color:var(--text-dim);font-size:13px;">
+          개소 · 진행여부 · 누수 · 발생원인 · 보수방안 · 위치보조 · 메모
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

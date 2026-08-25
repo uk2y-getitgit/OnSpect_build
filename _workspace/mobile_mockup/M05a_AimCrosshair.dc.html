@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    :root{
+      --paper:#ffffff; --bg:#eceff5; --surface:#ffffff; --surface-2:#f5f7fa;
+      --text:#1f2734; --text-muted:#666b73; --text-dim:#9aa4b0;
+      --border:#d9dee8; --border-2:#eef1f6;
+      --accent:#2d6cdf; --accent-weak:#e8f0fd; --accent-ink:#1b4ba8;
+      --radius:3px; --radius-lg:6px;
+      --shadow:0 2px 8px rgba(31,39,52,.08);
+      --shadow-float:0 6px 24px rgba(31,39,52,.16);
+      --font-ui:'Noto Sans KR',Pretendard,-apple-system,"Segoe UI",sans-serif;
+      --font-num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);}
+    a{color:var(--accent);} a:hover{color:var(--accent-ink);}
+    .num{font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+    .icon-btn{width:44px;height:44px;border-radius:var(--radius);border:1px solid var(--border);
+      background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text-muted);}
+    .tool-btn{width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;
+      justify-content:center;color:var(--text-muted);}
+    .tool-btn.active{background:var(--accent);color:#fff;}
+  </style>
+</helmet>
+
+<div style="width:1180px;height:820px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;position:relative;">
+
+  <div style="height:52px;flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;padding:0 16px;gap:14px;">
+    <span style="font-size:15px;font-weight:700;">○○아파트 3차</span>
+    <span style="font-size:14px;color:var(--text-dim);">· 지상2층</span>
+    <span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--accent-ink);background:var(--accent-weak);
+        border-radius:12px;padding:4px 12px;">비교안 A — 추천</span>
+  </div>
+
+  <div style="flex:1 1 auto;position:relative;overflow:hidden;">
+
+    <!-- zoomed-in paper -->
+    <div id="paper" style="position:absolute;left:96px;right:96px;top:24px;bottom:24px;background:var(--paper);
+        border-radius:var(--radius-lg);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;">
+      <svg viewBox="140 40 380 280" width="112%" height="112%" preserveAspectRatio="xMidYMid slice" style="display:block;font-family:'Noto Sans KR',sans-serif;">
+        <rect x="40" y="40" width="820" height="560" fill="none" stroke="#1f2734" stroke-width="4"/>
+        <line x1="40" y1="260" x2="860" y2="260" stroke="#1f2734" stroke-width="3"/>
+        <line x1="180" y1="40" x2="180" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="320" y1="40" x2="320" y2="260" stroke="#1f2734" stroke-width="2.5"/>
+        <rect x="40" y="260" width="140" height="120" fill="none" stroke="#1f2734" stroke-width="2.5"/>
+        <line x1="50" y1="370" x2="170" y2="270" stroke="#9aa4b0" stroke-width="1.5"/>
+        <line x1="50" y1="345" x2="145" y2="270" stroke="#9aa4b0" stroke-width="1.5"/>
+        <text x="102" y="150" font-size="15" fill="#9aa4b0">계단실</text>
+        <text x="248" y="150" font-size="15" fill="#9aa4b0">거실</text>
+        <!-- an existing neighbouring defect, for scale reference -->
+        <circle cx="260" cy="120" r="7" fill="#e5342a" stroke="#fff" stroke-width="2"/>
+      </svg>
+
+      <!-- screen-fixed crosshair (independent of the svg / drawing) -->
+      <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:120px;pointer-events:none;">
+        <div style="position:absolute;left:50%;top:0;width:2px;height:100%;transform:translateX(-50%);
+            background:linear-gradient(#fff,#fff) padding-box, var(--accent);
+            box-shadow:0 0 0 1.5px #fff;"></div>
+        <div style="position:absolute;top:50%;left:0;height:2px;width:100%;transform:translateY(-50%);
+            background:var(--accent);box-shadow:0 0 0 1.5px #fff;"></div>
+        <div style="position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);
+            border-radius:50%;border:2px solid var(--accent);background:rgba(45,108,223,.12);box-shadow:0 0 0 1.5px #fff;"></div>
+      </div>
+    </div>
+
+    <!-- hint banner -->
+    <div style="position:absolute;left:50%;top:36px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;
+        height:44px;padding:0 18px;background:var(--accent);color:#fff;border-radius:22px;box-shadow:var(--shadow-float);
+        font-size:14px;font-weight:600;white-space:nowrap;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+      조준 모드 · 도면을 밀어 십자에 맞추세요
+    </div>
+
+    <!-- left toolbar -->
+    <div style="position:absolute;left:16px;top:24px;background:var(--surface);border-radius:var(--radius-lg);
+        box-shadow:var(--shadow-float);padding:8px;display:flex;flex-direction:column;gap:4px;">
+      <div class="tool-btn" title="선택"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg></div>
+      <div class="tool-btn" title="점"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg></div>
+      <div class="tool-btn" title="방향"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg></div>
+      <div class="tool-btn" title="영역"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></div>
+      <div class="tool-btn" title="그리기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg></div>
+      <div style="height:1px;background:var(--border);margin:4px 2px;"></div>
+      <div class="tool-btn active" title="조준"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg></div>
+    </div>
+
+    <!-- [여기] confirm button, thumb reach -->
+    <div style="position:absolute;right:56px;bottom:64px;width:112px;height:112px;border-radius:50%;
+        background:var(--accent);box-shadow:var(--shadow-float);display:flex;flex-direction:column;
+        align-items:center;justify-content:center;color:#fff;gap:2px;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <span style="font-size:16px;font-weight:700;">여기</span>
+    </div>
+
+  </div>
+
+  <!-- rationale strip -->
+  <div style="position:absolute;left:96px;right:96px;bottom:26px;background:rgba(31,39,52,.9);color:#fff;
+      border-radius:6px;padding:12px 18px;font-size:12.5px;line-height:1.6;">
+    추천 사유 — 십자선이 화면(도면 아님)에 고정돼 확대·이동과 무관하게 항상 화면 중앙에 있고,
+    확정 버튼이 엄지 자리에 있어 손가락이 목표를 가리지 않는다. 코어 코드 변경 없이 기존 클릭 경로를 그대로 탄다.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
