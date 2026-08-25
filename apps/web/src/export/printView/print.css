@@ -1,0 +1,213 @@
+/*
+ * 인쇄 뷰 — Phase 4 스펙 §4-9 (**K1 · Q32**).
+ *
+ * ⭐ **PDF 라이브러리를 넣지 않는다.** `window.print()` + CSS `@page` 로 낸다.
+ *    한글 폰트 임베딩(4~8MB) 문제가 통째로 사라지고 의존성이 0 이다.
+ *    사용자는 인쇄 대화상자에서 `PDF로 저장` 을 고른다.
+ *
+ * ⭐ **페이지네이션을 자바스크립트로 계산하지 않는다.** `break-inside: avoid` 가 한다 —
+ *    계산하면 폰트·확대율이 바뀔 때마다 어긋난다(§3-5).
+ *
+ * `@page` 규칙은 여기 두지 않는다. 산출물마다 방향(세로/가로)이 달라
+ * `PrintRoute` 가 런타임에 <style> 로 주입한다 — 다른 화면의 인쇄를 오염시키지 않는다.
+ */
+
+.pv-root {
+  background: #fff;
+  color: #111;
+  font-family: var(--font-ui);
+  font-size: 10pt;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+/* 화면에서만 보이는 조작 막대. 인쇄물에는 나오지 않는다 */
+.pv-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.pv-bar__title {
+  font-weight: 600;
+}
+
+.pv-bar__hint {
+  color: var(--text-muted);
+}
+
+.pv-bar__spacer {
+  flex: 1;
+}
+
+.pv-status {
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.pv-status--error {
+  color: var(--error);
+}
+
+/* 한 페이지 */
+.pv-page {
+  break-after: page;
+  padding: 0 0 6mm;
+}
+
+.pv-page:last-child {
+  break-after: auto;
+}
+
+.pv-page__head {
+  text-align: center;
+  margin-bottom: 4mm;
+}
+
+.pv-page__title {
+  font-size: 13pt;
+  font-weight: 700;
+  margin: 0;
+}
+
+.pv-page__sub {
+  font-size: 10pt;
+  color: #333;
+  margin: 1mm 0 0;
+}
+
+/* ── 표 (결함 리스트) ───────────────────────────────────────────────────── */
+.pv-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.pv-table th,
+.pv-table td {
+  border: 0.3mm solid #444;
+  padding: 1mm 1.5mm;
+  font-size: 8.5pt;
+  overflow-wrap: anywhere;
+}
+
+.pv-table thead th {
+  background: #eceff3;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 표 머리는 페이지마다 반복된다 — 브라우저 기본 동작 */
+.pv-table thead {
+  display: table-header-group;
+}
+
+.pv-table tbody tr {
+  break-inside: avoid;
+}
+
+/* 층 섹션 머리는 혼자 페이지 끝에 남지 않는다 */
+.pv-table__section td {
+  background: #f5f7fa;
+  font-weight: 700;
+  text-align: left;
+}
+
+.pv-table__section {
+  break-inside: avoid;
+  break-after: avoid;
+}
+
+.pv-align-left {
+  text-align: left;
+}
+.pv-align-center {
+  text-align: center;
+}
+.pv-align-right {
+  text-align: right;
+}
+
+.pv-legend {
+  margin-top: 3mm;
+  font-size: 8.5pt;
+  break-inside: avoid;
+}
+
+.pv-legend__label {
+  font-weight: 700;
+  margin-right: 2mm;
+}
+
+/* ── 사진첩 (2열 × 3행) ─────────────────────────────────────────────────── */
+.pv-photos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6mm 6mm;
+}
+
+/* 마지막 페이지가 6 으로 안 나눠떨어져도 **칸 크기를 유지한다** (§3-6) */
+.pv-cell {
+  break-inside: avoid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 84mm;
+}
+
+.pv-cell__frame {
+  width: 100%;
+  height: 68mm;
+  border: 0.3mm solid #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #fff;
+}
+
+.pv-cell__frame img {
+  display: block;
+}
+
+.pv-cell__caption {
+  margin-top: 1.5mm;
+  text-align: center;
+  font-size: 8.5pt;
+  line-height: 1.35;
+}
+
+.pv-cell__caption b {
+  font-weight: 700;
+}
+
+/* ── 조사위치도 ─────────────────────────────────────────────────────────── */
+.pv-map {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pv-map img {
+  max-width: 100%;
+  max-height: 175mm;
+  object-fit: contain;
+}
+
+@media print {
+  .pv-bar,
+  .pv-noprint {
+    display: none !important;
+  }
+
+  .pv-root {
+    background: #fff;
+  }
+}

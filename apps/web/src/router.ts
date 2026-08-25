@@ -16,7 +16,24 @@ export type Route =
   | { name: 'UPLOAD'; projectId: string; floorId: string | null } // #/p/:pid/upload
   | { name: 'CANVAS'; projectId: string; floorId: string | null } // #/p/:pid/f/:fid
   /** #/p/:pid/settings?from=f/{floorId} — 캔버스에서 왔으면 그 층으로 되돌아간다 (F25) */
-  | { name: 'SETTINGS'; projectId: string; fromFloorId: string | null };
+  | { name: 'SETTINGS'; projectId: string; fromFloorId: string | null }
+  /** #/p/:pid/export — 산출물 출력 P6 (Phase 4 §4-1) */
+  | { name: 'EXPORT'; projectId: string }
+  /**
+   * #/p/:pid/export/print?run={runId}&kind={...} — **인쇄 전용 뷰** (§4-9).
+   * 새 탭으로 열고 화면 UI 없이 문서만 렌더한 뒤 `window.print()` 를 부른다.
+   * PDF 라이브러리를 넣지 않는다 — 한글 폰트 임베딩 문제가 통째로 사라진다(K1 · Q32).
+   */
+  | { name: 'EXPORT_PRINT'; projectId: string; runId: string; kind: PrintKind };
+
+/** 인쇄 뷰가 낼 수 있는 산출물. 손상결함표는 엑셀 전용이라 여기 없다 */
+export type PrintKind = 'DEFECT_LIST' | 'PHOTO_BOOK' | 'LOCATION_MAP';
+
+const PRINT_KINDS: readonly PrintKind[] = ['DEFECT_LIST', 'PHOTO_BOOK', 'LOCATION_MAP'];
+
+function parsePrintKind(v: string | null): PrintKind {
+  return PRINT_KINDS.includes(v as PrintKind) ? (v as PrintKind) : 'DEFECT_LIST';
+}
 
 export function parseHash(hash: string): Route {
   const raw = hash.replace(/^#/, '');
@@ -38,6 +55,18 @@ export function parseHash(hash: string): Route {
       const m = from ? /^f\/(.+)$/.exec(from) : null;
       // `URLSearchParams` 가 이미 디코드한 값이다. 여기서 또 디코드하지 않는다
       return { name: 'SETTINGS', projectId, fromFloorId: m?.[1] ?? null };
+    }
+    if (seg[2] === 'export') {
+      if (seg[3] === 'print') {
+        const q = new URLSearchParams(query);
+        return {
+          name: 'EXPORT_PRINT',
+          projectId,
+          runId: q.get('run') ?? '',
+          kind: parsePrintKind(q.get('kind')),
+        };
+      }
+      return { name: 'EXPORT', projectId };
     }
     if (seg[2] === 'f') {
       return { name: 'CANVAS', projectId, floorId: seg[3] ? decodeURIComponent(seg[3]) : null };
@@ -65,6 +94,10 @@ export function hrefOf(route: Route): string {
       return route.fromFloorId
         ? `#/p/${encodeURIComponent(route.projectId)}/settings?from=f/${encodeURIComponent(route.fromFloorId)}`
         : `#/p/${encodeURIComponent(route.projectId)}/settings`;
+    case 'EXPORT':
+      return `#/p/${encodeURIComponent(route.projectId)}/export`;
+    case 'EXPORT_PRINT':
+      return `#/p/${encodeURIComponent(route.projectId)}/export/print?run=${encodeURIComponent(route.runId)}&kind=${route.kind}`;
     case 'CANVAS':
       return route.floorId
         ? `#/p/${encodeURIComponent(route.projectId)}/f/${encodeURIComponent(route.floorId)}`

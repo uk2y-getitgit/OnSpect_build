@@ -563,6 +563,17 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           >
             도곽
           </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title="손상결함표 · 결함 리스트 · 사진첩 · 조사위치도를 뽑습니다"
+            onClick={() => {
+              flush();
+              navigate({ name: 'EXPORT', projectId });
+            }}
+          >
+            출력
+          </button>
           <span className="topbar__project" title={displayName}>
             {displayName}
           </span>

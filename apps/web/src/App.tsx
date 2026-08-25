@@ -7,8 +7,10 @@
 import { AppDataProvider, useAppData } from './data/appData';
 import { deleteDatabase } from './data/idb/db';
 import { useRoute } from './router';
+import { PrintRoute } from './export/printView/PrintRoute';
 import { CanvasRoute } from './routes/CanvasRoute';
 import { DrawingUpload } from './routes/DrawingUpload';
+import { Export } from './routes/Export';
 import { ProjectForm } from './routes/ProjectForm';
 import { ProjectList } from './routes/ProjectList';
 import { ProjectSetup } from './routes/ProjectSetup';
@@ -31,6 +33,13 @@ function Shell() {
   const route = useRoute();
   const { storage, saveError, clearSaveError } = useAppData();
   const [resetting, setResetting] = useState(false);
+
+  // 인쇄 뷰는 **앱 셸 밖**이다 (§4-9) — 배너·초기화 버튼이 인쇄물에 섞이면 안 된다
+  if (route.name === 'EXPORT_PRINT') {
+    return (
+      <PrintRoute projectId={route.projectId} runId={route.runId} kind={route.kind} />
+    );
+  }
 
   return (
     <div className="shell">
@@ -67,6 +76,7 @@ function Shell() {
         {route.name === 'SETTINGS' && (
           <Settings projectId={route.projectId} fromFloorId={route.fromFloorId} />
         )}
+        {route.name === 'EXPORT' && <Export projectId={route.projectId} />}
         {route.name === 'CANVAS' && (
           <CanvasRoute projectId={route.projectId} floorId={route.floorId} />
         )}

@@ -3418,3 +3418,321 @@ select.input { cursor: pointer; }
   font-size: 10px;
   font-weight: 700;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * P6 산출물 출력 (Phase 4 §4-1)
+ *
+ * 층 칩은 **누른 순서가 곧 번호 순서**다. 그래서 선택된 칩에는 순서 배지가 붙고,
+ * 옆에 그 층에 배정된 번호 구간(`1–12`)이 실시간으로 표시된다.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.page--export {
+  gap: 8px;
+}
+
+.xp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+.xp-section {
+  padding: 12px;
+}
+
+/* ── 층 칩 ─────────────────────────────────────────────────────────────── */
+.xp-floors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.xp-floors__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.xp-floors__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.xp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--btn-h);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--t-hover), border-color var(--t-hover);
+}
+
+.xp-chip:hover {
+  background: var(--surface-2);
+}
+
+.xp-chip:active {
+  background: var(--surface-3);
+}
+
+.xp-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* selected 와 hover 는 서로 구분된다 (디자인시스템) */
+.xp-chip[aria-pressed='true'] {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.xp-chip[aria-pressed='true']:hover {
+  background: #dbe8fc;
+}
+
+.xp-chip__order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.xp-chip__name {
+  font-weight: 500;
+}
+
+.xp-chip__range {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 11px;
+}
+
+.xp-chip[aria-pressed='true'] .xp-chip__range {
+  color: var(--accent-ink);
+}
+
+.xp-chip__flag {
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* ── 옵션 ──────────────────────────────────────────────────────────────── */
+.xp-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.xp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.xp-field--wide {
+  grid-column: 1 / -1;
+}
+
+.xp-field[disabled] {
+  opacity: 0.55;
+}
+
+.xp-field__legend {
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.xp-radio,
+.xp-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.xp-field[disabled] .xp-radio,
+.xp-field[disabled] .xp-check {
+  cursor: default;
+}
+
+.xp-check--off {
+  cursor: default;
+  color: var(--text-dim);
+}
+
+.xp-soon {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.xp-num {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.xp-num input {
+  width: 64px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-num);
+}
+
+.xp-text input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
+/* ── 산출물 · 요약 ─────────────────────────────────────────────────────── */
+.xp-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-bottom: 10px;
+}
+
+.xp-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-2);
+  font-size: 13px;
+}
+
+.xp-summary__spacer {
+  flex: 1;
+}
+
+.xp-hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.xp-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xp-warnings .notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.xp-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── 출력 이력 ─────────────────────────────────────────────────────────── */
+.xp-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xp-run {
+  padding: 8px 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.xp-run__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.xp-run__at {
+  font-family: var(--font-num);
+  font-weight: 600;
+}
+
+.xp-run__meta,
+.xp-run__kinds {
+  color: var(--text-muted);
+}
+
+.xp-run__drift {
+  margin: 6px 0 0;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  background: #fdf5e6;
+  border: 1px solid #f0dcae;
+  color: #7a5a12;
+  font-size: 11px;
+}
+
+.xp-run__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.xp-run__spacer {
+  flex: 1;
+}
+
+.xp-list {
+  max-height: 46vh;
+  overflow: auto;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+}
