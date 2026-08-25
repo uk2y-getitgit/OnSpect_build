@@ -65,8 +65,14 @@ export type HitProfile = {
   clickSlop: number;
 };
 
-/** 마우스 프로파일 — 위 모듈 상수 그대로. 프로파일을 주지 않으면 이것이 쓰인다 */
-export const DEFAULT_HIT_PROFILE: HitProfile = {
+/**
+ * 마우스 프로파일 — 위 모듈 상수 그대로. 프로파일을 주지 않으면 이것이 쓰인다.
+ *
+ * **얼려 둔다.** 이것은 앱 전체가 공유하는 하나뿐인 객체라, 어댑터가 실수로 필드 하나를
+ * 대입하는 순간 PC 히트 판정이 전역으로 바뀐다 — 타입도 테스트도 못 잡는 종류의 사고다.
+ * 다른 값이 필요하면 **복사해서** 만들어라: `{ ...DEFAULT_HIT_PROFILE, minMark: 44 }`.
+ */
+export const DEFAULT_HIT_PROFILE: Readonly<HitProfile> = Object.freeze({
   pad: HIT_PAD_PX,
   minMark: HIT_MIN_MARK_PX,
   minLabel: HIT_MIN_LABEL_PX,
@@ -74,7 +80,7 @@ export const DEFAULT_HIT_PROFILE: HitProfile = {
   stroke: HIT_STROKE_PX,
   handle: HIT_HANDLE_PX,
   clickSlop: CLICK_SLOP_PX,
-};
+});
 
 /**
  * 방향 · 영역 생성 최소 드래그 거리 (스크린 px, §S2a-2).

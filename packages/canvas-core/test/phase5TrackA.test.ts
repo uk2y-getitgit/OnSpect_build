@@ -151,6 +151,34 @@ describe('A1 · 핀치 (GESTURE_PINCH_START / GESTURE_PINCH / GESTURE_PINCH_END)
     }
   });
 
+  it('망가진 center · pan(NaN · Infinity)은 그 프레임을 통째로 버린다', () => {
+    // 어댑터가 핀치 첫 프레임에 "직전 중점" 없이 pan 을 계산하면 NaN 이 나온다.
+    // 한 프레임만 새어 들어와도 뷰포트가 NaN 으로 굳고 viewports 기억까지 오염된다
+    const { state, ctx } = boot([]);
+    const bad: InputEvent[] = [
+      { k: 'GESTURE_PINCH', center: { x: Number.NaN, y: 350 }, factor: 1.2, pan: { x: 0, y: 0 } },
+      { k: 'GESTURE_PINCH', center: { x: 500, y: 350 }, factor: 1.2, pan: { x: Number.NaN, y: 0 } },
+      {
+        k: 'GESTURE_PINCH',
+        center: { x: 500, y: 350 },
+        factor: 1.2,
+        pan: { x: 0, y: Number.POSITIVE_INFINITY },
+      },
+    ];
+    for (const ev of bad) {
+      const s = reduce(state, ev, ctx).state;
+      expect(s.viewport).toEqual(state.viewport);
+      expect(s.viewports[DRAWING.id]).toEqual(state.viewports[DRAWING.id]);
+    }
+
+    // 나쁜 프레임 뒤에도 정상 프레임은 그대로 먹힌다 (코어가 잠기지 않는다)
+    const after = run(state, ctx, [
+      bad[0]!,
+      { k: 'GESTURE_PINCH', center: { x: 500, y: 350 }, factor: 1.5, pan: { x: 0, y: 0 } },
+    ]).state;
+    expect(after.viewport.zoom).toBeCloseTo(state.viewport.zoom * 1.5, 10);
+  });
+
   it('도면이 없으면 아무 일도 없다', () => {
     const ctx = ctxOf([]);
     const s0 = reduce(initialCanvasState(CANVAS), { k: 'RESIZE', size: CANVAS }, ctx).state;
@@ -290,6 +318,24 @@ describe('A2 · 두 번째 포인터 = 진행 중 드래그 취소 (T3)', () => 
     expect(again.drag?.pointerId).toBe(1);
   });
 
+  it('POINTER_CANCEL 은 드래그의 주인 포인터일 때만 취소한다', () => {
+    const { state, ctx } = boot([]);
+    const panning = run(state, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 500, y: 350 }, button: 0, keys: K },
+      { k: 'POINTER_MOVE', pointerId: 1, screen: { x: 540, y: 360 }, keys: K },
+    ]).state;
+    expect(panning.drag?.pointerId).toBe(1);
+
+    // 남의 포인터가 취소돼도 내 드래그는 살아 있다
+    const other = reduce(panning, { k: 'POINTER_CANCEL', pointerId: 7 }, ctx).state;
+    expect(other.drag).not.toBeNull();
+    expect(other.drag?.pointerId).toBe(1);
+
+    // 주인이 취소되면 드래그가 사라진다
+    const mine = reduce(panning, { k: 'POINTER_CANCEL', pointerId: 1 }, ctx).state;
+    expect(mine.drag).toBeNull();
+  });
+
   it('핀치 시작이 드래그를 취소한다 (어댑터가 POINTER_DOWN 없이 바로 넘겨도 안전)', () => {
     const { state, ctx } = boot([]);
     const withTool = reduce(state, { k: 'SET_TOOL', tool: 'AREA_RECT' }, ctx).state;
@@ -339,6 +385,18 @@ describe('A3 · CENTER_ON_NORM', () => {
     const s0 = reduce(initialCanvasState(CANVAS), { k: 'RESIZE', size: CANVAS }, ctx).state;
     const s = reduce(s0, { k: 'CENTER_ON_NORM', n: { x: 0.5, y: 0.5 } }, ctx).state;
     expect(s.viewport).toEqual(s0.viewport);
+  });
+
+  it('망가진 좌표(NaN)는 무시한다 — 뷰포트가 오염되지 않는다', () => {
+    const { state, ctx } = boot([]);
+    for (const n of [
+      { x: Number.NaN, y: 0.5 },
+      { x: 0.5, y: Number.POSITIVE_INFINITY },
+    ]) {
+      const s = reduce(state, { k: 'CENTER_ON_NORM', n }, ctx).state;
+      expect(s.viewport).toEqual(state.viewport);
+      expect(s.viewports[DRAWING.id]).toEqual(state.viewports[DRAWING.id]);
+    }
   });
 });
 
@@ -413,6 +471,14 @@ describe('A4 · 히트 프로파일 주입 (T5)', () => {
       { k: 'POINTER_MOVE', pointerId: 1, screen: { x: 500 + shake[0], y: 350 + shake[1] }, keys: K },
     ]).state;
     expect(b.drag?.moved).toBe(false);
+  });
+
+  it('DEFAULT_HIT_PROFILE 은 얼려 있다 — 실수로 고쳐도 전역이 안 바뀐다', () => {
+    expect(Object.isFrozen(DEFAULT_HIT_PROFILE)).toBe(true);
+    // 앱이 값을 바꾸려면 복사본을 만들어야 한다
+    const touch = { ...DEFAULT_HIT_PROFILE, minMark: 44 };
+    expect(touch.minMark).toBe(44);
+    expect(DEFAULT_HIT_PROFILE.minMark).toBe(10);
   });
 
   it('DEFAULT_HIT_PROFILE 은 모듈 상수와 값이 같다', () => {

@@ -409,6 +409,16 @@ function cancelDrag(state: CanvasState): CanvasState {
   return { ...state, drag: null, guides: [] };
 }
 
+/**
+ * 좌표가 실수 두 개로 성립하는가. NaN · Infinity · undefined 를 걸러낸다.
+ *
+ * 코어는 어댑터를 믿지 않는다 — 뷰포트는 한 번 오염되면 스스로 못 낫는 상태다
+ * (`state.viewports` 에 도면별로 기억까지 된다).
+ */
+function finitePoint(p: { x: number; y: number } | null | undefined): boolean {
+  return !!p && Number.isFinite(p.x) && Number.isFinite(p.y);
+}
+
 function fitState(state: CanvasState): CanvasState {
   if (!state.drawing || state.canvas.w <= 0 || state.canvas.h <= 0) return state;
   return withViewport(
@@ -494,6 +504,13 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
 
     case 'GESTURE_PINCH': {
       if (!state.drawing) return ok(state, ctx);
+      /**
+       * 좌표가 성한 값이 아니면 **그 프레임을 통째로 버린다.**
+       * 어댑터는 "직전 프레임 중점" 으로 `pan` 을 내는데, 핀치 첫 프레임에는 직전이 없어
+       * `undefined` 뺄셈 → NaN 이 나오기 쉽다. NaN 이 한 프레임만 들어와도 뷰포트가
+       * NaN 으로 굳고 `viewports` 기억에까지 남아 FIT 전에는 복구되지 않는다.
+       */
+      if (!finitePoint(ev.center) || !finitePoint(ev.pan)) return ok(state, ctx);
       // 요소 드래그가 남아 있으면(START 를 놓친 어댑터) 여기서라도 버린다.
       // 정렬 스냅샷이 스크린 좌표라 뷰포트가 움직이면 유효성이 깨진다 (WHEEL 과 같은 이유)
       const base = cancelDrag(state);
@@ -519,6 +536,8 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
     // ── Phase 5 T4 ────────────────────────────────────────────────────────
     case 'CENTER_ON_NORM': {
       if (!state.drawing) return ok(state, ctx);
+      // 핀치와 같은 이유 — 성하지 않은 좌표 하나가 뷰포트를 영구히 오염시킨다
+      if (!finitePoint(ev.n)) return ok(state, ctx);
       return ok(
         withViewport(
           state,
@@ -544,7 +563,11 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
       return onPointerUp(state, ev, ctx);
 
     case 'POINTER_CANCEL':
-      return ok({ ...state, drag: null, guides: [] }, ctx);
+      // A2 와 같은 성질 — **취소된 포인터가 드래그의 주인일 때만** 취소한다.
+      // 두 손가락 중 한쪽이 시스템에 뺏겼다고(스크롤·알림) 남의 드래그까지 죽이면 안 된다.
+      // POINTER_MOVE · POINTER_UP 은 이미 같은 검사를 한다
+      if (state.drag && state.drag.pointerId !== ev.pointerId) return ok(state, ctx);
+      return ok(cancelDrag(state), ctx);
 
     case 'POINTER_LEAVE':
       return ok(state.drag ? state : { ...state, hover: null }, ctx);
@@ -1996,7 +2019,8 @@ function onKeyDown(
     }
     if (s.drag) {
       // originNorm 으로 복귀 후 취소. 커밋하지 않았으므로 drag 를 버리면 원위치다
-      return ok({ ...s, drag: null, guides: [] }, ctx);
+      // — 두 번째 포인터 취소(A2/T3)와 **같은 함수**를 탄다. 취소 규칙은 하나여야 한다
+      return ok(cancelDrag(s), ctx);
     }
     return ok({ ...s, selection: { ...NO_SELECTION } }, ctx);
   }
