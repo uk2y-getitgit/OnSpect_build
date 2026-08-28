@@ -153,3 +153,43 @@
 ## 막힌 것 / 질문
 
 **없다.** `_workspace/QUESTIONS.md` 에 새로 추가한 항목 없음.
+
+---
+
+# 검수 반영 (2026-08-28)
+
+기준: `_workspace/34_code-reviewer_findings_Batch2.md` · 지시받은 **보통 3건 + 경미 3건만** 좁게 수정.
+경미6(방향키 누수)·경미7(`doUndo` StrictMode 규약)·경미9(`hidePhotoNumber` 굵기 서식)는
+**지시대로 손대지 않았다.**
+
+## 고친 것
+
+| # | 지적 | 파일 | 수정 내용 |
+|---|---|---|---|
+| 보통1 | 클릭 한 번에 자르기 사각형이 5%로 붕괴 | `apps/web/src/ui/photos/PhotoCropEditor.tsx` | `Drag` 의 `NEW` 를 `{anchor, prev, moved}` 로 확장. `pointerdown` 에서 `setRect` 제거(확정 안 함) → 첫 `pointermove` 에서 `rectFromDrag(anchor,p)` 확정 + `moved=true` → `endDrag` 에서 `!moved` 면 `setRect(drag.prev)` 로 복원 |
+| 보통2 | 편집 중 헤더 `[닫기]` 가 경고 없이 작업을 버림 | `apps/web/src/ui/photos/PhotoPreviewDialog.tsx` | `mode !== 'VIEW'` 이면 `[닫기]` `disabled` + 헤더에 "편집 중 — **[취소]** 또는 **[적용]** 을 눌러주세요" 표시. 툴팁 문구도 정정 |
+| 보통3 | 주석 편집기에 자르기 경계 표시 없음 | `apps/web/src/ui/photos/PhotoAnnotateEditor.tsx` | `photo.edits.crop` 이 있으면 `toDisplayRect(crop, rotate)` 로 표시 사각형을 만들어 **기존 `.cropRect`** 를 `pointer-events:none` 으로 SVG 위에 겹침. 힌트에 "어두운 영역은 자르기로 잘려 나갑니다" 추가 |
+| 경미4 | `styles.css` 주석이 구현과 반대 | `apps/web/src/styles.css:3479-` | `max-width/height:100%` 서술을 삭제하고 "px 상한은 `photoStage.tsx` 가 인라인으로 넣는다 — 중복 아님, 지우지 마라" 로 정정 |
+| 경미5 | `Enter` 가 `frame.ready` 가드를 안 거침 | `PhotoCropEditor.tsx` · `PhotoAnnotateEditor.tsx` | 두 `apply()` 첫 줄에 `if (!frame.ready) return;` + `useCallback` 의존성에 `frame.ready` 추가 |
+| 경미8 | 예외 시 생성된 objectURL 유실 | `apps/web/src/export/photoBookImages.ts` | 셀 루프를 `try { … } catch {}` 로 감싸 **항상** `{ byCell, created }` 반환(부분 결과 + 해제 대상 보존) |
+
+**신규 CSS 클래스 0개 · 신규 계산 함수 0개 · 신규 의존성 0개.**
+보통3 은 `.cropRect`(기존) 와 `toDisplayRect`(project-core 기존, 단위테스트 26건으로 고정됨)만 재사용했다.
+
+## 검증
+
+- `npm run typecheck` — 3패키지 **통과**
+- `npm run test` — canvas-core **277 통과** · project-core **270 통과** (합 547, 실패 0)
+- `npm run build` — `@onspect/web` vite 프로덕션 빌드 **성공** (237 모듈)
+- `apps/web` 은 테스트 러너가 없어(알려진 한계 1) 위 6건은 타입검사·빌드·코드 검토로만 확인했다
+
+## 직접 확인해주실 것
+
+- [ ] 자른 적 없는 사진에서 `[자르기]` → 사진 위를 **한 번 탭(끌지 않음)** → 사각형이 **전체 그대로** 남아 있는가 (붕괴 없음)
+- [ ] 이미 자른 사진에서 사각형 바깥을 **탭만** → 직전 사각형이 그대로 유지되는가
+- [ ] 바깥에서 **끌면** 새 사각형이 정상적으로 그려지는가 (기존 동작 유지)
+- [ ] `[자르기]`/`[주석]` 편집 중 헤더 `[닫기]` 가 **눌리지 않고**, 옆에 "편집 중 — [취소] 또는 [적용]" 안내가 보이는가
+- [ ] `[취소]`/`[적용]` 로 VIEW 로 돌아오면 `[닫기]` 가 **다시 활성**되는가
+- [ ] 가운데 40%만 남기고 자른 사진에서 `[주석]` 을 열면 **잘릴 바깥이 어둡게** 보이는가 (그 위에 그은 획도 어둠 아래로 보임)
+- [ ] 회전(90/270)된 자른 사진에서도 어두운 경계가 **사진의 실제 잘린 영역과 맞는가**
+- [ ] 어두운 영역 위에서도 **그리기·지우기가 정상 동작**하는가 (`pointer-events:none` 확인)

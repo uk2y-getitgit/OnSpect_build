@@ -224,13 +224,23 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
               {mode === 'CROP' ? ' · 자르기' : mode === 'ANNOTATE' ? ' · 주석' : ''}
             </span>
           </div>
+          {/* ⭐ 편집 중에는 **닫기 자체를 막는다.** 예전에는 `title` 툴팁으로만 경고했는데
+              현장 태블릿(주 사용 환경)에서는 툴팁이 아예 뜨지 않아, 20획을 그린 뒤 [닫기] 를
+              탭하면 아무 경고 없이 전부 사라졌다. 스크림 클릭은 이미 막혀 있었으므로
+              같은 손실 경로를 여기서도 닫는다. */}
+          {mode !== 'VIEW' && (
+            <span className="photoView__meta">
+              편집 중 — <b>[취소]</b> 또는 <b>[적용]</b> 을 눌러주세요
+            </span>
+          )}
           <button
             ref={closeRef}
             type="button"
             className="btn btn--small"
             onClick={onClose}
+            disabled={mode !== 'VIEW'}
             aria-label="닫기"
-            title={mode === 'VIEW' ? undefined : '편집 중인 내용은 저장되지 않습니다'}
+            title={mode === 'VIEW' ? undefined : '편집 중에는 닫을 수 없습니다 — [취소] 또는 [적용]'}
           >
             닫기
           </button>

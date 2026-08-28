@@ -61,34 +61,41 @@ export async function renderPhotoBookImages(
   /** 같은 사진이 여러 칸에 오면 한 번만 굽는다 */
   const composed = new Map<string, PhotoBookImage>();
 
-  for (const c of cells) {
-    const base = baseUrls.get(c.renderBlobKey);
-    if (!base) continue; // Blob 이 사라졌다 — 인쇄 뷰가 "불러오지 못했습니다" 를 그린다
-    const fallback: PhotoBookImage = { url: base, baked: false, width: null, height: null };
+  // ⚠️ 루프 전체를 감싼다. 중간에 예외가 나면 **그때까지 만든 objectURL 이 통째로 유실**되어
+  //    호출자가 해제할 방법이 없어진다(부분 결과도 버려진다). 항상 `{ byCell, created }` 를
+  //    돌려주면 남은 칸은 "불러오지 못했습니다" 로 그려지고 누수는 0 이다.
+  try {
+    for (const c of cells) {
+      const base = baseUrls.get(c.renderBlobKey);
+      if (!base) continue; // Blob 이 사라졌다 — 인쇄 뷰가 "불러오지 못했습니다" 를 그린다
+      const fallback: PhotoBookImage = { url: base, baked: false, width: null, height: null };
 
-    if (!needsCompose(c)) {
-      // 빠른 경로 — 자르기·주석이 없으면 굽지 않는다. 회전은 CSS 가 한다
-      byCell[c.key] = fallback;
-      continue;
-    }
+      if (!needsCompose(c)) {
+        // 빠른 경로 — 자르기·주석이 없으면 굽지 않는다. 회전은 CSS 가 한다
+        byCell[c.key] = fallback;
+        continue;
+      }
 
-    const sig = composeSignature(c);
-    const hit = composed.get(sig);
-    if (hit) {
-      byCell[c.key] = hit;
-      continue;
-    }
+      const sig = composeSignature(c);
+      const hit = composed.get(sig);
+      if (hit) {
+        byCell[c.key] = hit;
+        continue;
+      }
 
-    const r = await composePhotoFromUrl(base, c);
-    if (!r) {
-      byCell[c.key] = fallback; // 폴백 — 원본이 인쇄된다
-      continue;
+      const r = await composePhotoFromUrl(base, c);
+      if (!r) {
+        byCell[c.key] = fallback; // 폴백 — 원본이 인쇄된다
+        continue;
+      }
+      const url = URL.createObjectURL(r.blob);
+      created.push(url);
+      const made: PhotoBookImage = { url, baked: true, width: r.width, height: r.height };
+      composed.set(sig, made);
+      byCell[c.key] = made;
     }
-    const url = URL.createObjectURL(r.blob);
-    created.push(url);
-    const made: PhotoBookImage = { url, baked: true, width: r.width, height: r.height };
-    composed.set(sig, made);
-    byCell[c.key] = made;
+  } catch {
+    // 부분 결과를 그대로 반환한다 (위 주석)
   }
 
   return { byCell, created };

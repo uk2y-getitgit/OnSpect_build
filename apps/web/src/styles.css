@@ -3479,9 +3479,14 @@ select.input { cursor: pointer; }
 /* ───────────────────────────────────────────────────────────────────────────
  * 사진 편집기 — 자르기(§2-3) · 주석(§2-4)
  *
- * ⭐ `.photoEdit__box` 가 **이미지 실제 표시 박스**다. `display:inline-block` + 이미지가
- *    `max-width/height:100%` 이므로 래퍼가 이미지에 딱 붙고, 오버레이를 `inset:0` 으로 깔면
- *    레터박스 계산이 통째로 사라진다. 정규화 좌표 = `(clientX - rect.left) / rect.width`.
+ * ⭐ `.photoEdit__box` 가 **이미지 실제 표시 박스**다. `display:inline-block` 래퍼가
+ *    이미지에 딱 붙으므로 오버레이를 `inset:0` 으로 깔면 레터박스 계산이 통째로 사라진다.
+ *    정규화 좌표 = `(clientX - rect.left) / rect.width`.
+ *
+ * ⚠️ **이미지 상한을 여기 CSS 에서 `max-width/height:100%` 로 주지 않는다.** 래퍼 높이가
+ *    `auto` 라 퍼센트 높이가 해소되지 않아 세로로 긴 사진이 스테이지를 넘친다. 대신
+ *    `photoStage.tsx` 가 `.photoEdit__fit`(절대배치 = 확정 픽셀)을 재서 **px 상한을 인라인**
+ *    으로 넣는다. 그 인라인 상한은 중복이 아니다 — 지우지 마라(`photoStage.tsx:12-14`).
  * ─────────────────────────────────────────────────────────────────────────── */
 .photoEdit {
   display: flex;

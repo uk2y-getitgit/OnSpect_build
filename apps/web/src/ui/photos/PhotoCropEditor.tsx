@@ -41,7 +41,15 @@ const FULL_RECT: Rect = { x: 0, y: 0, w: 1, h: 1 };
 type Drag =
   | { mode: 'MOVE'; start: Pt; from: Rect }
   | { mode: 'RESIZE'; handle: HandleId; from: Rect }
-  | { mode: 'NEW'; anchor: Pt };
+  /**
+   * ⚠️ `NEW` 는 **누른 순간에 확정하지 않는다.** 예전에는 `pointerdown` 에서 바로
+   * `setRect(rectFromDrag(p,p))` 를 불렀는데, `rectFromDrag` 가 최소 크기를 강제하므로
+   * **끌지 않은 단순 클릭 한 번에 전체 사각형이 5%×5% 로 붕괴**했다(편집기에 Undo 가 없고
+   * `[자르기 해제]` 는 `crop === null` 이라 비활성 → 되돌릴 방법이 화면에 없었다).
+   * 그래서 `prev`(누르기 직전 사각형)를 들고 있다가 **실제로 움직였을 때만**(`moved`) 확정하고,
+   * 안 움직이고 끝나면 `prev` 로 되돌린다.
+   */
+  | { mode: 'NEW'; anchor: Pt; prev: Rect; moved: boolean };
 
 export type PhotoCropEditorProps = {
   photo: Photo;
@@ -79,6 +87,9 @@ export function PhotoCropEditor({ photo, url, disabled, onApply, onCancel }: Pho
 
   const apply = useCallback(() => {
     if (disabled) return;
+    // ⚠️ 버튼은 `disabled={!frame.ready}` 로 막혀 있지만 **`Enter` 단축키는 그 가드를 안 거친다.**
+    //    준비 전 사각형은 초기값이라 같은 값을 다시 쓰는 무의미한 IDB 쓰기가 된다.
+    if (!frame.ready) return;
     const r = rectRef.current;
     // 사실상 전체면 자르기를 저장하지 않는다 — 미세 오차가 남아 "✎" 배지가 뜨는 것을 막는다
     if (isFullRect(r)) {
@@ -86,7 +97,7 @@ export function PhotoCropEditor({ photo, url, disabled, onApply, onCancel }: Pho
       return;
     }
     onApply(roundRect(toSourceRect(r, rotate)));
-  }, [disabled, onApply, rotate]);
+  }, [disabled, frame.ready, onApply, rotate]);
 
   const clear = useCallback(() => {
     if (disabled) return;
@@ -152,10 +163,9 @@ export function PhotoCropEditor({ photo, url, disabled, onApply, onCancel }: Pho
     if (handle) setDrag({ mode: 'RESIZE', handle, from: rect });
     else if (movable) setDrag({ mode: 'MOVE', start: p, from: rect });
     else {
-      setDrag({ mode: 'NEW', anchor: p });
-      // ⚠️ `rectFromDrag` 로 만든다 — 오른쪽·아래 끝을 눌렀을 때 `x+w > 1` 인 사각형이
-      //    남지 않게 클램프까지 한 번에 처리한다(끌지 않고 클릭만 해도 유효해야 한다)
-      setRect(rectFromDrag(p, p));
+      // ⚠️ 여기서 `setRect` 를 **부르지 않는다.** 확정은 첫 `pointermove` 다.
+      //    클릭만 하고 끝나면 `endDrag` 가 `prev` 로 되돌린다(위 `Drag` 주석 참고).
+      setDrag({ mode: 'NEW', anchor: p, prev: rect, moved: false });
     }
   };
 
@@ -179,7 +189,10 @@ export function PhotoCropEditor({ photo, url, disabled, onApply, onCancel }: Pho
       setRect(resizeRect(drag.from, drag.handle, p));
       return;
     }
+    // ⚠️ `rectFromDrag` 는 클램프·최소 크기까지 한 번에 처리한다.
+    //    **여기가 새 사각형의 확정 지점**이다 — 움직였다는 사실을 `moved` 로 남긴다.
     setRect(rectFromDrag(drag.anchor, p));
+    if (!drag.moved) setDrag({ ...drag, moved: true });
   };
 
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -187,6 +200,8 @@ export function PhotoCropEditor({ photo, url, disabled, onApply, onCancel }: Pho
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+    // 끌지 않은 단순 클릭 — 직전 사각형을 그대로 되돌린다(붕괴 방지)
+    if (drag.mode === 'NEW' && !drag.moved) setRect(drag.prev);
     setDrag(null);
   };
 

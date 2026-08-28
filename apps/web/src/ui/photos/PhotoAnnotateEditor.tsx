@@ -22,6 +22,7 @@ import {
   roundPoint,
   strokePx,
   toDisplayPoint,
+  toDisplayRect,
   toSourcePoint,
   type AnnotationColorKey,
   type AnnotationWidthKey,
@@ -135,8 +136,11 @@ export function PhotoAnnotateEditor({
 
   const apply = useCallback(() => {
     if (disabled) return;
+    // ⚠️ 버튼은 `disabled={!frame.ready}` 로 막혀 있지만 **`Enter` 단축키는 그 가드를 안 거친다.**
+    //    준비 전에는 좌표가 초기값이라 같은 내용을 다시 쓰는 무의미한 IDB 쓰기가 나간다.
+    if (!frame.ready) return;
     onApply(toSourceAll(annsRef.current, rotate));
-  }, [disabled, onApply, rotate]);
+  }, [disabled, frame.ready, onApply, rotate]);
 
   // ── 키보드 ──────────────────────────────────────────────────────────────
   // `PhotoPreviewDialog` 가 캔버스 단축키를 이미 막고 있고, 이 핸들러는 그다음에 돈다.
@@ -243,6 +247,18 @@ export function PhotoAnnotateEditor({
   // ── 표시 ────────────────────────────────────────────────────────────────
   const shown = useMemo(() => (draft ? [...anns, draft] : anns), [anns, draft]);
 
+  /**
+   * ⚠️ **자르기 경계 표시.** 편집은 자르기 전 전체 프레임 위에서 하지만(§2-1), 출력 합성은
+   * `주석 → 자르기 → 회전` 이라 **자르기 밖에 그린 획은 인쇄에서 사라진다**(§2-2).
+   * 경계가 안 보이면 사용자에게는 "주석이 안 먹었다" 로 보인다 — 그리는 동안 보여준다.
+   * 자르기 편집기와 **같은 `.cropRect`**(바깥을 어둡게 하는 box-shadow) 를 재사용하고,
+   * 여기서는 조작 대상이 아니므로 `pointer-events:none` 으로 깐다.
+   */
+  const cropView = useMemo(
+    () => (photo.edits.crop ? toDisplayRect(photo.edits.crop, rotate) : null),
+    [photo.edits.crop, rotate],
+  );
+
   return (
     <div className="photoEdit">
       <EditStage frame={frame} alt={photo.fileName}>
@@ -268,6 +284,20 @@ export function PhotoAnnotateEditor({
                 <AnnotationShape key={a.id} a={a} w={box.w} h={box.h} />
               ))}
             </svg>
+            {/* 잘려 나갈 영역을 어둡게 — 획 위에 겹치되 포인터는 통과시킨다 */}
+            {cropView && (
+              <div
+                className="cropRect"
+                style={{
+                  left: `${cropView.x * 100}%`,
+                  top: `${cropView.y * 100}%`,
+                  width: `${cropView.w * 100}%`,
+                  height: `${cropView.h * 100}%`,
+                  pointerEvents: 'none',
+                }}
+                aria-hidden="true"
+              />
+            )}
           </div>
         )}
       </EditStage>
@@ -319,6 +349,7 @@ export function PhotoAnnotateEditor({
       <footer className="photoEdit__bar">
         <span className="photoEdit__hint">
           주석 {anns.length}개 · <b>Ctrl+Z</b> 되돌리기(이 창 안에서만) · <b>Esc</b> 취소
+          {cropView && ' · 어두운 영역은 자르기로 잘려 나갑니다'}
         </span>
         <span className="photoView__spacer" />
         <button
