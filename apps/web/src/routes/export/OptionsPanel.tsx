@@ -174,10 +174,35 @@ export function OptionsPanel({ params, onChange, mapEnabled }: OptionsPanelProps
             onChange={(e) => setDoc({ headerLine2: e.target.value })}
           />
         </label>
-        <label className="xp-check xp-check--off" title="준비 중 — 사진번호에 부번이 생겨 번호체계가 바뀝니다">
-          <input type="checkbox" checked={false} disabled />
-          <span>대표 외 사진 포함</span>
-          <span className="xp-soon">준비 중</span>
+        {/*
+          §2-8 — `assignNumbers()` 를 건드리지 않는다. 대표는 `사진 12` 그대로이고
+          나머지는 배치 단계의 **파생 부번** `12-1`·`12-2` 다.
+          손상결함표·결함리스트의 `사진번호` 열은 그대로 `12` 하나다.
+        */}
+        <label
+          className="xp-check"
+          title="결함번호·사진번호(정수)는 그대로입니다. 부번만 늘어납니다"
+        >
+          <input
+            type="checkbox"
+            // ⚠️ `=== true` — 옛 이력에서 복원한 `params.doc` 에는 이 키가 없을 수 있다.
+            //    `undefined` 를 넣으면 React 가 비제어 입력으로 취급해 경고가 뜬다
+            checked={params.doc.includeNonPrimaryPhotos === true}
+            onChange={(e) => setDoc({ includeNonPrimaryPhotos: e.target.checked })}
+          />
+          <span>대표 외 사진 포함 (부번 12-1·12-2로 나갑니다·사진첩 장수가 늘어납니다)</span>
+        </label>
+        {/* F-4 — **표시만** 뺀다. 번호 자체와 `ExportRun.mapping` 은 그대로다 (불변식 #2) */}
+        <label
+          className="xp-check"
+          title="사진첩 캡션 1행만 숨깁니다. 손상결함표·결함리스트의 사진번호 열은 그대로입니다"
+        >
+          <input
+            type="checkbox"
+            checked={params.doc.hidePhotoNumber === true}
+            onChange={(e) => setDoc({ hidePhotoNumber: e.target.checked })}
+          />
+          <span>사진첩 사진번호 숨기기</span>
         </label>
       </fieldset>
     </div>

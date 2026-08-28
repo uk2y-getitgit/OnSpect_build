@@ -117,7 +117,19 @@ export function defectListModel(
   return buildDefectList(tableInput(src, plan, params));
 }
 
-export function photoBookModel(src: ExportSource, plan: ExportPlan): PhotoBookPage[] {
+/**
+ * ⭐ `params` 는 **선택이 아니다** — `doc.includeNonPrimaryPhotos`(§2-8)·`doc.hidePhotoNumber`(F-4)를
+ *    넘기지 않으면 옵션을 켜도 사진첩이 안 바뀐다. 넘겨받은 것은 `ExportRun.params` 이므로
+ *    **재출력 때도 같은 옵션이 그대로 재현된다.**
+ *
+ * ⚠️ 두 옵션 모두 `assignNumbers()`·`ExportRun.mapping` 을 건드리지 않는다 (불변식 #2).
+ *    부번은 배치 단계의 파생값이고, 숨김은 표시만 뺀 것이다.
+ */
+export function photoBookModel(
+  src: ExportSource,
+  plan: ExportPlan,
+  params: ExportParams,
+): PhotoBookPage[] {
   return buildPhotoBook({
     rows: plan.rows,
     defects: src.bundle.defects,
@@ -128,6 +140,8 @@ export function photoBookModel(src: ExportSource, plan: ExportPlan): PhotoBookPa
       floors: src.bundle.floors,
       buildings: src.bundle.buildings,
     }),
+    includeNonPrimary: params.doc.includeNonPrimaryPhotos === true,
+    hidePhotoNumber: params.doc.hidePhotoNumber === true,
   });
 }
 

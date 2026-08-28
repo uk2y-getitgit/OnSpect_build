@@ -10,8 +10,15 @@
  *    타이핑마다 IndexedDB 를 때리지 않는다.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { displaySize, type Photo } from '@onspect/project-core';
+import {
+  displaySize,
+  type Photo,
+  type PhotoAnnotation,
+  type PhotoEdits,
+} from '@onspect/project-core';
 import { usePhotoComposite } from '../../data/usePhotoComposite';
+import { PhotoAnnotateEditor } from './PhotoAnnotateEditor';
+import { PhotoCropEditor } from './PhotoCropEditor';
 
 /** 캡션 상한 (§2-5) */
 export const PHOTO_CAPTION_MAX = 80;
@@ -51,8 +58,15 @@ export type PhotoPreviewDialogProps = {
   onRemove: () => void;
   /** 빈 값이면 `null` 이 온다 — 파생 캡션으로 되돌아간다 (§2-5) */
   onCaptionChange: (photoId: string, caption: string | null) => void;
+  /** 자르기 지정·해제 (§2-3). 좌표는 **렌더 프레임 0~1 정규화**로 이미 되돌려져서 온다 */
+  onCropChange: (photoId: string, crop: PhotoEdits['crop']) => void;
+  /** 주석 통째 교체 (§2-4). 좌표는 **렌더 프레임 0~1 정규화** */
+  onAnnotationsChange: (photoId: string, annotations: PhotoAnnotation[]) => void;
   onClose: () => void;
 };
+
+/** 본문 모드 — 편집은 **새 창이 아니라 이 다이얼로그 본문 교체**다 (§2-3) */
+type EditMode = 'VIEW' | 'CROP' | 'ANNOTATE';
 
 export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
   const {
@@ -69,11 +83,23 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
     onReplace,
     onRemove,
     onCaptionChange,
+    onCropChange,
+    onAnnotationsChange,
     onClose,
   } = props;
 
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const captionId = useId();
+
+  // ── 편집 모드 (§2-3 · §2-4) ─────────────────────────────────────────────
+  const [mode, setMode] = useState<EditMode>('VIEW');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  // 사진이 바뀌면 편집을 닫는다 — 앞 사진의 좌표로 다음 사진을 자르는 사고를 막는다
+  useEffect(() => {
+    setMode('VIEW');
+  }, [photo.id]);
 
   // 큰 이미지는 **열 때 비로소** 로드한다 — 목록에서 미리 열면 objectURL 이 수백 개가 된다
   useEffect(() => {
@@ -114,6 +140,20 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = isTypingTarget(e.target);
+      const editing = modeRef.current !== 'VIEW';
+
+      // ⭐ 편집기가 열려 있으면 `Escape`·`Enter`·방향키·`Ctrl+Z` 는 **편집기 것**이다.
+      //    여기서는 캔버스 단축키가 뒤에서 도는 것만 계속 막는다.
+      //    (편집기 리스너는 이 리스너 **다음에** 돈다 — `stopPropagation` 은 같은 대상의
+      //     다른 리스너를 막지 않는다. `stopImmediatePropagation` 을 쓰면 안 되는 이유다.)
+      if (editing) {
+        if (isCanvasShortcut(e)) {
+          e.stopPropagation();
+          if (!typing) e.preventDefault();
+        }
+        return;
+      }
+
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
@@ -168,7 +208,12 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
 
   return (
     <div className="photoScrim" role="dialog" aria-modal="true" aria-label="사진 미리보기">
-      <div className="photoScrim__hit" onClick={onClose} aria-hidden="true" />
+      {/* 편집 중에는 바깥 클릭으로 닫지 않는다 — 그린 것이 조용히 사라지면 안 된다 */}
+      <div
+        className="photoScrim__hit"
+        onClick={mode === 'VIEW' ? onClose : undefined}
+        aria-hidden="true"
+      />
       <div className="photoView">
         <header className="photoView__head">
           <div className="photoView__titles">
@@ -176,6 +221,7 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
             <span className="photoView__meta num">
               {index + 1} / {total} · {size.width}×{size.height}
               {photo.isPrimary ? ' · 대표' : ''}
+              {mode === 'CROP' ? ' · 자르기' : mode === 'ANNOTATE' ? ' · 주석' : ''}
             </span>
           </div>
           <button
@@ -184,11 +230,39 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
             className="btn btn--small"
             onClick={onClose}
             aria-label="닫기"
+            title={mode === 'VIEW' ? undefined : '편집 중인 내용은 저장되지 않습니다'}
           >
             닫기
           </button>
         </header>
 
+        {mode === 'CROP' && (
+          <PhotoCropEditor
+            photo={photo}
+            url={url}
+            disabled={disabled}
+            onApply={(crop) => {
+              onCropChange(photo.id, crop);
+              setMode('VIEW');
+            }}
+            onCancel={() => setMode('VIEW')}
+          />
+        )}
+        {mode === 'ANNOTATE' && (
+          <PhotoAnnotateEditor
+            photo={photo}
+            url={url}
+            disabled={disabled}
+            onApply={(annotations) => {
+              onAnnotationsChange(photo.id, annotations);
+              setMode('VIEW');
+            }}
+            onCancel={() => setMode('VIEW')}
+          />
+        )}
+
+        {mode === 'VIEW' && (
+          <>
         <div className="photoView__stage">
           <button
             type="button"
@@ -282,12 +356,24 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
             교체…
           </button>
 
-          {/* R-5 · R-6 에서 편집 모드로 열린다 */}
-          <button type="button" className="btn btn--small" disabled title="준비 중입니다">
-            자르기 <span className="tag tag--soon">준비 중</span>
+          {/* ⭐ 새 창이 아니라 **이 다이얼로그 본문**이 편집 모드로 바뀐다 (§2-3) */}
+          <button
+            type="button"
+            className="btn btn--small"
+            onClick={() => setMode('CROP')}
+            disabled={disabled}
+            title="사진에서 쓸 영역만 남깁니다. 원본은 그대로 보관됩니다"
+          >
+            자르기{photo.edits.crop !== null ? ' ✎' : ''}
           </button>
-          <button type="button" className="btn btn--small" disabled title="준비 중입니다">
-            주석 <span className="tag tag--soon">준비 중</span>
+          <button
+            type="button"
+            className="btn btn--small"
+            onClick={() => setMode('ANNOTATE')}
+            disabled={disabled}
+            title="사진 위에 화살표·자유획을 그립니다"
+          >
+            주석{(photo.annotations?.length ?? 0) > 0 ? ` ✎${photo.annotations.length}` : ''}
           </button>
 
           <span className="photoView__spacer" />
@@ -300,6 +386,8 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
             삭제
           </button>
         </footer>
+          </>
+        )}
       </div>
     </div>
   );

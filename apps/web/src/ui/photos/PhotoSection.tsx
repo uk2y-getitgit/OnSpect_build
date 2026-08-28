@@ -9,7 +9,12 @@
  * 롱프레스 대신 **우클릭**을 쓴다(기획서 §2-C 가 명시적으로 허용).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { hasPhotoEdits, type Photo } from '@onspect/project-core';
+import {
+  hasPhotoEdits,
+  type Photo,
+  type PhotoAnnotation,
+  type PhotoEdits,
+} from '@onspect/project-core';
 import type { RejectedPhoto } from '../../data/photoIngest';
 import { MAX_PHOTOS_PER_PICK, PHOTO_ACCEPT_ATTR } from '../../data/photoIngest';
 import { PhotoPreviewDialog } from './PhotoPreviewDialog';
@@ -33,6 +38,10 @@ export type PhotoSectionProps = {
   onReorder: (ids: string[]) => void;
   /** 사진첩 캡션 수동 덮어쓰기 (§2-5). 빈 값이면 `null` 이 온다 */
   onCaptionChange: (photoId: string, caption: string | null) => void;
+  /** 자르기 지정·해제 (§2-3). 좌표는 **렌더 프레임 0~1 정규화** */
+  onCropChange: (photoId: string, crop: PhotoEdits['crop']) => void;
+  /** 주석 통째 교체 (§2-4). 좌표는 **렌더 프레임 0~1 정규화** */
+  onAnnotationsChange: (photoId: string, annotations: PhotoAnnotation[]) => void;
 };
 
 type MenuState = { photoId: string; x: number; y: number } | null;
@@ -54,6 +63,8 @@ export function PhotoSection(props: PhotoSectionProps) {
     onRemove,
     onReorder,
     onCaptionChange,
+    onCropChange,
+    onAnnotationsChange,
   } = props;
 
   const addInputRef = useRef<HTMLInputElement | null>(null);
@@ -309,6 +320,8 @@ export function PhotoSection(props: PhotoSectionProps) {
             setPreviewId(null);
           }}
           onCaptionChange={onCaptionChange}
+          onCropChange={onCropChange}
+          onAnnotationsChange={onAnnotationsChange}
           onClose={() => setPreviewId(null)}
         />
       )}

@@ -833,6 +833,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
                 onRemove={photoOps.remove}
                 onReorder={(ids) => photoOps.reorder(selected.id, ids)}
                 onCaptionChange={photoOps.setCaption}
+                onCropChange={photoOps.setCrop}
+                onAnnotationsChange={photoOps.setAnnotations}
               />
             ) : null
           }

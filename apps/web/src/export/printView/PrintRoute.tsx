@@ -31,6 +31,11 @@ import {
   type ExportSource,
 } from '../exportModel';
 import { releaseLocationMaps, renderLocationMaps, type LocationMapPage } from '../locationMap';
+import {
+  releasePhotoBookImages,
+  renderPhotoBookImages,
+  type PhotoBookImages,
+} from '../photoBookImages';
 import { PrintDamageTable } from './PrintDamageTable';
 import { PrintDefectList } from './PrintDefectList';
 import { PrintLocationMap } from './PrintLocationMap';
@@ -58,9 +63,10 @@ function pageRule(kind: PrintKind): string {
 type Loaded = {
   source: ExportSource;
   run: ExportRun;
-  photoUrls: Record<string, string>;
+  /** 셀 키 → 이미지(자르기·주석·회전이 구워진 합성본 또는 원본 폴백) */
+  photoImages: PhotoBookImages | null;
   maps: LocationMapPage[];
-  /** 사진첩 페이지 — `photoUrls` 와 **같은 계산 결과**여야 한다(검수 보통 2). 여기서 한 번만 만든다 */
+  /** 사진첩 페이지 — `photoImages` 와 **같은 계산 결과**여야 한다(검수 보통 2). 여기서 한 번만 만든다 */
   bookPages: PhotoBookPage[];
 };
 
@@ -98,6 +104,8 @@ export function PrintRoute({
     const repo = storage.repo;
     let alive = true;
     let created: LocationMapPage[] = [];
+    /** 우리가 만든 사진 합성본 objectURL — `locationMap` 과 **같은 해제 규약**이다 */
+    let createdPhotos: PhotoBookImages | null = null;
 
     // ⭐ 새 kind/run 을 부르기 전에 **옛 data 를 먼저 버린다.** 안 그러면 `kind` 만 먼저 바뀌고
     //    `data` 는 옛 값이 남아 새 kind 브랜치가 옛 데이터로 렌더된다
@@ -120,7 +128,7 @@ export function PrintRoute({
         const source: ExportSource = { bundle, settings: settings as ItemSettings };
         const plan = planFromRun(source, run);
 
-        let photoUrls: Record<string, string> = {};
+        let photoImages: PhotoBookImages | null = null;
         let maps: LocationMapPage[] = [];
         let bookPages: PhotoBookPage[] = [];
 
@@ -129,8 +137,15 @@ export function PrintRoute({
           //    `primaryOf()`(읽기 정규화)는 대표가 0장인 저장 상태에서 **첫 장을 대표로 선출**하는데,
           //    원본 플래그를 그대로 필터하면 그 칸의 URL 이 없어 빈 칸이 인쇄된다(검수 보통 2).
           //    `photo.ts` 가 "각자 find(isPrimary) 하지 않는다"고 못박은 바로 그 규칙이다.
-          bookPages = photoBookModel(source, plan);
-          photoUrls = await loadPhotoUrls(repo, projectId, bookPages);
+          // ⭐ `run.params` 를 넘긴다 — 대표 외 사진(§2-8)·사진번호 숨김(F-4)이
+          //    **이력에 저장된 값 그대로** 재현된다.
+          bookPages = photoBookModel(source, plan, run.params);
+          // ⭐ 자르기·주석은 **미리보기와 같은 `composePhoto`** 로 굽는다 (§2-2)
+          photoImages = await renderPhotoBookImages({
+            pages: bookPages,
+            objectUrl: (key) => repo.objectUrl(key, projectId),
+          });
+          createdPhotos = photoImages;
         } else if (kind === 'LOCATION_MAP') {
           const r = await renderLocationMaps({
             project: bundle.project,
@@ -151,9 +166,10 @@ export function PrintRoute({
 
         if (!alive) {
           releaseLocationMaps(created);
+          releasePhotoBookImages(createdPhotos);
           return;
         }
-        setData({ source, run, photoUrls, maps, bookPages });
+        setData({ source, run, photoImages, maps, bookPages });
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : String(e));
       }
@@ -161,8 +177,10 @@ export function PrintRoute({
 
     return () => {
       alive = false;
-      // 조사위치도 PNG 의 objectURL 만 우리가 만들었다. 사진·도면 URL 은 repo 캐시 소유다
+      // 조사위치도 PNG 와 사진 합성본의 objectURL 만 우리가 만들었다.
+      // 원본 사진·도면 URL 은 repo 캐시 소유라 건드리지 않는다
       releaseLocationMaps(created);
+      releasePhotoBookImages(createdPhotos);
     };
   }, [storage, projectId, runId, kind]);
 
@@ -236,7 +254,7 @@ export function PrintRoute({
       )}
       {data && kind === 'DEFECT_LIST' && listModel && <PrintDefectList model={listModel} />}
       {data && kind === 'PHOTO_BOOK' && (
-        <PrintPhotoBook pages={data.bookPages} urls={data.photoUrls} />
+        <PrintPhotoBook pages={data.bookPages} images={data.photoImages?.byCell ?? {}} />
       )}
       {data && kind === 'LOCATION_MAP' && <PrintLocationMap pages={data.maps} />}
     </div>
@@ -247,28 +265,6 @@ export function PrintRoute({
 function displayNumbersOf(run: ExportRun): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [id, m] of Object.entries(run.mapping)) out[id] = String(m.no);
-  return out;
-}
-
-/**
- * 사진첩이 **실제로 그릴 칸**의 Blob 키만 objectURL 로 바꾼다.
- *
- * ⚠️ `photos` 를 다시 훑어 `isPrimary` 를 필터하지 않는다 — `buildPhotoBook` 은
- * `primaryOf()`(읽기 정규화)를 쓰므로 대표가 0장인 저장 상태에서 **첫 장을 대표로 선출**한다.
- * 두 경로가 갈리면 그 칸만 조용히 빈 채로 인쇄된다(검수 보통 2 · `photo.ts` 의 금지 조항).
- */
-async function loadPhotoUrls(
-  repo: { objectUrl: (key: string, projectId: string) => Promise<string | null> },
-  projectId: string,
-  pages: readonly PhotoBookPage[],
-): Promise<Record<string, string>> {
-  const keys = new Set<string>();
-  for (const p of pages) for (const c of p.cells) keys.add(c.renderBlobKey);
-  const out: Record<string, string> = {};
-  for (const key of keys) {
-    const u = await repo.objectUrl(key, projectId);
-    if (u) out[key] = u;
-  }
   return out;
 }
 
