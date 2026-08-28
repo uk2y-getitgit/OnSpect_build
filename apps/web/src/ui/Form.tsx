@@ -113,17 +113,26 @@ export function Modal({
     onCloseRef.current = onClose;
   });
 
-  // B1-b — 초기 포커스는 **마운트 1회**로 고정한다. 그리고 문서 순서 첫 요소(헤더의 ✕)가 아니라
+  // B1-b — 초기 포커스는 **딱 1회**다. 그리고 문서 순서 첫 요소(헤더의 ✕)가 아니라
   // **본문(.modal__scroll)의 첫 입력**을 잡는다. 둘 중 하나라도 어기면 타이핑 중 포커스가 튄다.
+  //
+  // ⭐ "1회"를 **의존성 배열이 아니라 ref 로** 보장한다. 본문을 비동기로 불러오는 모달
+  //    (`ProjectForm`·`DrawingUpload` — 마운트 시 본문이 `불러오는 중…` 뿐이다)은 마운트 시점에
+  //    잡을 입력칸이 없다. 의존 `[]` 로 두면 그때 한 번 실패하고 끝나 영영 포커스가 안 간다.
+  //    매 렌더 확인하되 실제 포커스는 성공한 그 한 번뿐이므로 B1(포커스 뺏김)은 재발하지 않는다.
+  const focusedRef = useRef(false);
   useEffect(() => {
+    if (focusedRef.current) return;
     const el = ref.current;
     if (!el) return;
     const scope = el.querySelector<HTMLElement>('.modal__scroll') ?? el;
-    const first =
-      scope.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
-      el.querySelector<HTMLElement>(MODAL_FOCUSABLE);
-    first?.focus();
-  }, []);
+    const first = scope.querySelector<HTMLElement>(MODAL_FOCUSABLE);
+    // 본문에 입력칸이 아직 없다 — **아무 데도 포커스하지 않고** 다음 렌더에 다시 본다.
+    // (footer 의 `취소` 로 폴백하느니 안 잡는 편이 낫다)
+    if (!first) return;
+    focusedRef.current = true;
+    first.focus();
+  });
 
   useEffect(() => {
     const el = ref.current;

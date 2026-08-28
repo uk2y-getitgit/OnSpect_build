@@ -86,6 +86,13 @@ export function PrintRoute({
     let alive = true;
     let created: LocationMapPage[] = [];
 
+    // ⭐ 새 kind/run 을 부르기 전에 **옛 data 를 먼저 버린다.** 안 그러면 `kind` 만 먼저 바뀌고
+    //    `data` 는 옛 값이 남아 새 kind 브랜치가 옛 데이터로 렌더된다
+    //    (예: DEFECT_LIST→PHOTO_BOOK 이면 `bookPages=[]`). 아래 `ready` 이펙트가 이 `null` 을 받아
+    //    인쇄 버튼을 닫으므로 빈 문서 인쇄가 막힌다.
+    setData(null);
+    setError(null);
+
     void (async () => {
       try {
         const [bundle, settings, run] = await Promise.all([
@@ -158,10 +165,10 @@ export function PrintRoute({
   //    단 `waitForImages` 는 남긴다: 원래 방어("빈 칸이 인쇄된다")를 잃지 않으려면
   //    디코드가 끝나기 전에는 버튼을 disabled 로 둬야 한다.
   useEffect(() => {
-    if (!data) {
-      setReady(false);
-      return;
-    }
+    // ⭐ `setReady(false)` 는 가드보다 **위**에 있어야 한다. `data` 가 A→B 로 교체되는 경로에서도
+    //    버튼을 다시 닫아야 새 데이터의 이미지 디코드 전에 인쇄가 열리지 않는다.
+    setReady(false);
+    if (!data) return;
     const root = rootRef.current;
     if (!root) return;
     let cancelled = false;
