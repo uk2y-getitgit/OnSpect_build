@@ -9,7 +9,7 @@
  * 롱프레스 대신 **우클릭**을 쓴다(기획서 §2-C 가 명시적으로 허용).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type Photo } from '@onspect/project-core';
+import { hasPhotoEdits, type Photo } from '@onspect/project-core';
 import type { RejectedPhoto } from '../../data/photoIngest';
 import { MAX_PHOTOS_PER_PICK, PHOTO_ACCEPT_ATTR } from '../../data/photoIngest';
 import { PhotoPreviewDialog } from './PhotoPreviewDialog';
@@ -31,6 +31,8 @@ export type PhotoSectionProps = {
   onReplace: (photoId: string, file: File) => void;
   onRemove: (photoId: string) => void;
   onReorder: (ids: string[]) => void;
+  /** 사진첩 캡션 수동 덮어쓰기 (§2-5). 빈 값이면 `null` 이 온다 */
+  onCaptionChange: (photoId: string, caption: string | null) => void;
 };
 
 type MenuState = { photoId: string; x: number; y: number } | null;
@@ -51,6 +53,7 @@ export function PhotoSection(props: PhotoSectionProps) {
     onReplace,
     onRemove,
     onReorder,
+    onCaptionChange,
   } = props;
 
   const addInputRef = useRef<HTMLInputElement | null>(null);
@@ -222,6 +225,12 @@ export function PhotoSection(props: PhotoSectionProps) {
                     )}
                   </button>
                   {p.isPrimary && <span className="photoTile__badge">대표</span>}
+                  {/* R1 — 썸네일은 합성하지 않는다. 편집 여부만 알리고 합성본은 큰 창에서 본다 */}
+                  {hasPhotoEdits(p) && (
+                    <span className="photoTile__edited" title="자르기·주석이 적용된 사진입니다">
+                      ✎
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="photoTile__more"
@@ -299,6 +308,7 @@ export function PhotoSection(props: PhotoSectionProps) {
             onRemove(preview.id);
             setPreviewId(null);
           }}
+          onCaptionChange={onCaptionChange}
           onClose={() => setPreviewId(null)}
         />
       )}

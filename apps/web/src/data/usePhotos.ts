@@ -16,8 +16,13 @@ import {
   removePhoto as removeFromList,
   reorderPhotos as reorderList,
   rotatePhoto,
+  setPhotoAnnotations,
+  setPhotoCaption,
+  setPhotoCrop,
   setPrimary as setPrimaryInList,
   type Photo,
+  type PhotoAnnotation,
+  type PhotoEdits,
 } from '@onspect/project-core';
 import { useAppData } from './appData.js';
 import {
@@ -56,6 +61,16 @@ export type PhotoOps = {
   rotate: (photoId: string, deltaDeg: number) => void;
   remove: (photoId: string) => void;
   reorder: (defectId: string, ids: readonly string[]) => void;
+
+  // ── 비파괴 보정 (PhotoPolish §2-3 · §2-4 · §2-5) ─────────────────────────
+  // 셋 다 `project-core` 의 순수 setter 를 그대로 통과시킨다. 좌표 규약(렌더 프레임 정규화)은
+  // **편집기가 저장 직전에 이미 되돌려 놓고** 넘긴다 — 여기서 변환하지 않는다.
+  /** 사진첩 캡션 수동 덮어쓰기. 빈 문자열은 setter 가 `null` 로 정규화한다 */
+  setCaption: (photoId: string, caption: string | null) => void;
+  /** 자르기 지정·해제 (렌더 프레임 0~1 정규화) */
+  setCrop: (photoId: string, crop: PhotoEdits['crop']) => void;
+  /** 주석 통째 교체 (렌더 프레임 0~1 정규화) */
+  setAnnotations: (photoId: string, annotations: readonly PhotoAnnotation[]) => void;
 };
 
 export function usePhotos(
@@ -273,16 +288,48 @@ export function usePhotos(
     [applyList, photosOf],
   );
 
-  const rotate = useCallback(
-    (photoId: string, deltaDeg: number) => {
+  /**
+   * 사진 1장을 순수 setter 로 갈아끼운다. **바뀐 것이 없으면 아무 일도 하지 않는다** —
+   * `project-core` 의 setter 가 같은 객체를 돌려주므로 불필요한 저장·리렌더가 생기지 않는다.
+   */
+  const editOne = useCallback(
+    (photoId: string, fn: (p: Photo) => Photo) => {
       const target = photosRef.current.find((p) => p.id === photoId);
       if (!target) return;
-      const next = rotatePhoto(target, deltaDeg);
+      const next = fn(target);
       if (next === target) return;
       persist([next]);
       setPhotos((cur) => cur.map((p) => (p.id === photoId ? next : p)));
     },
     [persist],
+  );
+
+  const rotate = useCallback(
+    (photoId: string, deltaDeg: number) => {
+      editOne(photoId, (p) => rotatePhoto(p, deltaDeg));
+    },
+    [editOne],
+  );
+
+  const setCaption = useCallback(
+    (photoId: string, caption: string | null) => {
+      editOne(photoId, (p) => setPhotoCaption(p, caption));
+    },
+    [editOne],
+  );
+
+  const setCrop = useCallback(
+    (photoId: string, crop: PhotoEdits['crop']) => {
+      editOne(photoId, (p) => setPhotoCrop(p, crop));
+    },
+    [editOne],
+  );
+
+  const setAnnotations = useCallback(
+    (photoId: string, annotations: readonly PhotoAnnotation[]) => {
+      editOne(photoId, (p) => setPhotoAnnotations(p, annotations));
+    },
+    [editOne],
   );
 
   const reorder = useCallback(
@@ -344,5 +391,8 @@ export function usePhotos(
     rotate,
     remove,
     reorder,
+    setCaption,
+    setCrop,
+    setAnnotations,
   };
 }

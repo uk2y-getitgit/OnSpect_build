@@ -832,6 +832,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
                 onReplace={(photoId, file) => void photoOps.replaceFile(photoId, file)}
                 onRemove={photoOps.remove}
                 onReorder={(ids) => photoOps.reorder(selected.id, ids)}
+                onCaptionChange={photoOps.setCaption}
               />
             ) : null
           }

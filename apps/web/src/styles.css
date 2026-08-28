@@ -3397,6 +3397,60 @@ select.input { cursor: pointer; }
   .photoView__nav:not(:disabled):hover { background: rgba(255, 255, 255, 0.24); }
 }
 
+/* 합성 중 표시 — 원본이 먼저 보이고 끝나면 바뀐다 (§2-2) */
+.photoView__busy {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(20, 25, 33, 0.72);
+  color: #e8ecf2;
+  font-size: 11.5px;
+}
+
+/* ── 캡션 + 촬영정보 (PhotoPolish §2-5) ──────────────────────────────── */
+.photoView__caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-2);
+}
+
+.photoView__capLabel {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.photoView__capInput {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.photoView__capInput:disabled {
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+
+.photoView__shot {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .photoView__actions {
   display: flex;
   flex-wrap: wrap;
@@ -3407,6 +3461,20 @@ select.input { cursor: pointer; }
 }
 
 .photoView__spacer { flex: 1; }
+
+/* 자르기·주석이 있는 타일 배지 (R1) */
+.photoTile__edited {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(20, 25, 33, 0.7);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  pointer-events: none;
+}
 
 /* Q33 · K3 — 1차 범위 밖. 자리만 잡아 둔다 */
 .tag--soon {
