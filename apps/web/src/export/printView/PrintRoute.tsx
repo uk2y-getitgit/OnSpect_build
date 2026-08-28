@@ -23,23 +23,36 @@ import {
 } from '@onspect/project-core';
 import { useAppData } from '../../data/appData';
 import type { PrintKind } from '../../router';
-import { defectListModel, photoBookModel, planFromRun, type ExportSource } from '../exportModel';
+import {
+  damageTableModel,
+  defectListModel,
+  photoBookModel,
+  planFromRun,
+  type ExportSource,
+} from '../exportModel';
 import { releaseLocationMaps, renderLocationMaps, type LocationMapPage } from '../locationMap';
+import { PrintDamageTable } from './PrintDamageTable';
 import { PrintDefectList } from './PrintDefectList';
 import { PrintLocationMap } from './PrintLocationMap';
 import { PrintPhotoBook } from './PrintPhotoBook';
 import './print.css';
 
 const KIND_TO_ARTIFACT: Record<PrintKind, keyof typeof ARTIFACT_LABEL> = {
+  DAMAGE_TABLE: 'DAMAGE_TABLE',
   DEFECT_LIST: 'DEFECT_LIST',
   PHOTO_BOOK: 'PHOTO_BOOK',
   LOCATION_MAP: 'LOCATION_MAP',
 };
 
-/** 조사위치도만 가로. 나머지는 세로 (§4-9) */
+/**
+ * 조사위치도와 **손상결함표**만 가로. 나머지는 세로 (§4-9 · PhotoPolish §2-9).
+ *
+ * 손상결함표는 13열이고 열폭 합이 128 문자다. 세로 186mm 에 넣으면
+ * `결함의 유형 및 형상`(18) 이 26mm 라 두 줄로 깨진다.
+ */
 function pageRule(kind: PrintKind): string {
-  const orientation = kind === 'LOCATION_MAP' ? 'landscape' : 'portrait';
-  return `@page { size: A4 ${orientation}; margin: 12mm; }`;
+  const landscape = kind === 'LOCATION_MAP' || kind === 'DAMAGE_TABLE';
+  return `@page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: 12mm; }`;
 }
 
 type Loaded = {
@@ -158,6 +171,15 @@ export function PrintRoute({
     return defectListModel(data.source, planFromRun(data.source, data.run), data.run.params);
   }, [data, kind]);
 
+  /**
+   * 손상결함표 — **엑셀과 문자 그대로 같은 함수**(`buildDamageTable`)를 쓴다.
+   * `run.params.doc.headerLine2` 도 run 에서 나오므로 머리말까지 재현된다 (§2-9).
+   */
+  const tableModel = useMemo(() => {
+    if (!data || kind !== 'DAMAGE_TABLE') return null;
+    return damageTableModel(data.source, planFromRun(data.source, data.run), data.run.params);
+  }, [data, kind]);
+
 
   // 렌더가 끝나고 **모든 이미지가 디코드되면** 인쇄 버튼을 연다.
   // ⭐ 여기서 `window.print()` 를 부르지 않는다 (F-2 · 스펙 §2-3) — 이 화면은 **미리보기**다.
@@ -208,6 +230,10 @@ export function PrintRoute({
       {error && <p className="pv-status pv-status--error">{error}</p>}
       {!error && !data && <p className="pv-status">문서를 만드는 중…</p>}
 
+      {data && kind === 'DAMAGE_TABLE' && tableModel && (
+        // ⚠️ `groupHeader`·`legend` 는 **여기서만 켠다** — 결함 리스트에 조용히 새면 안 된다
+        <PrintDamageTable model={tableModel} subtitle="손상결함표" groupHeader legend />
+      )}
       {data && kind === 'DEFECT_LIST' && listModel && <PrintDefectList model={listModel} />}
       {data && kind === 'PHOTO_BOOK' && (
         <PrintPhotoBook pages={data.bookPages} urls={data.photoUrls} />

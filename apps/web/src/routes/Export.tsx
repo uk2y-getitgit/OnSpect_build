@@ -66,7 +66,9 @@ const REPEAT_ROW_NOTICE =
 
 /** 산출물별 안내 — 무엇이 파일로 나오고 무엇이 인쇄 뷰인지 (M3 · K1) */
 const KIND_HINT: Record<ExportArtifactKind, string> = {
-  DAMAGE_TABLE: `엑셀 파일로 내려받습니다 (13열 · 층 섹션 · 원인 범례). ${REPEAT_ROW_NOTICE}`,
+  DAMAGE_TABLE:
+    `엑셀 파일로 내려받습니다 (13열 · 층 섹션 · 원인 범례). ` +
+    `PDF 는 아래 이력에서 [손상결함표 PDF] (A4 가로). ${REPEAT_ROW_NOTICE}`,
   DEFECT_LIST: '엑셀 파일로 내려받습니다 (9열 축약). PDF 는 아래 이력에서 [PDF로 인쇄]',
   PHOTO_BOOK: '파일이 아니라 인쇄 뷰로 냅니다 — 생성 후 [사진첩 PDF] 를 누르세요',
   LOCATION_MAP: '층마다 PNG 1장을 내려받습니다',

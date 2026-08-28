@@ -27,10 +27,19 @@ export type Route =
    */
   | { name: 'EXPORT_PRINT'; projectId: string; runId: string; kind: PrintKind };
 
-/** 인쇄 뷰가 낼 수 있는 산출물. 손상결함표는 엑셀 전용이라 여기 없다 */
-export type PrintKind = 'DEFECT_LIST' | 'PHOTO_BOOK' | 'LOCATION_MAP';
+/**
+ * 인쇄 뷰가 낼 수 있는 산출물.
+ * 손상결함표는 엑셀 전용이었으나 PhotoPolish §2-9 로 **인쇄 뷰가 생겼다**(A4 가로).
+ * ⚠️ **기본값은 `DEFECT_LIST` 그대로다** — 옛 링크(`kind` 없음)의 동작이 바뀌면 안 된다.
+ */
+export type PrintKind = 'DAMAGE_TABLE' | 'DEFECT_LIST' | 'PHOTO_BOOK' | 'LOCATION_MAP';
 
-const PRINT_KINDS: readonly PrintKind[] = ['DEFECT_LIST', 'PHOTO_BOOK', 'LOCATION_MAP'];
+const PRINT_KINDS: readonly PrintKind[] = [
+  'DAMAGE_TABLE',
+  'DEFECT_LIST',
+  'PHOTO_BOOK',
+  'LOCATION_MAP',
+];
 
 function parsePrintKind(v: string | null): PrintKind {
   return PRINT_KINDS.includes(v as PrintKind) ? (v as PrintKind) : 'DEFECT_LIST';

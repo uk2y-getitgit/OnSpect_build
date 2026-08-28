@@ -35,7 +35,13 @@ export type RunHistoryProps = {
   onDelete: (run: ExportRun) => void;
 };
 
-const PRINTABLE: readonly ExportArtifactKind[] = ['DEFECT_LIST', 'PHOTO_BOOK', 'LOCATION_MAP'];
+/** 인쇄 뷰가 있는 산출물. 손상결함표는 PhotoPolish §2-9 로 추가됐다 (A4 가로) */
+const PRINTABLE: readonly ExportArtifactKind[] = [
+  'DAMAGE_TABLE',
+  'DEFECT_LIST',
+  'PHOTO_BOOK',
+  'LOCATION_MAP',
+];
 
 export function RunHistory({
   runs,
