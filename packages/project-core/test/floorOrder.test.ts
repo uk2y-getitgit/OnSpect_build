@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   assignSortOrder,
   changedOrders,
+  floorCodeOf,
+  floorCodesOf,
   floorsNeedingOrderCheck,
   parseFloorName,
   parsedSortOrder,
@@ -10,6 +12,7 @@ import {
   sortByOrder,
   type Ordered,
 } from '../src/floorOrder.js';
+import { FLOOR_CODE_MAX, normalizeFloorCode, SORT_EXTERIOR, SORT_ROOFTOP } from '../src/types.js';
 
 function f(id: string, name: string, sortOrder: number): Ordered {
   return { id, name, sortOrder };
@@ -165,5 +168,98 @@ describe('changedOrders', () => {
     const before = build(['지하1층', '1층']);
     const after = before.map((x) => (x.id === 'f1' ? { ...x, sortOrder: 99 } : x));
     expect(changedOrders(before, after).map((x) => x.id)).toEqual(['f1']);
+  });
+});
+
+/**
+ * D19 §5-5(b)(c) — 외부 층 파싱 + 출력 접두어 파생.
+ *
+ * ⚠️ 접두어는 **파생값**이다. 저장하지 않는다(불변식 #2).
+ */
+describe('EXTERIOR — D19 외부 층', () => {
+  it('외부 · 외곽 · 옥외 · 외벽 · EXT · EXTERIOR 를 옥탑보다 뒤로 읽는다', () => {
+    for (const s of ['외부', '외곽', '옥외', '외벽', 'EXT', 'EXTERIOR', '건물 외부', '외벽부']) {
+      expect(parseFloorName(s), s).toEqual({ kind: 'EXTERIOR', sortOrder: SORT_EXTERIOR });
+    }
+    expect(SORT_EXTERIOR).toBeGreaterThan(SORT_ROOFTOP);
+  });
+
+  it('`옥외` 를 옥상(ROOF)으로 오인하지 않는다', () => {
+    expect(parseFloorName('옥외').kind).toBe('EXTERIOR');
+    expect(parseFloorName('옥상').kind).toBe('ROOF');
+    expect(parseFloorName('옥탑').kind).toBe('ROOFTOP');
+  });
+
+  it('`W` 자체는 층 이름 패턴이 아니다 — 출력 코드일 뿐이다', () => {
+    expect(parseFloorName('W').kind).toBe('UNKNOWN');
+  });
+
+  it('PIT 이 여전히 먼저다 (외부 검사가 PIT 을 가로채지 않는다)', () => {
+    expect(parseFloorName('기계실피트').kind).toBe('PIT');
+  });
+});
+
+describe('floorCodeOf — D19 접두어 파생', () => {
+  it('이름에서 판다', () => {
+    expect(floorCodeOf({ name: '지상1층' })).toBe('1F');
+    expect(floorCodeOf({ name: '3층' })).toBe('3F');
+    expect(floorCodeOf({ name: '지하1층' })).toBe('B1F');
+    expect(floorCodeOf({ name: '외부' })).toBe('W');
+    expect(floorCodeOf({ name: '기계실피트' })).toBe('PIT');
+  });
+
+  it('옥상=RF · 옥탑=PH (국제 관례 + 사용자 예시 `RF-01`)', () => {
+    expect(floorCodeOf({ name: '옥상' })).toBe('RF');
+    expect(floorCodeOf({ name: '지붕층' })).toBe('RF');
+    expect(floorCodeOf({ name: '옥탑' })).toBe('PH');
+    // ⚠️ 파서는 문자열 `RF` 를 옥탑으로 읽는다 → 코드는 PH 다. 헷갈리면 직접 입력하면 된다
+    expect(floorCodeOf({ name: 'RF' })).toBe('PH');
+  });
+
+  it('파싱 실패면 접두어가 없다 (번호만 나간다)', () => {
+    expect(floorCodeOf({ name: '중간층' })).toBeNull();
+    expect(floorCodeOf({ name: '' })).toBeNull();
+  });
+
+  it('직접 입력한 code 가 이름 파생을 이긴다', () => {
+    expect(floorCodeOf({ name: '지상1층', code: 'w' })).toBe('W');
+    expect(floorCodeOf({ name: '중간층', code: 'M1' })).toBe('M1');
+  });
+
+  it('빈 code 는 없는 것과 같다', () => {
+    expect(floorCodeOf({ name: '지상2층', code: '' })).toBe('2F');
+    expect(floorCodeOf({ name: '지상2층', code: '   ' })).toBe('2F');
+    expect(floorCodeOf({ name: '지상2층', code: null })).toBe('2F');
+  });
+});
+
+describe('normalizeFloorCode — 공백 제거 · 대문자 · 최대 6자', () => {
+  it('빈 값은 null (자동 파생)', () => {
+    expect(normalizeFloorCode('')).toBeNull();
+    expect(normalizeFloorCode('   ')).toBeNull();
+    expect(normalizeFloorCode(null)).toBeNull();
+    expect(normalizeFloorCode(undefined)).toBeNull();
+  });
+
+  it('공백을 지우고 대문자로 올린다', () => {
+    expect(normalizeFloorCode(' b1 f ')).toBe('B1F');
+  });
+
+  it('6자를 넘으면 자른다', () => {
+    expect(normalizeFloorCode('ABCDEFGH')).toBe('ABCDEF');
+    expect(FLOOR_CODE_MAX).toBe(6);
+  });
+});
+
+describe('floorCodesOf — 출력 스냅샷 맵', () => {
+  it('층 id → 접두어. 파생 실패는 null 로 남긴다', () => {
+    expect(
+      floorCodesOf([
+        { id: 'a', name: '지하1층' },
+        { id: 'b', name: '지상1층', code: null },
+        { id: 'c', name: '중간층' },
+        { id: 'd', name: '외부' },
+      ]),
+    ).toEqual({ a: 'B1F', b: '1F', c: null, d: 'W' });
   });
 });

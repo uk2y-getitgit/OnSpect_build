@@ -141,6 +141,35 @@ describe('damageRow — 셀 값 규칙 (§3-4)', () => {
     expect(t.sections[0]!.rows[0]!.cells.no).toBe(93);
     expect(t.sections[0]!.rows[0]!.cells.photoNo).toBe(92);
   });
+
+  /** D19 §5-5 — 접두어는 **표기**만 바꾼다. `NumberingRow.no` 는 여전히 정수다 */
+  it('floorCodes 가 있으면 NO 열이 `B1F-01` 로 나간다', () => {
+    const t = buildDamageTable(input({ rows: [row('a', 1, 1)], floorCodes: { f1: 'B1F' } }));
+    const r = t.sections[0]!.rows[0]!;
+    expect(r.cells.no).toBe('B1F-01');
+    expect(r.text.no).toBe('B1F-01');
+  });
+
+  it('그 층에 접두어가 없으면(=null) 정수 그대로 — 기존 출력물 무변경', () => {
+    const t = buildDamageTable(input({ rows: [row('a', 7, 1)], floorCodes: { f1: null } }));
+    expect(t.sections[0]!.rows[0]!.cells.no).toBe(7);
+    expect(t.sections[0]!.rows[0]!.text.no).toBe('7');
+  });
+
+  it('층마다 다른 접두어가 붙는다', () => {
+    const t = buildDamageTable(
+      input({
+        rows: [row('a', 1, 1, 'f1'), row('b', 1, 2, 'f2')],
+        defects: [def('a'), def('b')],
+        floors: [
+          { id: 'f1', name: '지하1층', buildingId: 'b1' },
+          { id: 'f2', name: '지상1층', buildingId: 'b1' },
+        ],
+        floorCodes: { f1: 'B1F', f2: '1F' },
+      }),
+    );
+    expect(t.sections.map((s) => s.rows[0]!.text.no)).toEqual(['B1F-01', '1F-01']);
+  });
 });
 
 describe('위치 열 (K17)', () => {

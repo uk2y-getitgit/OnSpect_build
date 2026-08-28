@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ARTIFACT_LABEL,
   DEFAULT_EXPORT_PARAMS,
+  floorCodeOf,
+  floorCodesOf,
   projectDisplayName,
   type ExportArtifactKind,
   type ExportParams,
@@ -118,7 +120,14 @@ export function Export({ projectId }: { projectId: string }) {
         initialized.current = true;
         // 처음 열 때는 **지하→지상** 순서로 전부 선택해 둔다.
         // 누른 순서가 출력 순서라는 규칙(§4-4)은 그대로다 — 이건 그 시작값일 뿐이다
-        setParams(DEFAULT_EXPORT_PARAMS(defaultFloorOrder(b)));
+        const base = DEFAULT_EXPORT_PARAMS(defaultFloorOrder(b));
+        // ⭐ D19 · 가정 U13 — 층 접두어가 하나라도 있으면 번호모드를 `PER_FLOOR` 로 **제안**한다.
+        //    접두어(`1F-01`)는 층 안에서 1부터 세는 번호를 전제로 한다. 전체연속이면
+        //    `1F-01 … 1F-12 · 2F-13` 이 되어 접두어가 뜻을 잃는다.
+        //    **강제가 아니다** — 사용자가 아래 옵션에서 다시 `전체 이어서` 로 바꿀 수 있다
+        setParams(
+          b.floors.some((f) => floorCodeOf(f) !== null) ? { ...base, mode: 'PER_FLOOR' } : base,
+        );
       }
       setLoading(false);
     })();
@@ -178,7 +187,12 @@ export function Export({ projectId }: { projectId: string }) {
       const repo = storage.repo;
       const at = Date.now();
 
-      const useParams = opts.existing ? opts.existing.params : params;
+      // ⭐ D19 — 새 출력이면 **지금 층 접두어를 스냅샷으로 굳혀** 이력에 넣는다.
+      //    나중에 층 이름을 고쳐도 `[같은 번호로 다시 받기]` 가 그때 그 접두어를 재현한다.
+      //    옛 이력은 `floorCodes` 가 없고, 그때는 호출부가 현재 층에서 파생한다(`floorCodesFor`)
+      const useParams = opts.existing
+        ? opts.existing.params
+        : { ...params, floorCodes: floorCodesOf(source.bundle.floors) };
       const usePlan = opts.existing ? planFromRun(source, opts.existing) : plan;
       const useKinds = opts.existing
         ? new Set(

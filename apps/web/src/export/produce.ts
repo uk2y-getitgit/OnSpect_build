@@ -16,7 +16,14 @@ import {
 } from '@onspect/project-core';
 import { damageTableSheet } from './damageTableFile';
 import { buildFileName, type DownloadItem } from './download';
-import { damageTableModel, defectListModel, type ExportPlan, type ExportSource } from './exportModel';
+import {
+  damageTableModel,
+  defectListModel,
+  displayNumbersOf,
+  floorCodesFor,
+  type ExportPlan,
+  type ExportSource,
+} from './exportModel';
 import {
   releaseLocationMaps,
   renderLocationMaps,
@@ -110,7 +117,9 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
       memos: bundle.memos,
       floors: bundle.floors,
       floorIds: input.params.floorIds,
-      displayNumbers: displayNumbersOf(input.plan),
+      // D19 — 도면 위 번호 풍선도 접두어를 그대로 쓴다(`1F-01`).
+      // 스냅샷(`params.floorCodes`)이 있으면 그것이 진실이다 — 재출력 재현성
+      displayNumbers: displayNumbersOf(input.plan, floorCodesFor(input.source, input.params)),
       includedDefectIds: new Set(input.plan.rows.map((x) => x.defectId)),
       params: input.params,
       objectUrl: (key) => input.repo.objectUrl(key, input.projectId),
@@ -135,11 +144,4 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
   }
 
   return { items, artifacts, mapWarnings, csvFallback };
-}
-
-/** 결함 id → 출력 결함번호 문자열. 조사위치도가 `seq` 대신 이것을 그린다 (B1 주입 지점) */
-export function displayNumbersOf(plan: ExportPlan): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const r of plan.rows) out[r.defectId] = String(r.no);
-  return out;
 }

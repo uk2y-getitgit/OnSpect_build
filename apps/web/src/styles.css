@@ -2102,6 +2102,21 @@ select.input { cursor: pointer; }
 .frow__name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /*
+ * D19 — 층 접두어(`1F` · `B1F` · `W`). 층 이름 옆의 **작은** 칸이다.
+ * 비워 두면 이름에서 딴 값이 placeholder 로 흐리게 보인다 — 그게 실제로 나갈 값이다.
+ */
+.frow__code {
+  width: 6.5ch;
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  font-size: 12px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.frow__code::placeholder { color: var(--text-dim); opacity: 0.7; text-transform: none; }
+
+/*
  * ⚠️ `flex: 1` + `justify-content: flex-end` 를 걷어냈다.
  * 그 조합이 도면 썸네일·이름·해상도를 화면 오른쪽 끝으로 몰아붙이던 원인이다 (R-1).
  * 이제 층 이름 칸 바로 옆에 붙고, 남는 폭은 행의 마지막 그리드 칸이 흡수한다.

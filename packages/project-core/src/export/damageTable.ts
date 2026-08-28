@@ -17,7 +17,7 @@
 import { outputSize, type SizeInput } from '../items/size.js';
 import type { CauseMaster, Structural } from '../items/types.js';
 import { STRUCTURAL_LABEL } from '../items/types.js';
-import type { NumberingRow } from './numbering.js';
+import { formatDefectNo, type NumberingRow } from './numbering.js';
 
 // ── 열 정의 ────────────────────────────────────────────────────────────────
 export type DamageColumnKey =
@@ -124,6 +124,11 @@ export type DamageTableInput = {
   headerLine2: string;
   /** 기본 = 손상결함표 13열. 결함 리스트는 `DEFECT_LIST_COLUMNS` 를 넣는다 */
   columns?: readonly DamageColumnKey[];
+  /**
+   * D19 — 층 접두어 스냅샷 (`ExportParams.floorCodes`). 없거나 그 층 값이 `null` 이면
+   * NO 열은 지금까지처럼 **정수 그대로** 나간다.
+   */
+  floorCodes?: Record<string, string | null>;
 };
 
 // ── 행 ─────────────────────────────────────────────────────────────────────
@@ -181,15 +186,22 @@ export function damageRow(
     memberStructural: (memberId: string | null) => Structural | null;
     /** 발생원인 코드 조회 (F6) */
     causeCode: (causeId: string | null) => number | null;
+    /**
+     * D19 — 이 결함이 속한 층의 출력 접두어. `null`/생략이면 NO 열은 **정수 그대로**다.
+     * ⚠️ 접두어가 있으면 셀 값이 **문자열**(`'1F-01'`)이 된다 — 엑셀도 그대로 문자열로 쓴다.
+     *    저장되는 번호(`ExportRun.mapping`)는 여전히 정수다(불변식 #2).
+     */
+    floorCode?: string | null;
   },
 ): DamageRow {
   const size = outputSize(d);
 
   const structural = d.structural ?? ctx.memberStructural(d.memberId);
   const code = ctx.causeCode(d.causeId);
+  const floorCode = ctx.floorCode ?? null;
 
   const cells: Record<DamageColumnKey, DamageCellValue> = {
-    no: row.no,
+    no: floorCode === null || floorCode === '' ? row.no : formatDefectNo(row.no, floorCode),
     location: ctx.location,
     member: d.memberName ?? '',
     structural: structural === null ? '' : STRUCTURAL_LABEL[structural],
@@ -302,6 +314,7 @@ export function buildDamageTable(input: DamageTableInput): DamageTableModel {
         location: locations[d.id] ?? '',
         memberStructural,
         causeCode,
+        floorCode: input.floorCodes?.[r.floorId] ?? null,
       }),
     );
     rowCount += 1;

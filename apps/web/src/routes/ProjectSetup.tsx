@@ -12,7 +12,10 @@ import {
   A4_LANDSCAPE,
   calcFitRect,
   changedOrders,
+  floorCodeOf,
   floorsNeedingOrderCheck,
+  FLOOR_CODE_MAX,
+  normalizeFloorCode,
   normalizeName,
   projectDisplayName,
   reorder,
@@ -280,6 +283,21 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
       const nextAll = floors.map((f) => (f.id === id ? { ...f, name: normalizeName(raw) } : f));
       saveFloors(nextAll.filter((f) => f.id === id), nextAll);
       return true;
+    },
+    [floors, saveFloors],
+  );
+
+  /**
+   * D19 — 층 접두어(`1F` · `B1F` · `W`). 비워 두면 이름에서 자동 파생한다(`floorCodeOf`).
+   * **좌표·순서에는 아무 영향이 없다** — 출력 결함번호 표기에만 쓰인다.
+   */
+  const setFloorCode = useCallback(
+    (id: string, raw: string) => {
+      const code = normalizeFloorCode(raw);
+      const cur = floors.find((f) => f.id === id);
+      if (!cur || (cur.code ?? null) === code) return;
+      const next: Floor = { ...cur, code, updatedAt: Date.now() };
+      saveFloors([next], floors.map((f) => (f.id === id ? next : f)));
     },
     [floors, saveFloors],
   );
@@ -821,6 +839,7 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
                             결함 <span className="num">{nDefect}</span>
                           </span>
                         )}
+                        <FloorCodeInput floor={f} onCommit={setFloorCode} />
                       </div>
 
                       <div className="frow__drawing">
@@ -1208,6 +1227,58 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
 }
 
 // ── 부품 ───────────────────────────────────────────────────────────────────
+
+/**
+ * D19 — 층 접두어 입력칸.
+ *
+ * 비워 두면 **이름에서 자동 파생한 값을 회색 placeholder 로** 보여준다 —
+ * 사용자가 아무것도 안 해도 `1F` 가 나온다는 것을 여기서 알 수 있어야 한다.
+ * 저장은 `blur`/`Enter` 에서 한 번만 한다(글자마다 IndexedDB 를 때리지 않는다).
+ */
+function FloorCodeInput({
+  floor,
+  onCommit,
+}: {
+  floor: Floor;
+  onCommit: (id: string, raw: string) => void;
+}) {
+  const saved = floor.code ?? null;
+  const [value, setValue] = useState(saved ?? '');
+  const lastSaved = useRef(saved);
+
+  // 다른 경로(재로드 · 이름 변경)로 값이 바뀌면 편집 중이 아닐 때만 따라간다
+  if (lastSaved.current !== saved) {
+    lastSaved.current = saved;
+    if ((normalizeFloorCode(value) ?? '') !== (saved ?? '')) setValue(saved ?? '');
+  }
+
+  const auto = floorCodeOf({ name: floor.name, code: null });
+
+  return (
+    <input
+      className="input frow__code"
+      type="text"
+      value={value}
+      maxLength={FLOOR_CODE_MAX}
+      placeholder={auto ?? '접두어'}
+      aria-label={`${floor.name} 출력 접두어`}
+      title={
+        auto === null
+          ? '출력 결함번호 접두어입니다. 비우면 접두어 없이 번호만 나갑니다'
+          : `출력 결함번호 접두어입니다. 비우면 이름에서 딴 ${auto} 를 씁니다 (${auto}-01)`
+      }
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(floor.id, value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+        if (e.key === 'Escape') {
+          setValue(saved ?? '');
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
+}
 
 function InlineEdit({
   value,

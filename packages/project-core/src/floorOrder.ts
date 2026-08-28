@@ -13,6 +13,7 @@
 import {
   BUILDING_STEP,
   FLOOR_STEP,
+  SORT_EXTERIOR,
   SORT_PIT,
   SORT_ROOF,
   SORT_ROOFTOP,
@@ -24,6 +25,8 @@ export type FloorParse =
   | { kind: 'ROOFTOP'; sortOrder: number }
   | { kind: 'ROOF'; sortOrder: number }
   | { kind: 'PIT'; sortOrder: number }
+  /** D19 — 외부 · 외곽 · 옥외 · 외벽. 출력 접두어는 `W` */
+  | { kind: 'EXTERIOR'; sortOrder: number }
   | { kind: 'UNKNOWN' };
 
 /** 파싱 결과가 지하(음수 구역)인가 — 재번호에서 부호 규약 복원에 쓴다 */
@@ -54,6 +57,19 @@ export function parseFloorName(name: string): FloorParse {
   // PIT 이 가장 먼저다 — `기계실피트` 처럼 접두어가 붙어도 최하단이다
   if (s.includes('PIT') || s.includes('피트')) return { kind: 'PIT', sortOrder: SORT_PIT };
 
+  // D19 외부 — **옥탑 검사보다 먼저**여야 한다. `옥외` 에는 `옥상`도 `지붕`도 없으므로
+  // ROOF 로 오인되지 않는다. ⚠️ `W` 는 넣지 않는다 — `W` 는 *출력 코드*이지 층 *이름*이 아니다
+  if (
+    s.includes('외부') ||
+    s.includes('외곽') ||
+    s.includes('옥외') ||
+    s.includes('외벽') ||
+    s === 'EXT' ||
+    s === 'EXTERIOR'
+  ) {
+    return { kind: 'EXTERIOR', sortOrder: SORT_EXTERIOR };
+  }
+
   // 옥탑 — `RF` 를 `F` 계열보다 먼저 걸러야 한다
   if (s.includes('옥탑') || s === 'PH' || s === 'PENTHOUSE' || s === 'R' || s === 'RF') {
     return { kind: 'ROOFTOP', sortOrder: SORT_ROOFTOP };
@@ -79,6 +95,50 @@ export function parseFloorName(name: string): FloorParse {
   }
 
   return { kind: 'UNKNOWN' };
+}
+
+/**
+ * D19 — 출력 결함번호 접두어. **파생값이다. 저장하지 않는다**(불변식 #2).
+ *
+ * `floor.code` 를 사용자가 직접 넣었으면 그것을 그대로(공백 제거 · 대문자) 쓰고,
+ * 없으면 이름에서 파생한다. 파싱 실패면 `null` = 접두어 없음(번호만 나간다).
+ *
+ * ⚠️ `ROOF → 'RF'` · `ROOFTOP → 'PH'` 인 이유: 파서는 문자열 `'RF'` 를 **옥탑**으로 읽지만
+ * (`parseFloorName` 의 `s === 'RF'`), 국제 관례는 RF = Roof Floor · PH = Penthouse 이고
+ * 사용자 예시도 옥상을 `RF-01` 로 적었다. 두 요구를 동시에 만족시키는 매핑이다.
+ */
+export function floorCodeOf(floor: { name: string; code?: string | null }): string | null {
+  const manual = (floor.code ?? '').trim();
+  if (manual !== '') return manual.toUpperCase();
+  const p = parseFloorName(floor.name);
+  switch (p.kind) {
+    case 'ABOVE':
+      return `${p.n}F`;
+    case 'BELOW':
+      return `B${p.n}F`;
+    case 'ROOF':
+      return 'RF';
+    case 'ROOFTOP':
+      return 'PH';
+    case 'PIT':
+      return 'PIT';
+    case 'EXTERIOR':
+      return 'W';
+    default:
+      return null;
+  }
+}
+
+/**
+ * 층 id → 접두어 맵. **출력 당시 스냅샷**(`ExportParams.floorCodes`)을 만드는 유일한 경로다 —
+ * 화면·엑셀·인쇄 뷰·조사위치도가 각자 파생하면 층 이름을 고친 뒤 서로 어긋난다.
+ */
+export function floorCodesOf(
+  floors: readonly { id: string; name: string; code?: string | null }[],
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const f of floors) out[f.id] = floorCodeOf(f);
+  return out;
 }
 
 /** 파싱된 sortOrder. 실패면 null (호출부가 `UNKNOWN` 분기를 매번 쓰지 않게) */

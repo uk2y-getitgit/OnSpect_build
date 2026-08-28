@@ -83,6 +83,8 @@ export function makeFloor(
     name,
     // 지하는 음수로 부여된다 (불변식 5 · §2-7-a)
     sortOrder: assignSortOrder(name, siblings),
+    // D19 — 접두어는 비워 둔다. 비어 있으면 `floorCodeOf` 가 이름에서 파생한다
+    code: null,
     ...base(deviceId, now),
   };
 }

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assignNumbers,
   defaultNumberingParams,
+  formatDefectNo,
   formatFloorRange,
   type NumberingDefect,
   type NumberingParams,
@@ -108,11 +109,20 @@ describe('번호 모드', () => {
     ]);
   });
 
-  it('K6 — PER_FLOOR 면 사진번호도 층마다 1부터', () => {
+  /**
+   * ⭐ **D19 가 K6 를 뒤집었다.** 예전에는 `PER_FLOOR` 면 사진번호도 층마다 1부터 셌다.
+   *    지금은 **결함번호만** 리셋하고 사진번호는 전체 연속이다 —
+   *    사진첩은 용역 전체를 한 권으로 묶으므로 `사진 1` 이 층마다 있으면 대조가 불가능하다.
+   *    사용자 예시: `1F-01 = 1번사진` · `2F-01 = 13번사진`.
+   */
+  it('D19 (K6 폐기) — PER_FLOOR 여도 사진번호는 리셋되지 않는다', () => {
     const r = assignNumbers(defects, params({ floorIds: ['f1', 'f2'], mode: 'PER_FLOOR' }), {
       hasPhoto: new Set(['a', 'b', 'c', 'e', 'f']),
     });
-    expect(r.rows.map((x) => x.photoNo)).toEqual([1, 2, 1, 2, 3]);
+    // 결함번호는 층마다 1부터
+    expect(r.rows.map((x) => x.no)).toEqual([1, 2, 1, 2, 3]);
+    // 사진번호는 층이 바뀌어도 이어진다
+    expect(r.rows.map((x) => x.photoNo)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('CONTINUOUS 면 사진번호도 이어서 센다', () => {
@@ -211,5 +221,28 @@ describe('순수성', () => {
     expect(defects).toEqual(copy);
     expect(p.floorIds).toBe(floorIds);
     expect(p.floorIds).toEqual(['f1']);
+  });
+});
+
+/**
+ * D19 §5-5(d) — 출력 결함번호 **표기**.
+ * ⭐ 저장 번호는 여전히 정수다(불변식 #2). 이 함수는 표기 문자열만 만든다.
+ */
+describe('formatDefectNo — D19 층 접두 번호', () => {
+  it('접두어가 없으면 정수를 그대로 문자열로 쓴다 (기존 출력물 무변경)', () => {
+    expect(formatDefectNo(1, null)).toBe('1');
+    expect(formatDefectNo(93, '')).toBe('93');
+    expect(formatDefectNo(93, undefined)).toBe('93');
+  });
+
+  it('접두어가 있으면 2자리 0채움', () => {
+    expect(formatDefectNo(1, '1F')).toBe('1F-01');
+    expect(formatDefectNo(12, 'B1F')).toBe('B1F-12');
+    expect(formatDefectNo(7, 'W')).toBe('W-07');
+  });
+
+  it('100 이상은 자릿수가 자연히 늘어난다 — 자르지 않는다', () => {
+    expect(formatDefectNo(100, '1F')).toBe('1F-100');
+    expect(formatDefectNo(1234, 'RF')).toBe('RF-1234');
   });
 });

@@ -90,7 +90,24 @@ export type Floor = RecordBase & {
   name: string;
   /** **정수. 지하는 음수** (불변식 5 / §2-7). UI 에 노출하지 않는다 */
   sortOrder: number;
+  /**
+   * D19 — 출력 결함번호 접두어(`1F` · `B1F` · `RF` · `W`). `null`/`''` = 이름에서 자동 파생
+   * (`floorCodeOf`). 정규화: 공백 제거 · 대문자 · 최대 6자.
+   *
+   * ⚠️ **옛 레코드는 이 필드가 없다**(`undefined`). 읽는 쪽은 `?? null` 로 받는다 —
+   * optional 필드 추가라 `DB_VERSION` 은 1 그대로고 마이그레이션이 없다.
+   */
+  code: string | null;
 };
+
+/** 층 접두어 최대 길이 (D19) */
+export const FLOOR_CODE_MAX = 6;
+
+/** 층 접두어 정규화 — 공백 제거 · 대문자 · 최대 6자. 빈 값은 `null`(자동 파생) */
+export function normalizeFloorCode(raw: string | null | undefined): string | null {
+  const s = (raw ?? '').replace(/\s+/g, '').toUpperCase().slice(0, FLOOR_CODE_MAX);
+  return s === '' ? null : s;
+}
 
 // ── 도면 ───────────────────────────────────────────────────────────────────
 /**
@@ -222,6 +239,11 @@ export const SORT_ROOFTOP = 9000;
 export const SORT_ROOF = 8000;
 /** PIT · 피트 — 최하단 */
 export const SORT_PIT = -9000;
+/**
+ * D19 — 외부 · 외곽 · 옥외 · 외벽. **옥탑(9000)보다 뒤** = 층 목록 맨 아래 = 출력 마지막.
+ * 실무에서 외부 조사는 보고서 맨 뒤에 붙는다.
+ */
+export const SORT_EXTERIOR = 9500;
 
 /** 용역 생성 직후 자동으로 만드는 동 이름 (§2-6) */
 export const DEFAULT_BUILDING_NAME = '본관';

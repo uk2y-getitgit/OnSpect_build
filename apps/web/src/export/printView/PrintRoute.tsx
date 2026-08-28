@@ -26,6 +26,8 @@ import type { PrintKind } from '../../router';
 import {
   damageTableModel,
   defectListModel,
+  displayNumbersOf,
+  floorCodesFor,
   photoBookModel,
   planFromRun,
   type ExportSource,
@@ -154,7 +156,9 @@ export function PrintRoute({
             memos: bundle.memos,
             floors: bundle.floors,
             floorIds: run.params.floorIds,
-            displayNumbers: displayNumbersOf(run),
+            // D19 — `run.params.floorCodes` 스냅샷을 그대로 쓴다. 층 이름을 나중에 고쳐도
+            // 이 이력으로 다시 뽑으면 접두어까지 그때 그대로다
+            displayNumbers: displayNumbersOf(plan, floorCodesFor(source, run.params)),
             includedDefectIds: new Set(plan.rows.map((r2) => r2.defectId)),
             params: run.params,
             objectUrl: (key) => repo.objectUrl(key, projectId),
@@ -262,12 +266,6 @@ export function PrintRoute({
 }
 
 // ── 보조 ───────────────────────────────────────────────────────────────────
-function displayNumbersOf(run: ExportRun): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [id, m] of Object.entries(run.mapping)) out[id] = String(m.no);
-  return out;
-}
-
 /**
  * 모든 `<img>` 가 디코드될 때까지 기다린다 (§4-9).
  * 하나가 실패해도 나머지는 인쇄한다 — 빈 칸이 낫지, 인쇄가 아예 안 되면 안 된다.

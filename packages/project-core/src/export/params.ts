@@ -52,6 +52,17 @@ export type ExportDocOptions = {
 export type ExportParams = NumberingParams & {
   render: ExportRenderOptions;
   doc: ExportDocOptions;
+  /**
+   * D19 — **출력 당시의 층 접두어 스냅샷** (`floorId → '1F' | null`).
+   *
+   * ⭐ 접두어는 층 이름·`Floor.code` 에서 파생되므로, 나중에 층 이름을 고치면 재출력 결과가
+   *    달라진다. 그건 *"같은 옵션으로 다시 뽑으면 같은 번호"* 를 깬다 → 스냅샷을 남긴다.
+   *    없으면(옛 run) 호출부가 **현재 층에서 파생**한다.
+   *
+   * `ExportParams` 는 `meta` KV 에 JSON 으로 들어가므로 **필드 추가에 마이그레이션이 없다.**
+   * `ExportRun.mapping` 은 여전히 `{no: number, photoNo}` 정수다(불변식 #2).
+   */
+  floorCodes?: Record<string, string | null>;
 };
 
 export const DEFAULT_RENDER_OPTIONS: ExportRenderOptions = {

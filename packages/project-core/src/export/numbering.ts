@@ -174,10 +174,11 @@ export function assignNumbers(
     const bucket = (buckets.get(fid) ?? []).slice().sort(compareForOutput);
 
     if (params.mode === 'PER_FLOOR') {
-      // 5. 층이 바뀔 때마다 1부터.
-      //    K6 — **사진번호도 같은 규칙을 따른다.** 번호모드를 따라간다
+      // 5. 층이 바뀔 때마다 **결함번호만** 1부터.
+      //    ⭐ D19 로 **K6 가 폐기됐다** — 사진번호는 층이 바뀌어도 리셋하지 않는다.
+      //    사진첩은 용역 전체를 한 권으로 묶으므로 `사진 1` 이 층마다 있으면 대조가 불가능하다
+      //    (사용자 예시: `1F-01 = 1번사진` · `2F-01 = 13번사진`).
       no = 0;
-      photoNo = 0;
     }
 
     let from: number | null = null;
@@ -234,6 +235,19 @@ function compareForOutput(a: NumberingDefect, b: NumberingDefect): number {
   if (a.drawingId !== b.drawingId) return a.drawingId < b.drawingId ? -1 : 1;
   if (a.id !== b.id) return a.id < b.id ? -1 : 1;
   return 0;
+}
+
+/**
+ * D19 — 출력 결함번호 **표기**. 접두어가 있으면 `1F-01`, 없으면 `1`.
+ *
+ * ⭐ **저장 번호는 그대로 정수다**(불변식 #2 · `ExportRun.mapping`). 이 함수는 표기만 만든다 —
+ *    접두어는 `(floorId → floorCode)` 파생 문자열이고 어디에도 저장되지 않는다.
+ *
+ * 자릿수는 2자리 0채움이고 100 이상은 자연히 3자리로 늘어난다(`1F-100`).
+ */
+export function formatDefectNo(no: number, floorCode: string | null | undefined): string {
+  if (floorCode === null || floorCode === undefined || floorCode === '') return String(no);
+  return `${floorCode}-${String(no).padStart(2, '0')}`;
 }
 
 /** 층 칩 표기용 — `①–12` / `—`(0건) */

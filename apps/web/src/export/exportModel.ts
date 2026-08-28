@@ -17,6 +17,8 @@ import {
   buildLocations,
   buildPhotoBook,
   defectIdsWithPrimaryPhoto,
+  floorCodesOf,
+  formatDefectNo,
   groupPhotosByDefect,
   sortByOrder,
   type DamageTableInput,
@@ -98,7 +100,35 @@ function tableInput(
     causes: src.settings.causes,
     projectName: src.bundle.project.name,
     headerLine2: params.doc.headerLine2,
+    floorCodes: floorCodesFor(src, params),
   };
+}
+
+/**
+ * D19 — 이 출력에 쓸 층 접두어. **스냅샷이 있으면 그것이 진실이다**(재현성).
+ * 없으면(옛 `ExportRun`) 지금 층에서 파생한다 — 옛 이력도 깨지지 않고 열린다.
+ *
+ * ⭐ 화면·엑셀·인쇄 뷰·조사위치도가 전부 이 함수 하나를 부른다. 각자 파생하면
+ *    층 이름을 고친 날 산출물끼리 접두어가 어긋난다(K20 과 같은 정신).
+ */
+export function floorCodesFor(
+  src: ExportSource,
+  params: ExportParams,
+): Record<string, string | null> {
+  return params.floorCodes ?? floorCodesOf(src.bundle.floors);
+}
+
+/**
+ * 결함 id → 출력 결함번호 **표기 문자열** (`1F-01` 또는 `1`).
+ * 조사위치도의 번호 풍선이 이것을 그린다.
+ */
+export function displayNumbersOf(
+  plan: ExportPlan,
+  floorCodes: Record<string, string | null>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const r of plan.rows) out[r.defectId] = formatDefectNo(r.no, floorCodes[r.floorId] ?? null);
+  return out;
 }
 
 export function damageTableModel(
