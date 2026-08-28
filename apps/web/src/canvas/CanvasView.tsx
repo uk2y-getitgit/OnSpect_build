@@ -284,7 +284,13 @@ export function CanvasView({
       send({ k: 'KEY_DOWN', key: e.key, keys: keysFrom(e, spaceRef.current) });
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      // ⚠️ 스페이스 해제는 **가드보다 먼저** 한다 (B1-a).
+      //    입력창에서 스페이스를 떼는 동안 여기서 빠져나가면 팬 상태가 눌린 채 남아
+      //    커서가 손 모양으로 굳는다.
       if (e.key === ' ') spaceRef.current = false;
+      // ⭐ onKeyDown 과 **같은 가드**. 이게 없으면 모달 입력창에서 친 글자의 keyup 이
+      //    캔버스로 새어 들어와 리렌더를 유발하고, 모달의 포커스가 튄다 (버그 B1).
+      if (isTypingTarget(e.target)) return;
       send({ k: 'KEY_UP', key: e.key, keys: keysFrom(e, spaceRef.current) });
     };
     const onBlur = () => {

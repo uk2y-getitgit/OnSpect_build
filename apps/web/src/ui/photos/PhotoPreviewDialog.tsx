@@ -13,6 +13,11 @@ import { displaySize, type Photo } from '@onspect/project-core';
 /** `CanvasView` 가 window 에서 가로채는 키 — 이 다이얼로그가 떠 있는 동안 막는다 */
 const CANVAS_SHORTCUT_KEYS = new Set(['Delete', 'Backspace', '0', '+', '=', '-', '_']);
 
+/** keydown·keyup 이 **같은 판정**을 쓴다 — 한쪽만 막으면 구멍이 남는다 (버그 B1) */
+function isCanvasShortcut(e: KeyboardEvent): boolean {
+  return CANVAS_SHORTCUT_KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && 'zZyY'.includes(e.key));
+}
+
 export type PhotoPreviewDialogProps = {
   photo: Photo;
   /** 0-based. 좌우 이동 버튼의 활성 판정에 쓴다 */
@@ -80,15 +85,26 @@ export function PhotoPreviewDialog(props: PhotoPreviewDialogProps) {
       //    차단 조건이 `isTypingTarget` 하나뿐이라 이 화면의 포커스(닫기 버튼)는 통과한다.
       //    특히 **Delete — 사진이 아니라 캔버스에서 선택된 결함이 지워진다.**
       //    하단에 빨간 [삭제] 버튼이 있어 Delete 를 누르는 것이 자연스러운 화면이다.
-      const blocked =
-        CANVAS_SHORTCUT_KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && 'zZyY'.includes(e.key));
-      if (blocked) {
+      if (isCanvasShortcut(e)) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    };
+    // ⭐ **keyup 도 같이 막는다** (버그 B1). keydown 만 막으면 `CanvasView` 의 window keyup 이
+    //    그대로 통과해 캔버스 리듀서를 돌리고, 그 리렌더가 이 화면의 포커스를 흔든다.
+    //    ⚠️ 스페이스는 막지 않는다 — 스페이스 keyup 을 삼키면 캔버스 팬 상태가 눌린 채 굳는다.
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (isCanvasShortcut(e)) {
         e.stopPropagation();
         e.preventDefault();
       }
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
   }, [onClose, onPrev, onNext]);
 
   const size = displaySize(photo);

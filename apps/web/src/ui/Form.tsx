@@ -75,8 +75,18 @@ export function BusyButton({
 }
 
 /**
+ * 초기 포커스 후보 — **헤더의 ✕ 닫기 버튼은 제외한다.**
+ * `querySelector` 는 문서 순서 첫 매치를 주므로, 제외하지 않으면 헤더의 ✕ 가 항상 이긴다 (B1-b).
+ */
+const MODAL_FOCUSABLE =
+  'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]):not(.modal__x)';
+
+/**
  * 모달 셸 — 스크림 클릭·Esc 로 닫히고, 열릴 때 첫 필드로 포커스가 간다.
  * Tab 이 모달 밖으로 새지 않게 가둔다 (ui-quality §7-2).
+ *
+ * ⚠️ **포커스 이펙트는 마운트 1회다** (버그 B1). 부모 리렌더마다 다시 돌면
+ *    타이핑할 때마다 포커스가 첫 요소로 튀어 입력 자체가 불가능해진다.
  */
 export function Modal({
   title,
@@ -96,17 +106,32 @@ export function Modal({
   const ref = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
 
+  // B1-c — `onClose` 는 호출부에서 대개 **인라인 화살표 함수**다. 이걸 이펙트 의존에 두면
+  // 부모가 리렌더될 때마다 이펙트가 다시 돌아 포커스를 빼앗는다. ref 로 받아 의존에서 뺀다.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  // B1-b — 초기 포커스는 **마운트 1회**로 고정한다. 그리고 문서 순서 첫 요소(헤더의 ✕)가 아니라
+  // **본문(.modal__scroll)의 첫 입력**을 잡는다. 둘 중 하나라도 어기면 타이핑 중 포커스가 튄다.
   useEffect(() => {
     const el = ref.current;
-    const first = el?.querySelector<HTMLElement>(
-      'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
-    );
+    if (!el) return;
+    const scope = el.querySelector<HTMLElement>('.modal__scroll') ?? el;
+    const first =
+      scope.querySelector<HTMLElement>(MODAL_FOCUSABLE) ??
+      el.querySelector<HTMLElement>(MODAL_FOCUSABLE);
     first?.focus();
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !el) return;
@@ -128,7 +153,7 @@ export function Modal({
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="modal-scrim" onPointerDown={onClose}>
