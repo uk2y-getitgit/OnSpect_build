@@ -3087,6 +3087,42 @@ select.input { cursor: pointer; }
 .tbset__key { flex: 0 0 132px; font-size: 12px; color: var(--text-muted); word-break: keep-all; }
 .tbset__sep { width: 100%; height: 1px; margin: 4px 0; border: 0; background: var(--border); }
 
+/* D16 — 스코프 구분 머리(`이 도면` / `용역 전체`). 어느 값이 어디까지 퍼지는지 보이게 */
+.tbset__section {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+.tbset__scope { font-weight: 500; font-size: 11px; color: var(--text-dim); word-break: keep-all; }
+
+/*
+ * D16 실시간 미리보기 — 모달이 캔버스를 가리면 슬라이더 효과가 안 보인다.
+ * 오른쪽에 붙이고 스크림을 거의 투명하게 둔다. `place-items: center` 를 덮어쓴다.
+ */
+.modal-scrim--dock {
+  place-items: stretch end;
+  background: rgba(31, 39, 52, 0.06);
+}
+.modal--dockRight {
+  width: min(400px, calc(100vw - 32px));
+  max-height: calc(100vh - 24px);
+  margin: 12px 12px 12px 0;
+  align-self: center;
+}
+@media (max-width: 720px) {
+  /* 좁은 화면에서는 가릴 캔버스도 거의 없다 — 평소 모달처럼 가운데 */
+  .modal-scrim--dock { place-items: center; background: rgba(31, 39, 52, 0.34); }
+  .modal--dockRight { margin: 0; }
+}
+
 /* ── F2 자유그리기 사후연결 대기 바 ────────────────────────────────────── */
 .stage__pending {
   position: absolute;

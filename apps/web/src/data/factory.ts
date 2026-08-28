@@ -48,6 +48,10 @@ export function makeProject(deviceId: string, draft: ProjectDraft, now = Date.no
     lastOpenedAt: now,
     deletedAt: null,
     schemaVersion: 1,
+    // D16 — 도곽·범례는 용역 스코프다. `null` 은 "아직 승격 안 됨"이고
+    // 읽는 쪽이 기본값으로 받는다(`projectTitleBlockOf`). 처음 여는 순간 승격된다
+    titleBlock: null,
+    legend: null,
     ...base(deviceId, now),
   };
 }

@@ -18,6 +18,7 @@ import {
   normalizeFloorCode,
   normalizeName,
   projectDisplayName,
+  promoteProjectDecor,
   reorder,
   sortByOrder,
   validateBuildingName,
@@ -26,13 +27,14 @@ import {
   type Building,
   type CopyStructureResult,
   clampScale,
+  DEFAULT_DRAWING_TITLE_BLOCK,
   fitRectToImgLayout,
   isA4Normalized,
   type Drawing,
-  type DrawingLegend,
-  type DrawingTitleBlock,
   type Floor,
   type Project,
+  type ProjectLegend,
+  type ProjectTitleBlock,
 } from '@onspect/project-core';
 import { useAppData } from '../data/appData';
 import { makeBuilding, makeFloor } from '../data/factory';
@@ -113,7 +115,11 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
         setNotFound(true);
         return;
       }
-      setProject(b.project);
+      // D16 승격(§5-3-c) — 진입점 2곳(`CanvasRoute` · 여기) 모두에 건다.
+      // 어느 쪽으로 먼저 들어와도 같은 대표 도면이 뽑히므로 결과가 갈리지 않는다
+      const promoted = promoteProjectDecor(b.project, b.drawings, b.floors);
+      if (promoted) void guard(() => storage.repo.putProject(promoted));
+      setProject(promoted ?? b.project);
       setBuildings(b.buildings);
       setFloors(b.floors);
       setDrawings(b.drawings);
@@ -367,20 +373,35 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
     [storage, guard, toast],
   );
 
-  /** F5-1·F5-2 — 도곽·범례 설정 저장. 저장되는 것은 숫자·문자뿐이고 좌표는 건드리지 않는다 */
+  /**
+   * F5-1·F5-2 — 도곽·범례 설정 저장. 저장되는 것은 숫자·문자뿐이고 좌표는 건드리지 않는다.
+   *
+   * ⭐ **D16 — 용역 설정(`Project` 1건) + 이 도면의 도면명(`Drawing` 1건)** 으로 갈린다.
+   */
   const applyTitleBlock = useCallback(
-    (dw: Drawing, tb: DrawingTitleBlock, lg: DrawingLegend) => {
+    (dw: Drawing, tb: ProjectTitleBlock, lg: ProjectLegend, drawingName: string | null) => {
+      if (!project) return;
       setTitleBusy(true);
-      const updated: Drawing = { ...dw, titleBlock: tb, legend: lg, updatedAt: Date.now() };
-      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
+      const now = Date.now();
+      const nextProject: Project = { ...project, titleBlock: tb, legend: lg, updatedAt: now };
+      const nextDrawing: Drawing = {
+        ...dw,
+        titleBlock: { ...(dw.titleBlock ?? DEFAULT_DRAWING_TITLE_BLOCK), drawingName },
+        updatedAt: now,
+      };
+      setProject(nextProject);
+      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? nextDrawing : d)));
       void (async () => {
-        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        if (storage.phase === 'READY') {
+          await guard(() => storage.repo.putProject(nextProject));
+          await guard(() => storage.repo.putDrawing(nextDrawing));
+        }
         setTitleBusy(false);
         setTitling(null);
-        toast('도곽 · 범례 설정을 저장했습니다');
+        toast('도곽 · 범례 설정을 저장했습니다 — 이 용역의 모든 도면에 적용됩니다');
       })();
     },
-    [storage, guard, toast],
+    [storage, guard, toast, project],
   );
 
   // ── F1 [A4로 맞추기] ────────────────────────────────────────────────────
@@ -1204,7 +1225,7 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
           project={project}
           legendTypes={legendTypesOf(defects, titling.id)}
           busy={titleBusy}
-          onApply={(tb, lg) => applyTitleBlock(titling, tb, lg)}
+          onApply={(tb, lg, name) => applyTitleBlock(titling, tb, lg, name)}
           onClose={() => {
             if (!titleBusy) setTitling(null);
           }}

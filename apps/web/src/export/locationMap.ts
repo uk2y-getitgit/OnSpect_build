@@ -221,7 +221,8 @@ async function renderOne(a: {
     ghost: null,
     pending: null,
     titleBlock,
-    legend: render.legend ? legendConfigFor(drawing, defects) : null,
+    // D16 — 범례 설정도 용역 스코프다. 행은 여전히 이 도면의 결함에서 파생한다(D8)
+    legend: render.legend ? legendConfigFor(drawing, defects, input.project) : null,
   };
 
   // 6. 오프스크린 캔버스. **dpr = 1** — 여기서는 CSS px 과 출력 px 이 같다

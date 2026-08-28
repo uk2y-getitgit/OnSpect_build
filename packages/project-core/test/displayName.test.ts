@@ -26,6 +26,9 @@ function project(over: Partial<Project> = {}): Project {
     lastOpenedAt: 0,
     deletedAt: null,
     schemaVersion: 1,
+    // D16 — null = 아직 승격 안 됨(읽는 쪽이 기본값으로 받는다)
+    titleBlock: null,
+    legend: null,
     createdAt: 0,
     updatedAt: 0,
     deviceId: 'dev',

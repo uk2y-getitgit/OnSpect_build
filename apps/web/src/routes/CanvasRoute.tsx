@@ -24,17 +24,19 @@ import {
   ZOOM_WHEEL_STEP,
 } from '@onspect/canvas-core';
 import {
+  DEFAULT_DRAWING_TITLE_BLOCK,
   projectDisplayName,
+  promoteProjectDecor,
   seedAttrs,
   sortByOrder,
   type Building,
   type Drawing,
-  type DrawingLegend,
-  type DrawingTitleBlock,
   type Floor,
   type ItemSettings,
   type Photo,
   type Project,
+  type ProjectLegend,
+  type ProjectTitleBlock,
 } from '@onspect/project-core';
 import { CanvasView } from '../canvas/CanvasView';
 import { ContextToolbar } from '../canvas/ContextToolbar';
@@ -99,6 +101,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
    * 예전에는 용역 구성 화면에만 있었다. 다이얼로그·저장 로직은 그대로, 진입점만 하나 늘렸다 */
   const [titling, setTitling] = useState(false);
   const [titleBusy, setTitleBusy] = useState(false);
+  /**
+   * D16 실시간 미리보기 — 도곽·범례 다이얼로그가 **저장 전에** 흘려보낸 임시 값.
+   * `null` = 오버라이드 없음(저장된 값을 쓴다). 다이얼로그가 닫히면 항상 `null` 로 돌아온다.
+   */
+  const [tbPreview, setTbPreview] = useState<ProjectTitleBlock | null>(null);
+  const [lgPreview, setLgPreview] = useState<ProjectLegend | null>(null);
 
   const [state, dispatch] = useReducer(
     appReducer,
@@ -128,7 +136,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         s = null;
       }
       if (!alive) return;
-      setProject(b.project);
+      // D16 승격(§5-3-c) — 도곽·범례를 용역 스코프로 올리면서 **이미 설정해 둔 값을 잃지 않는다.**
+      // `ensureProjectSettings`(바로 위)와 같은 관용구: 여는 시점에 그 용역 것만 채운다.
+      // 실패해도 캔버스는 계속 돈다 — 읽기 쪽이 어차피 기본값으로 폴백한다
+      const promoted = promoteProjectDecor(b.project, b.drawings, b.floors);
+      if (promoted) void guard(() => storage.repo.putProject(promoted));
+      setProject(promoted ?? b.project);
       setBuildings(b.buildings);
       setFloors(b.floors);
       setDrawings(b.drawings);
@@ -364,28 +377,31 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
 
   const displayNumbers = useMemo(() => displayNumbersOf(defects), [defects]);
 
-  // F5-1 도곽 — 저장 형태(project-core) → 렌더 형태(canvas-core) 로 잇는다 (D13)
+  // F5-1 도곽 — 저장 형태(project-core) → 렌더 형태(canvas-core) 로 잇는다 (D13).
+  // ⭐ D16 — 값은 **용역**에서 온다. 도면에서 읽는 것은 `drawingName` 하나뿐.
+  //    `tbPreview` 는 다이얼로그가 저장 전에 흘려보낸 임시 값이다(저장소를 안 때린다)
   const titleBlock = useMemo(
-    () => titleBlockConfigFor(currentDrawing, project),
-    [currentDrawing, project],
+    () => titleBlockConfigFor(currentDrawing, project, tbPreview),
+    [currentDrawing, project, tbPreview],
   );
 
   // F5-2 범례 — 행은 저장하지 않고 **이 도면에 실제로 쓰인 결함유형**에서 파생한다.
   // 배경 레이어는 뷰포트가 바뀔 때만 다시 그리므로, 행 구성이 실제로 바뀔 때만
   // 새 객체가 나오도록 서명(키)으로 memo 를 건다 — 결함을 옮길 때마다 재렌더하지 않게.
-  const legend = useMemo(
-    () => legendConfigFor(currentDrawing, defects),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      currentDrawing?.id,
-      currentDrawing?.legend?.enabled,
-      currentDrawing?.legend?.lgScale,
+  const legendSig = useMemo(
+    () =>
       defects
-        .map((d) => d.defectTypeId ?? d.defectTypeName ?? '')
+        .filter((d) => d.drawingId === currentDrawing?.id)
+        .map((d) => `${d.defectTypeId ?? d.defectTypeName ?? ''}`)
         .filter((x) => x !== '')
         .sort()
         .join('|'),
-    ],
+    [defects, currentDrawing?.id],
+  );
+  const legend = useMemo(
+    () => legendConfigFor(currentDrawing, defects, project, lgPreview),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentDrawing?.id, project?.legend, lgPreview, legendSig],
   );
 
   // F6 — 번호 풍선 크기. 도면마다 결함 밀도가 달라 도면 단위로 둔다(도곽·범례와 같은 스코프).
@@ -410,19 +426,36 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   }, [defects]);
 
   /** F5-1·F5-2 — 도곽·범례 설정 저장. ProjectSetup 의 같은 이름 함수와 동일한 로직 */
+  /**
+   * D16 — 저장이 **두 레코드로 갈린다.**
+   * 용역 설정(`Project` 1건) + 이 도면의 도면명(`Drawing` 1건). 그 외 도면은 안 건드린다.
+   */
   const applyTitleBlock = useCallback(
-    (dw: Drawing, tb: DrawingTitleBlock, lg: DrawingLegend) => {
+    (dw: Drawing, tb: ProjectTitleBlock, lg: ProjectLegend, drawingName: string | null) => {
+      if (!project) return;
       setTitleBusy(true);
-      const updated: Drawing = { ...dw, titleBlock: tb, legend: lg, updatedAt: Date.now() };
-      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
+      const now = Date.now();
+      const nextProject: Project = { ...project, titleBlock: tb, legend: lg, updatedAt: now };
+      // 도면 레코드에는 `drawingName` 만 남는다. 나머지 8필드는 읽히지 않지만
+      // **지우지 않는다** — 타입을 유지해 마이그레이션을 0건으로 둔다
+      const nextDrawing: Drawing = {
+        ...dw,
+        titleBlock: { ...(dw.titleBlock ?? DEFAULT_DRAWING_TITLE_BLOCK), drawingName },
+        updatedAt: now,
+      };
+      setProject(nextProject);
+      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? nextDrawing : d)));
       void (async () => {
-        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        if (storage.phase === 'READY') {
+          await guard(() => storage.repo.putProject(nextProject));
+          await guard(() => storage.repo.putDrawing(nextDrawing));
+        }
         setTitleBusy(false);
         setTitling(false);
-        toast('도곽 · 범례 설정을 저장했습니다');
+        toast('도곽 · 범례 설정을 저장했습니다 — 이 용역의 모든 도면에 적용됩니다');
       })();
     },
-    [storage, guard, toast],
+    [storage, guard, toast, project],
   );
 
   /** F6 — 번호 풍선 크기 조절. `imgScale`(F5-3)과 달리 결함 좌표를 전혀 건드리지 않는다 */
@@ -883,7 +916,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           project={project}
           legendTypes={legendTypeNames}
           busy={titleBusy}
-          onApply={(tb, lg) => applyTitleBlock(currentDrawing, tb, lg)}
+          onApply={(tb, lg, name) => applyTitleBlock(currentDrawing, tb, lg, name)}
+          onPreview={(tb, lg) => {
+            setTbPreview(tb);
+            setLgPreview(lg);
+          }}
           onClose={() => {
             if (!titleBusy) setTitling(false);
           }}

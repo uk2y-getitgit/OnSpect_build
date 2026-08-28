@@ -69,6 +69,18 @@ export type Project = RecordBase & {
   deletedAt: number | null;
   /** 현재 1 */
   schemaVersion: number;
+
+  /**
+   * D16 — **도곽 공유 설정**. 이 용역의 모든 도면이 같은 값을 쓴다.
+   * `null` = 아직 승격 안 됨 → 읽을 때 `DEFAULT_PROJECT_TITLE_BLOCK`.
+   *
+   * ⚠️ 도면에서 읽는 도곽 값은 `Drawing.titleBlock.drawingName` **하나뿐**이다.
+   *    옛 레코드는 이 필드 자체가 없다(`undefined`) — `?? null` 로 받는다.
+   *    optional 필드 추가라 `DB_VERSION` 1 그대로, 마이그레이션 0건.
+   */
+  titleBlock: ProjectTitleBlock | null;
+  /** D16 — 범례 공유 설정. `null` = 아직 승격 안 됨. **행 자체는 여전히 도면별 파생**(D8) */
+  legend: ProjectLegend | null;
 };
 
 // ── 동 ─────────────────────────────────────────────────────────────────────
@@ -270,3 +282,84 @@ export const DEFAULT_DRAWING_TITLE_BLOCK: DrawingTitleBlock = {
 
 /** F5-2 범례 기본값 */
 export const DEFAULT_DRAWING_LEGEND: DrawingLegend = { enabled: true, lgScale: 1 };
+
+// ── D16 프로젝트 스코프 도곽 · 범례 ────────────────────────────────────────
+/**
+ * D16 — 용역 전체가 공유하는 도곽 설정. **`drawingName` 만 도면별**이라 그것만 뺀 8필드다.
+ *
+ * `col0`·`col1`·`labelFontSz`·`valueFontSz` 까지 올린 이유: 전부 *도곽의 생김새*라
+ * 도면마다 다르면 보고서가 들쭉날쭉해진다. `enabled` 을 도면별로 두면 사용자가
+ * **도면마다 도곽을 다시 켜야 한다** — 그게 "도곽 출력안됨"(버그 B2)의 원인이었다.
+ */
+export type ProjectTitleBlock = Omit<DrawingTitleBlock, 'drawingName'>;
+
+export const DEFAULT_PROJECT_TITLE_BLOCK: ProjectTitleBlock = {
+  enabled: true,
+  projectTitle: null,
+  scale: 'NONE',
+  tbScale: 1,
+  col0: 0.42,
+  col1: 0.46,
+  labelFontSz: 10,
+  valueFontSz: 14,
+};
+
+/**
+ * D16 + D15 — 용역 전체가 공유하는 범례 설정.
+ *
+ * ⚠️ **범례 *행*은 여기 없다.** 행은 여전히 그 도면의 결함에서 매번 파생한다(D8) —
+ *    저장하면 결함을 지웠을 때 유령 행이 남는다.
+ */
+export type ProjectLegend = {
+  /** 범례 블록 전체 마스터 스위치 */
+  enabled: boolean;
+  lgScale: number;
+  /** D8 결함유형 행 표시. **기본 true** — 기존 동작 보존 */
+  showTypes: boolean;
+  /** D15 상태 범례 3행. **기본 전부 false** — 기존 출력물이 한 글자도 안 바뀌게 */
+  statusNew: boolean;
+  statusPending: boolean;
+  statusRepaired: boolean;
+};
+
+export const DEFAULT_PROJECT_LEGEND: ProjectLegend = {
+  enabled: true,
+  lgScale: 1,
+  showTypes: true,
+  statusNew: false,
+  statusPending: false,
+  statusRepaired: false,
+};
+
+/**
+ * 저장된 값(옛 레코드는 `undefined`·필드 누락)을 **읽기 시점에 정규화**한다.
+ * `isInkMemo` 와 같은 수법 — 저장 레코드를 일괄로 고치지 않는다(마이그레이션 0건).
+ */
+export function projectLegendOf(lg: Partial<ProjectLegend> | null | undefined): ProjectLegend {
+  if (!lg) return DEFAULT_PROJECT_LEGEND;
+  return {
+    enabled: lg.enabled ?? DEFAULT_PROJECT_LEGEND.enabled,
+    lgScale: lg.lgScale ?? DEFAULT_PROJECT_LEGEND.lgScale,
+    showTypes: lg.showTypes ?? DEFAULT_PROJECT_LEGEND.showTypes,
+    statusNew: lg.statusNew ?? DEFAULT_PROJECT_LEGEND.statusNew,
+    statusPending: lg.statusPending ?? DEFAULT_PROJECT_LEGEND.statusPending,
+    statusRepaired: lg.statusRepaired ?? DEFAULT_PROJECT_LEGEND.statusRepaired,
+  };
+}
+
+/** 같은 정규화의 도곽판 — 옛 레코드에 필드가 빠져 있어도 렌더가 `NaN` 을 만나지 않는다 */
+export function projectTitleBlockOf(
+  tb: Partial<ProjectTitleBlock> | null | undefined,
+): ProjectTitleBlock {
+  if (!tb) return DEFAULT_PROJECT_TITLE_BLOCK;
+  return {
+    enabled: tb.enabled ?? DEFAULT_PROJECT_TITLE_BLOCK.enabled,
+    projectTitle: tb.projectTitle ?? DEFAULT_PROJECT_TITLE_BLOCK.projectTitle,
+    scale: tb.scale ?? DEFAULT_PROJECT_TITLE_BLOCK.scale,
+    tbScale: tb.tbScale ?? DEFAULT_PROJECT_TITLE_BLOCK.tbScale,
+    col0: tb.col0 ?? DEFAULT_PROJECT_TITLE_BLOCK.col0,
+    col1: tb.col1 ?? DEFAULT_PROJECT_TITLE_BLOCK.col1,
+    labelFontSz: tb.labelFontSz ?? DEFAULT_PROJECT_TITLE_BLOCK.labelFontSz,
+    valueFontSz: tb.valueFontSz ?? DEFAULT_PROJECT_TITLE_BLOCK.valueFontSz,
+  };
+}

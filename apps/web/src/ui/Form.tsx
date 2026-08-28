@@ -95,6 +95,7 @@ export function Modal({
   footer,
   children,
   wide = false,
+  dock,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -102,6 +103,12 @@ export function Modal({
   footer: ReactNode;
   children: ReactNode;
   wide?: boolean;
+  /**
+   * 화면 오른쪽에 붙이고 **스크림을 투명하게** 한다.
+   * 뒤 화면이 실시간 미리보기 대상일 때만 쓴다(도곽·범례 설정 — D16).
+   * 가리면 미리보기가 안 보인다.
+   */
+  dock?: 'right';
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
@@ -165,10 +172,19 @@ export function Modal({
   }, []);
 
   return (
-    <div className="modal-scrim" onPointerDown={onClose}>
+    <div
+      className={dock === 'right' ? 'modal-scrim modal-scrim--dock' : 'modal-scrim'}
+      onPointerDown={onClose}
+    >
       <div
         ref={ref}
-        className={wide ? 'modal modal--wide' : 'modal'}
+        className={[
+          'modal',
+          wide ? 'modal--wide' : '',
+          dock === 'right' ? 'modal--dockRight' : '',
+        ]
+          .filter((c) => c !== '')
+          .join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
