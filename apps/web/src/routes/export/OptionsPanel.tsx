@@ -39,7 +39,12 @@ export function OptionsPanel({ params, onChange, mapEnabled }: OptionsPanelProps
         <legend className="xp-field__legend">번호 부여</legend>
         {(
           [
-            ['PER_FLOOR', '층별 1번부터', '층이 바뀌면 결함번호와 사진번호가 함께 1로 돌아갑니다'],
+            // D19 — 사진번호는 더 이상 층에서 리셋되지 않는다(K6 폐기). 문구를 사실과 맞춘다
+            [
+              'PER_FLOOR',
+              '층별 1번부터',
+              '층이 바뀌면 결함번호만 1로 돌아갑니다. 사진번호는 용역 전체에 걸쳐 이어집니다',
+            ],
             ['CONTINUOUS', '전체 이어서', '선택한 층 전체에 걸쳐 번호가 계속 이어집니다'],
           ] as [NumberMode, string, string][]
         ).map(([mode, label, hint]) => (

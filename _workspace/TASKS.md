@@ -1,35 +1,59 @@
-# TASKS — S5 + Phase4 (팀 도구 폴백)
+# TASKS — 사용자 수정사항 2파일 (팀 도구 폴백)
 
 `TeamCreate`/`TaskCreate` 미가용 → `Agent` + `SendMessage` 폴백. 이 파일이 작업 목록을 대신한다.
 갱신: 리더가 각 에이전트 완료/알림을 받을 때마다 상태를 갱신한다.
 
-범위 문서: `_workspace/00_input/scope_S5_Phase4.md`
+범위 문서: `_workspace/00_input/scope_UserFeedback0828.md`
+확정 스펙: `_workspace/30_plan-reviewer_spec_UserFeedback0828.md`
 
 ## 상태 범례
 ⬜ 대기 · 🟦 진행중 · ✅ 완료 · 🟥 차단
 
+## 배치 구성 (의존관계 + 위험도 순)
+
+| 배치 | 작업 | 근거 |
+|---|---|---|
+| **1** | F-1(모달 포커스 버그) · F-2(자동인쇄 제거) · R-3커밋(합성렌더러 마무리) | 독립·저위험, 사용자가 지금 당장 못 쓰는 것부터 |
+| **2** | R-4(캡션·촬영정보) · R-5+R-6+R-8+F-4(자르기·주석·사진첩반영·사진번호숨김, 한PR) · R-9(손상결함표 인쇄뷰) | PhotoPolish 라운드 완결. R-5는 R-8과 분리 금지(스펙 경고) |
+| **3** | G-6(층접두번호+사진전체연속) · G-3(도곽·범례 프로젝트스코프+F-3문구) · G-2(상태범례, G-3의존) | 신규기능, canvas-core 미변경 |
+| **4** | G-5(D9폐기→유사결함불러오기) · G-1(필기메모 히트/지우개) | canvas-core 변경 포함, 277개 테스트+Phase5 히트프로파일 최고위험 → 마지막 |
+
+## 배치 1
+
 | # | 작업 | 담당 | 의존 | 상태 |
 |---|---|---|---|---|
-| 1 | 스펙 검토 + 작업 분해 (S5 + Phase4 4종 + 공통 번호부여) | plan-reviewer | - | ✅ `21_plan-reviewer_spec_S5_Phase4.md` |
-| A | Phase A 빌드 — T1~T8 (공통기반: 번호부여·ExportRun + S5 사진 전체) 2커밋 | builder | 1 | ✅ `22_builder_log_PhaseA_S5.md` · 브랜치 `feat/s5-phase4-a` 2커밋 |
-| A-R | Phase A 검수 | code-reviewer | A | ✅ `23_code-reviewer_findings_PhaseA.md` — 심각 1 · 보통 2 · 경미 4 |
-| A-Fix | Phase A 지적사항 수정 (심각1+보통2) | builder | A-R | ✅ 커밋 3 — 22_builder_log 하단 `검수 반영` 절 |
-| B | Phase B 빌드 — T9~T16 (출력화면 P6 + 엑셀어댑터 + 4종 산출물 + 출력이력) | builder | A-Fix | ✅ `24_builder_log_PhaseB_Export.md` · 브랜치 `feat/s5-phase4-a` 커밋 4~6 (`33859d9` · `d00a97f` · `f7452a0`) · 타입 ✅ / 테스트 212 ✅ / 빌드 ✅ · 신규 가정 M1~M12 · 비차단 질문 Q36 · Q37 |
-| B-R | Phase B 검수 | code-reviewer | B | ✅ `25_code-reviewer_findings_PhaseB.md` — 심각0·보통3·경미4, 재현성 검증 전부 통과 |
-| B-Fix | Phase B 지적사항 수정 (보통3) | builder | B-R | ✅ 커밋 `a6e5ab6` — 재현성 경고 오탐·사진첩 대표사진 우회·반복행 안내문구 |
-| C | 통합 판정 — 타입/테스트/빌드, 개발서버 기동, NEXT.md 갱신 | 리더 | A-R,B-R | ✅ main 병합(`a6e5ab6`, fast-forward) · 타입/테스트463/빌드 재확인 통과 · 서버 `localhost:5173` · `NEXT.md` 갱신 |
+| 1-B | F-1·F-2·R-3커밋 구현 | builder | - | ✅ `31_builder_log_Batch1.md` · 커밋 `634a6f7`·`82354d6`·`ac9b045` · 타입/테스트538/빌드 통과 |
+| 1-R | 배치1 검수 | code-reviewer | 1-B | ✅ `32_code-reviewer_findings_Batch1.md` — 심각0·보통3·경미4, 배치1 승인 |
+| 1-Fix | 배치1 지적사항 수정 (보통3) | builder | 1-R | ✅ 커밋 `f824bf8` · 타입/테스트261/빌드 통과 · 경미2(겹친다이얼로그 Esc이중닫힘) 미해결로 남음(이번범위 아님) |
 
-세부 작업 T1~T16 정의: `_workspace/21_plan-reviewer_spec_S5_Phase4.md` §5
+## 배치 2
 
-## 커밋 단위 (항목마다 커밋·푸시)
-S5 완료 / 공통 번호부여 완료 / 손상결함표 완료 / 결함리스트 완료 / 사진첩 완료 / 조사위치도 완료
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| 2-B | R-4·R-5+R-6+R-8+F-4·R-9 구현 | builder | 1-Fix | ✅ `33_builder_log_Batch2.md` · 커밋 `ad820c6`(R-4)·`7f6ef29`(R-9)·`62cbaff`(R-8핵심)·`4d44354`(R-5+R-6+R-8배선+F-4) · 타입/테스트547/빌드 통과 |
+| 2-R | 배치2 검수 | code-reviewer | 2-B | ✅ `34_code-reviewer_findings_Batch2.md` — 심각0·보통3·경미6, 조건부 통과(보통3 고치면 무조건 통과) |
+| 2-Fix | 배치2 지적사항 수정 (보통3 + 경미 일부) | builder | 2-R | ✅ 커밋 `194cef8` · 타입/테스트547/빌드 통과 |
 
-**Phase B 실제 커밋 (3개).** 산출물별로 5개로 쪼개면 **중간 커밋이 컴파일되지 않는다** —
-`Export.tsx → produce.ts → {damageTableFile, locationMap, xlsx}` 가 한 덩어리다.
-"각 커밋에서 타입검사·테스트·빌드가 깨지지 않는다"를 우선했고 커밋 메시지에 T 번호를 전부 적었다.
+## 배치 3
 
-| 커밋 | 내용 | T |
-|---|---|---|
-| `33859d9` | 손상결함표·결함리스트·사진첩 공유 모델 + 엑셀 어댑터 | T10 · T11 · T13 · T15 코어 |
-| `d00a97f` | 조사위치도 오프스크린 렌더 + 산출물 생성 파이프라인 | T14 · repo 위임(검수 경미 6) |
-| `f7452a0` | 출력 화면 P6 + 인쇄 뷰 + 출력 이력 | T9 · T12 · T16 · 인쇄 뷰 3종 |
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| 3-B | G-6·G-3·G-2 구현 | builder | 2-Fix | ✅ `35_builder_log_Batch3.md` · 커밋 `fc12efa`(G-6)·`efd9e00`(G-3)·`8770c42`(G-2) · 타입/테스트597/빌드 통과 · 가정 U17~U22 |
+| 3-R | 배치3 검수 | code-reviewer | 3-B | ⬜ |
+| 3-Fix | 배치3 지적사항 수정 | builder | 3-R | ⬜ |
+
+## 배치 4
+
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| 4-B | G-5·G-1 구현 | builder | 3-Fix | ⬜ |
+| 4-R | 배치4 검수 | code-reviewer | 4-B | ⬜ |
+| 4-Fix | 배치4 지적사항 수정 | builder | 4-R | ⬜ |
+
+## 통합
+
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| Z | 통합 판정 — 타입/테스트/빌드, 개발서버 기동, NEXT.md 갱신 | 리더 | 4-Fix | ⬜ |
+
+## 배치는 순차 진행이 원칙이나, 앞 배치 검수 대기 중 다음 배치 스펙 선독은 허용
