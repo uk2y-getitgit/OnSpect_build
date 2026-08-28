@@ -21,7 +21,8 @@ export type Route =
   | { name: 'EXPORT'; projectId: string }
   /**
    * #/p/:pid/export/print?run={runId}&kind={...} — **인쇄 전용 뷰** (§4-9).
-   * 새 탭으로 열고 화면 UI 없이 문서만 렌더한 뒤 `window.print()` 를 부른다.
+   * 새 탭으로 열고 문서를 **미리보기**로 렌더한다. 인쇄는 상단 `[PDF로 인쇄]` 를
+   * 눌렀을 때만 열린다 — 자동으로 `window.print()` 를 부르지 않는다 (F-2).
    * PDF 라이브러리를 넣지 않는다 — 한글 폰트 임베딩 문제가 통째로 사라진다(K1 · Q32).
    */
   | { name: 'EXPORT_PRINT'; projectId: string; runId: string; kind: PrintKind };

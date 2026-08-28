@@ -8,7 +8,11 @@
  * ⭐ **번호를 다시 계산하지 않는다.** `ExportRun.mapping` 을 그대로 쓴다 —
  *    같은 `run` 으로 연 손상결함표·사진첩·조사위치도의 번호가 어긋날 수 없다(K20).
  *
- * ⭐ **모든 `<img>` 의 `decode()` 를 기다린 뒤 인쇄한다.** 안 기다리면 빈 칸이 인쇄된다.
+ * ⭐ **자동으로 인쇄하지 않는다** (F-2 · 스펙 §2-3). 이 화면은 미리보기이고,
+ *    `window.print()` 는 사용자가 `[PDF로 인쇄]` 를 눌렀을 때만 열린다.
+ *
+ * ⭐ **모든 `<img>` 의 `decode()` 를 기다린 뒤에야 인쇄 버튼이 열린다.**
+ *    안 기다리고 인쇄하면 빈 칸이 인쇄된다.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -60,7 +64,8 @@ export function PrintRoute({
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const printed = useRef(false);
+  /** 모든 `<img>` 디코드 완료 — 그전에는 [PDF로 인쇄] 를 막는다 (F-2) */
+  const [ready, setReady] = useState(false);
 
   // `@page` 는 산출물마다 방향이 달라 런타임에 주입한다 — 전역 CSS 에 두면
   // 다른 화면에서 Ctrl+P 를 눌렀을 때도 A4 가 강제된다
@@ -147,20 +152,22 @@ export function PrintRoute({
   }, [data, kind]);
 
 
-  // 렌더가 끝나고 **모든 이미지가 디코드된 뒤** 인쇄한다
+  // 렌더가 끝나고 **모든 이미지가 디코드되면** 인쇄 버튼을 연다.
+  // ⭐ 여기서 `window.print()` 를 부르지 않는다 (F-2 · 스펙 §2-3) — 이 화면은 **미리보기**다.
+  //    인쇄는 사용자가 [PDF로 인쇄] 를 눌렀을 때만 열린다.
+  //    단 `waitForImages` 는 남긴다: 원래 방어("빈 칸이 인쇄된다")를 잃지 않으려면
+  //    디코드가 끝나기 전에는 버튼을 disabled 로 둬야 한다.
   useEffect(() => {
-    if (!data || printed.current) return;
+    if (!data) {
+      setReady(false);
+      return;
+    }
     const root = rootRef.current;
     if (!root) return;
-    printed.current = true;
     let cancelled = false;
     void (async () => {
       await waitForImages(root);
-      if (cancelled) return;
-      // 레이아웃이 한 프레임 안정된 뒤에 연다
-      requestAnimationFrame(() => {
-        if (!cancelled) window.print();
-      });
+      if (!cancelled) setReady(true);
     })();
     return () => {
       cancelled = true;
@@ -174,11 +181,17 @@ export function PrintRoute({
       <div className="pv-bar">
         <span className="pv-bar__title">{label}</span>
         <span className="pv-bar__hint">
-          인쇄 대화상자에서 <b>&quot;PDF로 저장&quot;</b>을 선택하세요
+          미리보기입니다 — <b>[PDF로 인쇄]</b> 를 누른 뒤 인쇄 대화상자에서{' '}
+          <b>&quot;PDF로 저장&quot;</b>을 선택하세요
         </span>
         <span className="pv-bar__spacer" />
-        <button type="button" className="btn btn--primary" onClick={() => window.print()}>
-          PDF로 인쇄
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!ready}
+          onClick={() => window.print()}
+        >
+          {ready ? 'PDF로 인쇄' : '이미지 준비 중…'}
         </button>
         <button type="button" className="btn" onClick={() => window.close()}>
           닫기
