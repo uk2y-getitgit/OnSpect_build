@@ -8,6 +8,7 @@
 import {
   DEFAULT_TITLE_BLOCK,
   legendSymbol,
+  statusRows,
   type Defect,
   type LegendConfig,
   type LegendRow,
@@ -98,6 +99,8 @@ export function legendConfigFor(
   if (!drawing || !lg.enabled) return null;
   const mine = defects.filter((d) => d.drawingId === drawing.id);
   const rows = lg.showTypes ? legendRowsFor(mine) : [];
-  if (rows.length === 0) return null;
-  return { enabled: true, lgScale: lg.lgScale, rows };
+  // D15 — 켜져 있어도 **그 도면에 없는 상태는 빠진다**(`statusRows` 안에서 거른다)
+  const status = statusRows(lg, mine);
+  if (rows.length === 0 && status.length === 0) return null;
+  return { enabled: true, lgScale: lg.lgScale, rows, statusRows: status };
 }

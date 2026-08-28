@@ -3103,6 +3103,23 @@ select.input { cursor: pointer; }
 }
 .tbset__scope { font-weight: 500; font-size: 11px; color: var(--text-dim); word-break: keep-all; }
 
+/* D15 상태 범례 체크박스 4개 */
+.tbset__checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.tbset__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  word-break: keep-all;
+}
+.tbset__check input:disabled + *, .tbset__check input:disabled ~ * { opacity: 0.45; }
+/* 체크박스 옆 색 견본 — 도면 위 마커·범례와 같은 예약색이다 */
+.tbset__dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.tbset__dot[data-status='CURRENT'] { background: #e5342a; }
+.tbset__dot[data-status='PREV_PENDING'] { background: #7c4dff; }
+.tbset__dot[data-status='REPAIRED'] { background: #9aa4b0; }
+
 /*
  * D16 실시간 미리보기 — 모달이 캔버스를 가리면 슬라이더 효과가 안 보인다.
  * 오른쪽에 붙이고 스크림을 거의 투명하게 둔다. `place-items: center` 를 덮어쓴다.

@@ -238,8 +238,59 @@ export function TitleBlockDialog({
           <span>범례 표시</span>
         </label>
         <p className="tbset__note">
-          지면 우측 상단에 <b>기호 | 설명</b> 2열 표로 그립니다. 결함유형별 색은 쓰지 않습니다 —
-          도면 위 마커 색은 <b>결함 상태</b>(현회차 · 전회차 · 보수완료)를 그대로 유지합니다.
+          지면 우측 상단에 <b>기호 | 설명</b> 2열 표로 그립니다. 결함유형 행은 색을 쓰지 않고,
+          상태 행은 <b>도면 위 마커와 같은 색</b>(현회차 빨강 · 전회차 보라 · 보수완료 회색)으로
+          채운 원을 그립니다.
+        </p>
+
+        {/*
+          D15 — 상태 범례. **켜도 그 도면에 그 상태가 없으면 안 그린다** —
+          범례는 "이 도면의 이 색이 무슨 뜻인가"를 설명하는 표라, 없는 색을 설명하면 거짓말이 된다.
+        */}
+        <div className="tbset__checks">
+          <label className="tbset__check">
+            <input
+              type="checkbox"
+              checked={lg.showTypes}
+              disabled={!lg.enabled}
+              onChange={(e) => setLeg('showTypes', e.target.checked)}
+            />
+            <span>결함유형</span>
+          </label>
+          <label className="tbset__check">
+            <input
+              type="checkbox"
+              checked={lg.statusNew}
+              disabled={!lg.enabled}
+              onChange={(e) => setLeg('statusNew', e.target.checked)}
+            />
+            <span className="tbset__dot" data-status="CURRENT" aria-hidden="true" />
+            <span>신규(현회차)</span>
+          </label>
+          <label className="tbset__check">
+            <input
+              type="checkbox"
+              checked={lg.statusPending}
+              disabled={!lg.enabled}
+              onChange={(e) => setLeg('statusPending', e.target.checked)}
+            />
+            <span className="tbset__dot" data-status="PREV_PENDING" aria-hidden="true" />
+            <span>미보수(전회차)</span>
+          </label>
+          <label className="tbset__check">
+            <input
+              type="checkbox"
+              checked={lg.statusRepaired}
+              disabled={!lg.enabled}
+              onChange={(e) => setLeg('statusRepaired', e.target.checked)}
+            />
+            <span className="tbset__dot" data-status="REPAIRED" aria-hidden="true" />
+            <span>보수완료</span>
+          </label>
+        </div>
+        <p className="tbset__note">
+          상태 행은 <b>이 도면에 실제로 있는 상태만</b> 나갑니다 — 켜 두어도 해당 결함이 없으면
+          그리지 않습니다.
         </p>
 
         <div className="tbset__row">

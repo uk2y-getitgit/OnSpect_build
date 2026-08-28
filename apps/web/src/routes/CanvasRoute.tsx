@@ -388,16 +388,18 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   // F5-2 범례 — 행은 저장하지 않고 **이 도면에 실제로 쓰인 결함유형**에서 파생한다.
   // 배경 레이어는 뷰포트가 바뀔 때만 다시 그리므로, 행 구성이 실제로 바뀔 때만
   // 새 객체가 나오도록 서명(키)으로 memo 를 건다 — 결함을 옮길 때마다 재렌더하지 않게.
-  const legendSig = useMemo(
-    () =>
-      defects
-        .filter((d) => d.drawingId === currentDrawing?.id)
-        .map((d) => `${d.defectTypeId ?? d.defectTypeName ?? ''}`)
-        .filter((x) => x !== '')
-        .sort()
-        .join('|'),
-    [defects, currentDrawing?.id],
-  );
+  // ⭐ 서명에 **상태**도 넣는다 — D15 상태 범례는 "그 도면에 그 상태가 있는가"로 행이 정해지므로,
+  //    결함유형만 보면 마지막 `보수완료` 결함을 지워도 범례 행이 남는다
+  const legendSig = useMemo(() => {
+    const mine = defects.filter((d) => d.drawingId === currentDrawing?.id);
+    const types = mine
+      .map((d) => d.defectTypeId ?? d.defectTypeName ?? '')
+      .filter((x) => x !== '')
+      .sort()
+      .join('|');
+    const statuses = [...new Set(mine.map((d) => d.status))].sort().join('|');
+    return `${types}#${statuses}`;
+  }, [defects, currentDrawing?.id]);
   const legend = useMemo(
     () => legendConfigFor(currentDrawing, defects, project, lgPreview),
     // eslint-disable-next-line react-hooks/exhaustive-deps
