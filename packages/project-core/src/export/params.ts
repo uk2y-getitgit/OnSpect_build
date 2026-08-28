@@ -31,8 +31,22 @@ export type ExportDocOptions = {
    * 하드코딩하면 다른 발주처에서 조용히 틀린다.
    */
   headerLine2: string;
-  /** 대표 외 사진 포함 (§2-C). 1차는 항상 false + UI 비활성 (K7 — 부번이 생겨 번호체계가 깨진다) */
+  /**
+   * 대표 외 사진 포함 (§2-C · PhotoPolish §2-8 로 **활성화됨**).
+   *
+   * ⭐ `assignNumbers()` 를 건드리지 않는다. 대표는 `사진 12` 그대로이고 나머지는
+   *    `12-1` · `12-2` 라는 **사진첩 배치 단계의 파생 부번**이다 →
+   *    `ExportRun.mapping`(결함 1건 : 번호 1개) 구조가 그대로라 재현성이 무손상이다.
+   *    손상결함표·결함 리스트의 `사진번호` 열도 그대로 `12` 다(대표만 가리킨다).
+   */
   includeNonPrimaryPhotos: boolean;
+  /**
+   * 사진첩 캡션 **1행(`사진 12`)을 숨긴다** (F-4 · 파일2-⑥). 기본 false.
+   *
+   * ⚠️ **표시만 숨긴다.** `assignNumbers()`·`ExportRun.mapping` 은 그대로다(불변식 #2).
+   *    손상결함표·결함 리스트의 `사진번호` 열은 **건드리지 않는다** — 그 열은 본표의 열이다.
+   */
+  hidePhotoNumber: boolean;
 };
 
 export type ExportParams = NumberingParams & {
@@ -51,6 +65,8 @@ export const DEFAULT_RENDER_OPTIONS: ExportRenderOptions = {
 export const DEFAULT_DOC_OPTIONS: ExportDocOptions = {
   headerLine2: '제2장 현장조사',
   includeNonPrimaryPhotos: false,
+  // 기본 false 이므로 **기존 출력물은 한 글자도 안 바뀐다**
+  hidePhotoNumber: false,
 };
 
 /** 출력 화면이 처음 열릴 때의 값. 층 순서는 호출자가 정한다(누른 순서 = 출력 순서) */
