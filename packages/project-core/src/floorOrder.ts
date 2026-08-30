@@ -13,6 +13,7 @@
 import {
   BUILDING_STEP,
   FLOOR_STEP,
+  normalizeFloorCode,
   SORT_EXTERIOR,
   SORT_PIT,
   SORT_ROOF,
@@ -40,6 +41,12 @@ function norm(name: string): string {
 }
 
 /**
+ * EXTERIOR 로 인정하는 층 이름 — **완전일치 목록이다**(공백 제거·대문자 후 비교).
+ * 부분일치로 넓히지 마라: `지상3층 외벽` 이 EXTERIOR 로 읽히면 그 층 도면이 목록 맨 위로 간다.
+ */
+const EXTERIOR_NAMES = new Set(['외부', '외곽', '옥외', '외벽', '외부전경', 'EXT', 'EXTERIOR']);
+
+/**
  * 이름 → sortOrder 해석 (§2-7-a).
  *
  * | 입력                         | 해석    | sortOrder |
@@ -57,18 +64,14 @@ export function parseFloorName(name: string): FloorParse {
   // PIT 이 가장 먼저다 — `기계실피트` 처럼 접두어가 붙어도 최하단이다
   if (s.includes('PIT') || s.includes('피트')) return { kind: 'PIT', sortOrder: SORT_PIT };
 
-  // D19 외부 — **옥탑 검사보다 먼저**여야 한다. `옥외` 에는 `옥상`도 `지붕`도 없으므로
-  // ROOF 로 오인되지 않는다. ⚠️ `W` 는 넣지 않는다 — `W` 는 *출력 코드*이지 층 *이름*이 아니다
-  if (
-    s.includes('외부') ||
-    s.includes('외곽') ||
-    s.includes('옥외') ||
-    s.includes('외벽') ||
-    s === 'EXT' ||
-    s === 'EXTERIOR'
-  ) {
-    return { kind: 'EXTERIOR', sortOrder: SORT_EXTERIOR };
-  }
+  // D19 외부 — **완전일치만** 인정한다 (2026-08-30 검수 보통3).
+  //
+  // 예전에는 `includes` 였다. 그래서 `지상3층 외벽` · `지하1층 외부계단` 처럼 **층 번호가 들어간**
+  // 이름까지 EXTERIOR(9500)로 삼켰다 — 3층 도면이 목록 맨 위로 올라가고 `순서 확인` 배지가 떴다.
+  // 사용자가 실제로 입력하는 외부 층 이름은 `외부` · `외벽` 같은 짧은 단어다(스펙 §5-5-b).
+  // 그 외의 조합은 UNKNOWN 으로 두고 드래그에 맡긴다 — 잘못 해석하는 것보다 낫다.
+  // ⚠️ `W` 는 넣지 않는다 — `W` 는 *출력 코드*이지 층 *이름*이 아니다
+  if (EXTERIOR_NAMES.has(s)) return { kind: 'EXTERIOR', sortOrder: SORT_EXTERIOR };
 
   // 옥탑 — `RF` 를 `F` 계열보다 먼저 걸러야 한다
   if (s.includes('옥탑') || s === 'PH' || s === 'PENTHOUSE' || s === 'R' || s === 'RF') {
@@ -98,10 +101,12 @@ export function parseFloorName(name: string): FloorParse {
 }
 
 /**
- * D19 — 출력 결함번호 접두어. **파생값이다. 저장하지 않는다**(불변식 #2).
+ * D19 — 층 이름에서 파생한 접두어 **제안값**. ⚠️ **출력에 쓰지 마라**(D20).
  *
- * `floor.code` 를 사용자가 직접 넣었으면 그것을 그대로(공백 제거 · 대문자) 쓰고,
- * 없으면 이름에서 파생한다. 파싱 실패면 `null` = 접두어 없음(번호만 나간다).
+ * `ProjectSetup` 의 접두어 입력칸 **placeholder 전용**이다. 사용자가 그 제안을 보고
+ * 직접 입력해야 비로소 출력에 반영된다 — 그것이 D20 의 "옵트인"이다.
+ * `floor.code` 를 직접 넣었으면 그것을 그대로(공백 제거 · 대문자) 쓰고,
+ * 없으면 이름에서 파생한다. 파싱 실패면 `null` = 제안 없음.
  *
  * ⚠️ `ROOF → 'RF'` · `ROOFTOP → 'PH'` 인 이유: 파서는 문자열 `'RF'` 를 **옥탑**으로 읽지만
  * (`parseFloorName` 의 `s === 'RF'`), 국제 관례는 RF = Roof Floor · PH = Penthouse 이고
@@ -132,13 +137,25 @@ export function floorCodeOf(floor: { name: string; code?: string | null }): stri
 /**
  * 층 id → 접두어 맵. **출력 당시 스냅샷**(`ExportParams.floorCodes`)을 만드는 유일한 경로다 —
  * 화면·엑셀·인쇄 뷰·조사위치도가 각자 파생하면 층 이름을 고친 뒤 서로 어긋난다.
+ *
+ * ⭐ **D20 — 수동 입력만 읽는다. 이름에서 파생하지 않는다.**
+ * 접두어를 한 곳도 넣지 않은 용역은 값이 전부 `null` 이고, 산출물은 접두어 도입 전과
+ * **한 글자도 다르지 않다**(NO 열 `1`·`2`·`3`). 옛 `ExportRun` 재다운로드도 같은 이유로 재현된다.
+ * 자동 파생(`floorCodeOf`)은 입력칸 placeholder 에서만 쓴다.
  */
 export function floorCodesOf(
   floors: readonly { id: string; name: string; code?: string | null }[],
 ): Record<string, string | null> {
   const out: Record<string, string | null> = {};
-  for (const f of floors) out[f.id] = floorCodeOf(f);
+  for (const f of floors) out[f.id] = normalizeFloorCode(f.code);
   return out;
+}
+
+/** 이 용역에 사용자가 접두어를 하나라도 넣었는가 — 번호모드 자동 제안의 조건 (D20) */
+export function hasAnyFloorCode(
+  floors: readonly { code?: string | null }[],
+): boolean {
+  return floors.some((f) => normalizeFloorCode(f.code) !== null);
 }
 
 /** 파싱된 sortOrder. 실패면 null (호출부가 `UNKNOWN` 분기를 매번 쓰지 않게) */

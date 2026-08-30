@@ -168,6 +168,8 @@ async function renderOne(a: {
     defects,
     globalStyle,
     preview: null,
+    // ⭐ 여백 계산도 늘어난 풍선 폭을 알아야 한다 — 안 그러면 `1F-01` 풍선의 오른쪽이 잘린다
+    displayNumbers: input.displayNumbers,
   });
   const box = screensBounds(probe);
   const maxPad = Math.round(longEdge * zoom * MAX_PAD_RATIO);
@@ -240,6 +242,7 @@ async function renderOne(a: {
     defects,
     globalStyle,
     preview: null,
+    displayNumbers: input.displayNumbers,
   });
   renderOps(ctx, buildOverlay(renderInput, screens), image);
 
@@ -307,7 +310,9 @@ function screensBounds(screens: readonly DefectScreen[]): Bounds | null {
     maxY = Math.max(maxY, y + r);
   };
   for (const s of screens) {
-    put(s.label.x, s.label.y, s.balloonR);
+    // 풍선은 원이 아니라 스타디움이다 — 늘어난 좌우 폭까지 센다 (검수 심각2)
+    put(s.label.x - s.labelHalfExtra, s.label.y, s.balloonR);
+    put(s.label.x + s.labelHalfExtra, s.label.y, s.balloonR);
     for (const m of s.marks) {
       put(m.center.x, m.center.y, s.markR);
       if (m.rect) {
@@ -333,10 +338,11 @@ function clippedDefects(
   const out: string[] = [];
   for (const s of screens) {
     const r = s.balloonR;
+    const halfW = r + s.labelHalfExtra; // 스타디움 폭 (검수 심각2)
     if (
-      s.label.x - r < 0 ||
+      s.label.x - halfW < 0 ||
       s.label.y - r < 0 ||
-      s.label.x + r > canvas.w ||
+      s.label.x + halfW > canvas.w ||
       s.label.y + r > canvas.h
     ) {
       out.push(s.defectId);

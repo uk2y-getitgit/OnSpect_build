@@ -170,6 +170,61 @@ export function ellipsePolyline(r: SRect, segments = 64): SPoint[] {
   return out;
 }
 
+/**
+ * 스타디움(가로로 늘어난 알약) 외곽선 — 번호 풍선 전용.
+ *
+ * 중심 `c` 에서 좌우로 `halfExtra` 만큼 벌어진 두 반원을 직선으로 이은 도형이다.
+ * `halfExtra === 0` 이면 정확히 반지름 `r` 인 원이 된다(다각형 근사이므로 원 op 과
+ * 픽셀이 미세하게 다르다 — **그래서 호출부는 `halfExtra === 0` 이면 원 op 을 그대로 쓴다**).
+ *
+ * 오른쪽 반원(-90° → +90°) → 왼쪽 반원(+90° → +270°) 순. 닫으면 스타디움이다.
+ */
+export function stadiumPolyline(
+  c: SPoint,
+  r: number,
+  halfExtra: number,
+  segments = 24,
+): SPoint[] {
+  const e = Math.max(0, halfExtra);
+  const seg = Math.max(4, segments);
+  const out: SPoint[] = [];
+  for (let i = 0; i <= seg; i += 1) {
+    const t = -Math.PI / 2 + (Math.PI * i) / seg;
+    out.push({ x: c.x + e + r * Math.cos(t), y: c.y + r * Math.sin(t) });
+  }
+  for (let i = 0; i <= seg; i += 1) {
+    const t = Math.PI / 2 + (Math.PI * i) / seg;
+    out.push({ x: c.x - e + r * Math.cos(t), y: c.y + r * Math.sin(t) });
+  }
+  return out;
+}
+
+/** 스타디움까지의 거리 판정 — 중심선 선분과의 거리가 곧 반지름 판정이다 */
+export function pointInStadium(p: SPoint, c: SPoint, r: number, halfExtra: number): boolean {
+  const e = Math.max(0, halfExtra);
+  return distPointSegment(p, { x: c.x - e, y: c.y }, { x: c.x + e, y: c.y }) <= r;
+}
+
+/**
+ * 중심에서 **단위벡터 `u` 방향**으로 스타디움 테두리까지의 거리.
+ * 리더선을 풍선 테두리에서 끊는 데 쓴다 — 안 그러면 선이 알약 속으로 파고든다.
+ * `halfExtra === 0` 이면 정확히 `r` 을 돌려준다(원일 때와 완전히 같다).
+ */
+export function stadiumBoundaryDist(u: SPoint, r: number, halfExtra: number): number {
+  const e = Math.max(0, halfExtra);
+  if (e === 0) return r;
+  const ax = Math.abs(u.x);
+  const ay = Math.abs(u.y);
+  // 반원(캡)으로 빠져나가는 경우
+  const disc = r * r - e * e * u.y * u.y;
+  if (disc >= 0) {
+    const t = e * ax + Math.sqrt(disc);
+    if (t * ax >= e) return t;
+  }
+  // 직선 구간(위/아래 평평한 변)으로 빠져나가는 경우
+  return ay > 0 ? r / ay : r + e;
+}
+
 /** 폴리라인(자유그리기)까지의 최단 거리 */
 export function distToPolyline(p: SPoint, pts: readonly SPoint[]): number {
   if (pts.length === 0) return Number.POSITIVE_INFINITY;

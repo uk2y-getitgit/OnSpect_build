@@ -17,8 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ARTIFACT_LABEL,
   DEFAULT_EXPORT_PARAMS,
-  floorCodeOf,
   floorCodesOf,
+  hasAnyFloorCode,
   projectDisplayName,
   type ExportArtifactKind,
   type ExportParams,
@@ -121,13 +121,12 @@ export function Export({ projectId }: { projectId: string }) {
         // 처음 열 때는 **지하→지상** 순서로 전부 선택해 둔다.
         // 누른 순서가 출력 순서라는 규칙(§4-4)은 그대로다 — 이건 그 시작값일 뿐이다
         const base = DEFAULT_EXPORT_PARAMS(defaultFloorOrder(b));
-        // ⭐ D19 · 가정 U13 — 층 접두어가 하나라도 있으면 번호모드를 `PER_FLOOR` 로 **제안**한다.
-        //    접두어(`1F-01`)는 층 안에서 1부터 세는 번호를 전제로 한다. 전체연속이면
-        //    `1F-01 … 1F-12 · 2F-13` 이 되어 접두어가 뜻을 잃는다.
-        //    **강제가 아니다** — 사용자가 아래 옵션에서 다시 `전체 이어서` 로 바꿀 수 있다
-        setParams(
-          b.floors.some((f) => floorCodeOf(f) !== null) ? { ...base, mode: 'PER_FLOOR' } : base,
-        );
+        // ⭐ D19 · D20 — 사용자가 **직접 입력한** 층 접두어가 하나라도 있으면
+        //    번호모드를 `PER_FLOOR` 로 **제안**한다. 접두어(`1F-01`)는 층 안에서 1부터 세는
+        //    번호를 전제로 한다. **강제가 아니다** — 아래 옵션에서 다시 바꿀 수 있다.
+        //    ⚠️ `hasAnyFloorCode` 는 이름에서 파생하지 않는다(D20). 접두어를 안 넣은 용역은
+        //    예전 기본값(`전체 이어서`)이 그대로 나온다 — 이것이 옵트인의 핵심이다
+        setParams(hasAnyFloorCode(b.floors) ? { ...base, mode: 'PER_FLOOR' } : base);
       }
       setLoading(false);
     })();

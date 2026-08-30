@@ -249,6 +249,8 @@ export function CanvasView({
       defects: inp.defects,
       globalStyle: inp.globalStyle,
       preview: inp.preview,
+      // 번호가 길면 풍선이 좌우로 늘어난다 — 히트 테스트도 같은 값을 본다 (검수 심각2)
+      displayNumbers: inp.displayNumbers,
     });
     renderOps(ctx, buildOverlay(inp, screens), image);
   }, [renderInput, image, state.canvas.w, state.canvas.h]);

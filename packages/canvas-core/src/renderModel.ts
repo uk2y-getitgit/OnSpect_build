@@ -49,6 +49,7 @@ import {
   hatchEllipse,
   hatchRect,
   rectOutline,
+  stadiumPolyline,
   type SRect,
 } from './shapes.js';
 import { resolveStyle } from './style.js';
@@ -219,8 +220,14 @@ export function buildScreens(input: {
   defects: readonly Defect[];
   globalStyle: GlobalStyle;
   preview: PreviewOverride;
+  /**
+   * 결함 id → 그릴 번호 문자열. **풍선 폭 계산에만 쓴다**(검수 심각2).
+   * 안 넘기면 풍선은 예전처럼 고정 반지름 원이다 — 화면/히트가 서로 어긋나지는 않지만
+   * 긴 번호(`1F-01`)가 원 밖으로 넘친다. **번호를 그리는 호출부는 반드시 넘겨라.**
+   */
+  displayNumbers?: Record<string, string>;
 }): DefectScreen[] {
-  const { drawing, viewport, defects, globalStyle, preview } = input;
+  const { drawing, viewport, defects, globalStyle, preview, displayNumbers } = input;
   return [...defects]
     .sort(byZAscending)
     .map((d) =>
@@ -231,6 +238,7 @@ export function buildScreens(input: {
         drawing.imageWidth,
         drawing.imageHeight,
         preview,
+        displayNumbers?.[d.id] ?? '',
       ),
     );
 }
@@ -365,39 +373,55 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
     }
 
     // 5·6. 번호 풍선 + 번호 텍스트
+    //
+    // ⭐ 풍선은 **스타디움(알약)** 이다 — 글자가 길면 좌우로 늘어난다(검수 심각2).
+    //    `labelHalfExtra === 0`(1~2자리 숫자)이면 원 op 을 **그대로** 쓴다: 예전과 픽셀이 같다.
+    //    폭은 `DefectScreen` 이 이미 계산해 두었다 — 히트 테스트가 보는 값과 **같은 값**이다.
     const balloonHovered = hov?.part === 'LABEL';
     const br = Math.max(4, s.balloonR);
+    const ex = Math.max(0, s.labelHalfExtra ?? 0);
+    /** 늘어난 만큼을 반영한 풍선 외곽선 op. `ex === 0` 이면 예전 원 op 그대로 */
+    const balloonOp = (
+      r: number,
+      o: { fill?: string; stroke?: string; width?: number; alpha?: number },
+    ): DrawOp =>
+      ex === 0
+        ? { k: 'circle', c: s.label, r, ...o }
+        : {
+            k: 'polyline',
+            pts: stadiumPolyline(s.label, r, ex),
+            close: true,
+            fill: o.fill,
+            color: o.stroke ?? o.fill ?? '#000000',
+            width: o.width ?? 1,
+            noStroke: o.stroke === undefined,
+            alpha: o.alpha,
+            join: 'round',
+          };
+
     if (isSel) {
       // 선택 글로우 — 풍선 주위
-      highlights.push({
-        k: 'circle',
-        c: s.label,
-        r: br + SELECTION_RING_PX + 2,
-        stroke: SELECTION_COLOR,
-        width: SELECTION_RING_PX,
-        alpha: 0.35,
-      });
-      highlights.push({
-        k: 'circle',
-        c: s.label,
-        r: br + 2,
-        stroke: SELECTION_COLOR,
-        width: 1.5,
-      });
+      highlights.push(
+        balloonOp(br + SELECTION_RING_PX + 2, {
+          stroke: SELECTION_COLOR,
+          width: SELECTION_RING_PX,
+          alpha: 0.35,
+        }),
+      );
+      highlights.push(balloonOp(br + 2, { stroke: SELECTION_COLOR, width: 1.5 }));
     }
     if (balloonHovered && !isSel) {
-      balloons.push({ k: 'circle', c: s.label, r: br + 3, fill: HOVER_HALO_COLOR });
+      balloons.push(balloonOp(br + 3, { fill: HOVER_HALO_COLOR }));
     }
-    balloons.push({
-      k: 'circle',
-      c: s.label,
-      r: br,
-      fill: '#ffffff',
-      stroke: st.color,
-      width:
-        Math.max(1, st.balloonStroke * zoomOf(s)) + (balloonHovered ? HOVER_STROKE_GROW_PX : 0),
-      alpha,
-    });
+    balloons.push(
+      balloonOp(br, {
+        fill: '#ffffff',
+        stroke: st.color,
+        width:
+          Math.max(1, st.balloonStroke * zoomOf(s)) + (balloonHovered ? HOVER_STROKE_GROW_PX : 0),
+        alpha,
+      }),
+    );
 
     const label = displayNumbers[s.defectId];
     if (label !== undefined && label !== '') {
@@ -739,8 +763,10 @@ function zoomOf(s: DefectScreen): number {
 }
 
 function intersectsCanvas(s: DefectScreen, canvas: Size): boolean {
-  let minX = s.label.x - s.balloonR;
-  let maxX = s.label.x + s.balloonR;
+  // 스타디움으로 늘어난 폭까지 센다 — 안 그러면 화면 가장자리에서 긴 번호가 통째로 사라진다
+  const halfW = s.balloonR + Math.max(0, s.labelHalfExtra ?? 0);
+  let minX = s.label.x - halfW;
+  let maxX = s.label.x + halfW;
   let minY = s.label.y - s.balloonR;
   let maxY = s.label.y + s.balloonR;
   const grow = (x: number, y: number, r = 0) => {

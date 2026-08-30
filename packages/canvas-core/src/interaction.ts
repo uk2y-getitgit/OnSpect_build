@@ -24,6 +24,7 @@ import {
   anchorNorm,
   arrowLastLegAngleDeg,
   autoLabelNorm,
+  balloonHalfExtra,
   centerOfGeometry,
   centerOfMark,
   effectiveLabelNorm,
@@ -108,6 +109,12 @@ export type ReduceContext = {
    * 무엇이 마우스이고 무엇이 손가락인지는 **어댑터만 안다.**
    */
   hitProfile?: HitProfile;
+  /**
+   * 결함 id → 화면에 그려지는 번호 문자열. **히트 영역이 그림과 같아지도록** 넘긴다
+   * (검수 심각2 — 긴 번호는 풍선이 좌우로 늘어난다).
+   * 생략하면 풍선을 원으로 보고 판정한다 = 예전 동작.
+   */
+  displayNumbers?: Record<string, string>;
 };
 
 export type ReduceResult = {
@@ -197,6 +204,7 @@ export function screensOf(state: CanvasState, ctx: ReduceContext): DefectScreen[
     defects: ctx.defects,
     globalStyle: ctx.globalStyle,
     preview: previewOf(state),
+    displayNumbers: ctx.displayNumbers,
   });
 }
 
@@ -951,7 +959,8 @@ function onPointerDown(
   const ih = state.drawing.imageHeight;
 
   if (hit.part === 'LABEL') {
-    const originNorm = effectiveLabelNorm(defect, style, iw, ih);
+    // 번호 문자열까지 넘긴다 — 자동배치 위치가 `defectScreen` 이 그린 위치와 같아야 한다
+    const originNorm = effectiveLabelNorm(defect, style, iw, ih, ctx.displayNumbers?.[defect.id] ?? '');
     const drag: DragState = {
       ...newDrag('MOVE_LABEL', ev.pointerId, ev.screen, next0.viewport, {}),
       defectId: defect.id,
@@ -1895,7 +1904,13 @@ function onResetLabel(state: CanvasState, defectId: string, ctx: ReduceContext):
     d.marks.length === 1 && d.marks[0]!.geometry.k === 'ARROW'
       ? (arrowLastLegAngleDeg(d.marks[0]!.geometry.points, iw, ih) ?? undefined)
       : undefined;
-  const to = roundNorm(autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride));
+  // 늘어난 풍선 폭까지 반영한다 — 초기화 결과가 `defectScreen` 의 자동배치와 같아야 한다
+  const extra = balloonHalfExtra(
+    ctx.displayNumbers?.[d.id] ?? '',
+    style.balloonRadius,
+    style.fontSize,
+  );
+  const to = roundNorm(autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride, extra));
   if (!d.label.placed) {
     return ok(state, ctx, [], [{ k: 'TOAST', kind: 'info', text: '이미 자동 배치 상태입니다' }]);
   }

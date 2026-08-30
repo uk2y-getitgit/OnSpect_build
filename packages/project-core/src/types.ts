@@ -103,8 +103,10 @@ export type Floor = RecordBase & {
   /** **정수. 지하는 음수** (불변식 5 / §2-7). UI 에 노출하지 않는다 */
   sortOrder: number;
   /**
-   * D19 — 출력 결함번호 접두어(`1F` · `B1F` · `RF` · `W`). `null`/`''` = 이름에서 자동 파생
-   * (`floorCodeOf`). 정규화: 공백 제거 · 대문자 · 최대 6자.
+   * D19 · D20 — 출력 결함번호 접두어(`1F` · `B1F` · `RF` · `W`). **옵트인이다.**
+   * `null`/`''` 이면 접두어 **없이** 번호만 나간다 — 이름에서 자동 파생하지 않는다.
+   * (`floorCodeOf` 의 파생값은 입력칸 placeholder 제안일 뿐이다.)
+   * 정규화: 공백 제거 · 대문자 · 최대 6자.
    *
    * ⚠️ **옛 레코드는 이 필드가 없다**(`undefined`). 읽는 쪽은 `?? null` 로 받는다 —
    * optional 필드 추가라 `DB_VERSION` 은 1 그대로고 마이그레이션이 없다.
@@ -293,16 +295,14 @@ export const DEFAULT_DRAWING_LEGEND: DrawingLegend = { enabled: true, lgScale: 1
  */
 export type ProjectTitleBlock = Omit<DrawingTitleBlock, 'drawingName'>;
 
-export const DEFAULT_PROJECT_TITLE_BLOCK: ProjectTitleBlock = {
-  enabled: true,
-  projectTitle: null,
-  scale: 'NONE',
-  tbScale: 1,
-  col0: 0.42,
-  col1: 0.46,
-  labelFontSz: 10,
-  valueFontSz: 14,
-};
+/**
+ * ⚠️ **값을 다시 적지 않는다.** 도면 기본값에서 `drawingName` 만 뺀 파생이다(검수 경미4).
+ * 두 벌로 적어 두면 한쪽만 고친 날 승격 결과와 새 도면 기본값이 조용히 갈린다.
+ */
+export const DEFAULT_PROJECT_TITLE_BLOCK: ProjectTitleBlock = (({
+  drawingName: _drawingName,
+  ...rest
+}) => rest)(DEFAULT_DRAWING_TITLE_BLOCK);
 
 /**
  * D16 + D15 — 용역 전체가 공유하는 범례 설정.

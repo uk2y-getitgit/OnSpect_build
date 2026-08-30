@@ -45,7 +45,13 @@ export function OptionsPanel({ params, onChange, mapEnabled }: OptionsPanelProps
               '층별 1번부터',
               '층이 바뀌면 결함번호만 1로 돌아갑니다. 사진번호는 용역 전체에 걸쳐 이어집니다',
             ],
-            ['CONTINUOUS', '전체 이어서', '선택한 층 전체에 걸쳐 번호가 계속 이어집니다'],
+            // D20 — 전체연속에서는 층 접두어를 붙이지 않는다. `2F-13` 은 2층의 13번이 아니라
+            // 거짓말이 되기 때문이다(검수 보통1). 사용자가 이유를 알 수 있게 여기서 말해 준다
+            [
+              'CONTINUOUS',
+              '전체 이어서',
+              '선택한 층 전체에 걸쳐 번호가 계속 이어집니다. 층 접두어는 이 모드에서 쓰이지 않습니다',
+            ],
           ] as [NumberMode, string, string][]
         ).map(([mode, label, hint]) => (
           <label className="xp-radio" key={mode} title={hint}>

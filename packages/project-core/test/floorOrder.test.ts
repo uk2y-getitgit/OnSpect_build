@@ -4,6 +4,7 @@ import {
   changedOrders,
   floorCodeOf,
   floorCodesOf,
+  hasAnyFloorCode,
   floorsNeedingOrderCheck,
   parseFloorName,
   parsedSortOrder,
@@ -178,10 +179,24 @@ describe('changedOrders', () => {
  */
 describe('EXTERIOR — D19 외부 층', () => {
   it('외부 · 외곽 · 옥외 · 외벽 · EXT · EXTERIOR 를 옥탑보다 뒤로 읽는다', () => {
-    for (const s of ['외부', '외곽', '옥외', '외벽', 'EXT', 'EXTERIOR', '건물 외부', '외벽부']) {
+    for (const s of ['외부', '외곽', '옥외', '외벽', 'EXT', 'EXTERIOR', 'ext', ' 외 부 ']) {
       expect(parseFloorName(s), s).toEqual({ kind: 'EXTERIOR', sortOrder: SORT_EXTERIOR });
     }
     expect(SORT_EXTERIOR).toBeGreaterThan(SORT_ROOFTOP);
+  });
+
+  /**
+   * 검수 보통3 — 예전에는 `includes` 라 `지상3층 외벽` 이 EXTERIOR(9500)로 삼켜졌다.
+   * 그 층 도면이 목록 맨 위로 올라가고 `순서 확인` 배지가 새로 떴다.
+   */
+  it('층 번호가 붙은 이름을 삼키지 않는다 — 완전일치만 EXTERIOR', () => {
+    // EXTERIOR(9500)로 읽히면 그 층이 목록 맨 위로 간다. 이제 UNKNOWN 이라 목록 끝에서
+    // 사용자가 드래그로 자리를 잡는다 — 잘못 해석하는 것보다 낫다(§2-7 의 기본 규칙)
+    expect(parseFloorName('지상3층 외벽').kind).toBe('UNKNOWN');
+    expect(parseFloorName('지하1층 외부계단').kind).toBe('UNKNOWN');
+    expect(parseFloorName('외벽부').kind).toBe('UNKNOWN');
+    // 순수한 층 이름은 그대로다
+    expect(parseFloorName('지상3층')).toEqual({ kind: 'ABOVE', n: 3, sortOrder: 30 });
   });
 
   it('`옥외` 를 옥상(ROOF)으로 오인하지 않는다', () => {
@@ -251,15 +266,45 @@ describe('normalizeFloorCode — 공백 제거 · 대문자 · 최대 6자', () 
   });
 });
 
-describe('floorCodesOf — 출력 스냅샷 맵', () => {
-  it('층 id → 접두어. 파생 실패는 null 로 남긴다', () => {
+/**
+ * D20 — **접두어는 옵트인이다.** 출력 스냅샷은 사용자가 직접 입력한 값만 읽는다.
+ *
+ * 이 describe 가 지키는 회귀는 하나다: *접두어를 한 곳도 안 넣은 용역의 산출물은
+ * 접두어 기능 도입 전과 한 글자도 다르지 않다.* (검수 심각1 · 체크리스트 D-22)
+ */
+describe('floorCodesOf — 출력 스냅샷 맵 (D20 옵트인)', () => {
+  it('⭐ 접두어를 안 넣으면 자동 파생하지 않는다 — 전부 null', () => {
     expect(
       floorCodesOf([
         { id: 'a', name: '지하1층' },
         { id: 'b', name: '지상1층', code: null },
         { id: 'c', name: '중간층' },
         { id: 'd', name: '외부' },
+        { id: 'e', name: '옥상', code: '' },
+        { id: 'f', name: '지상2층', code: '   ' },
       ]),
-    ).toEqual({ a: 'B1F', b: '1F', c: null, d: 'W' });
+    ).toEqual({ a: null, b: null, c: null, d: null, e: null, f: null });
+  });
+
+  it('직접 입력한 층만 접두어가 붙는다 (정규화: 공백 제거 · 대문자 · 6자)', () => {
+    expect(
+      floorCodesOf([
+        { id: 'a', name: '지하1층', code: 'b1f' },
+        { id: 'b', name: '지상1층' },
+        { id: 'c', name: '중간층', code: ' m 1 ' },
+      ]),
+    ).toEqual({ a: 'B1F', b: null, c: 'M1' });
+  });
+
+  it('floorCodeOf(자동 파생)는 그대로 남아 있다 — placeholder 제안 전용', () => {
+    expect(floorCodeOf({ name: '지상1층' })).toBe('1F'); // 제안값
+    expect(floorCodesOf([{ id: 'a', name: '지상1층' }])).toEqual({ a: null }); // 출력값
+  });
+
+  it('hasAnyFloorCode — 번호모드 자동 제안의 조건도 수동 입력만 본다', () => {
+    expect(hasAnyFloorCode([{ code: null }, { code: '' }])).toBe(false);
+    // 이름이 전부 파싱되는 용역이어도, 입력이 없으면 제안하지 않는다 (검수 심각1)
+    expect(hasAnyFloorCode([{ code: undefined }])).toBe(false);
+    expect(hasAnyFloorCode([{ code: null }, { code: '1F' }])).toBe(true);
   });
 });

@@ -105,16 +105,22 @@ function tableInput(
 }
 
 /**
- * D19 — 이 출력에 쓸 층 접두어. **스냅샷이 있으면 그것이 진실이다**(재현성).
- * 없으면(옛 `ExportRun`) 지금 층에서 파생한다 — 옛 이력도 깨지지 않고 열린다.
+ * D19 · D20 — 이 출력에 쓸 층 접두어. **스냅샷이 있으면 그것이 진실이다**(재현성).
+ * 없으면(옛 `ExportRun`) 지금 층의 **수동 입력** 접두어를 읽는다 — 옛 이력도 깨지지 않고 열린다.
+ * 접두어를 아무 층에도 넣지 않았으면 값이 전부 `null` 이라 예전 파일이 그대로 재현된다.
  *
  * ⭐ 화면·엑셀·인쇄 뷰·조사위치도가 전부 이 함수 하나를 부른다. 각자 파생하면
  *    층 이름을 고친 날 산출물끼리 접두어가 어긋난다(K20 과 같은 정신).
+ *
+ * ⭐ **번호모드가 `PER_FLOOR` 가 아니면 접두어를 쓰지 않는다** (검수 보통1).
+ *    전체연속에서 접두어를 붙이면 `1F-01 … 1F-12 · 2F-13 · 2F-14` 가 되어 접두어가 거짓말을 한다
+ *    (`2F-13` 은 2층의 13번이 아니다). 접두어는 "층 안에서 1부터"를 전제로 한 표기다.
  */
 export function floorCodesFor(
   src: ExportSource,
   params: ExportParams,
 ): Record<string, string | null> {
+  if (params.mode !== 'PER_FLOOR') return {};
   return params.floorCodes ?? floorCodesOf(src.bundle.floors);
 }
 

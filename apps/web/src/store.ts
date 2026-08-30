@@ -329,9 +329,13 @@ function dropStaleSelection(state: AppState): AppState {
 function runInput(state: AppState, ev: InputEvent): AppState {
   let seed = state.idSeed;
   const drawingId = state.canvas.drawing?.id ?? null;
+  const drawingDefects = defectsOfDrawing(state.defects, drawingId);
 
   const ctx: ReduceContext = {
-    defects: defectsOfDrawing(state.defects, drawingId),
+    defects: drawingDefects,
+    // 히트 영역이 **그려진 풍선과 같아지도록** 번호를 넘긴다 (검수 심각2).
+    // 화면 렌더(`CanvasView`)와 같은 소스를 쓴다 — 두 벌로 만들면 반드시 어긋난다
+    displayNumbers: displayNumbersOf(drawingDefects),
     memos: memosOfDrawing(state.memos, drawingId),
     globalStyle: DEFAULT_GLOBAL_STYLE,
     makeId: () => {

@@ -32,6 +32,8 @@ import {
   handlePoints,
   pointInEllipse,
   pointInRect,
+  pointInStadium,
+  stadiumBoundaryDist,
 } from './shapes.js';
 import type { Handle, Part, Selection, SPoint } from './types.js';
 
@@ -73,10 +75,13 @@ export function hitTest(
   const HIT_HANDLE_PX = profile.handle;
 
   // 1. 라벨
+  //    ⭐ 풍선은 원이 아니라 **스타디움**이다(검수 심각2). 늘어난 폭(`labelHalfExtra`)만큼
+  //       중심선 선분으로 판정한다 — 렌더가 쓰는 것과 **같은 값**이라 그림과 클릭이 어긋나지 않는다.
+  //       `labelHalfExtra === 0` 이면 선분이 한 점으로 줄어 예전 원 판정과 완전히 같다.
   const labelHits: HitTarget[] = [];
   for (const s of screens) {
     const r = Math.max(s.balloonR + HIT_PAD_PX, HIT_MIN_LABEL_PX);
-    if (dist(p, s.label) <= r) {
+    if (pointInStadium(p, s.label, r, s.labelHalfExtra ?? 0)) {
       labelHits.push({ defectId: s.defectId, part: 'LABEL', markId: null });
     }
   }
@@ -234,10 +239,12 @@ export function leaderSegment(s: DefectScreen): { a: SPoint; b: SPoint } | null 
   if (!s.anchor) return null;
   const v = sub(s.label, s.anchor);
   const r = Math.hypot(v.x, v.y);
-  if (r <= s.balloonR) return null;
   const u = unit(v);
+  // 풍선이 스타디움으로 늘어났으면 그 테두리에서 끊는다. `labelHalfExtra === 0` 이면 = balloonR
+  const edge = stadiumBoundaryDist({ x: -u.x, y: -u.y }, s.balloonR, s.labelHalfExtra ?? 0);
+  if (r <= edge) return null;
   return {
     a: s.anchor,
-    b: { x: s.label.x - u.x * s.balloonR, y: s.label.y - u.y * s.balloonR },
+    b: { x: s.label.x - u.x * edge, y: s.label.y - u.y * edge },
   };
 }

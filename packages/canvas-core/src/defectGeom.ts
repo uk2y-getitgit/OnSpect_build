@@ -4,10 +4,15 @@
  * 히트 테스트 · 렌더 모델 · 스냅이 **전부 이 한 곳**을 통해 위치를 얻는다.
  * 세 곳에 복제하면 "클릭은 잡히는데 그림은 딴 데 있는" 버그가 난다.
  */
-import { LABEL_AUTO_ANGLE_DEG, LABEL_AUTO_DIST_FACTOR } from './constants.js';
+import {
+  BALLOON_TEXT_PAD_EM,
+  LABEL_AUTO_ANGLE_DEG,
+  LABEL_AUTO_DIST_FACTOR,
+} from './constants.js';
 import { angleDeg, radians, toScreen } from './geometry.js';
 import { nearestAngle, SET_8 } from './snapAngle.js';
 import { areaBoundaryPoint, type SRect } from './shapes.js';
+import { estimateEm } from './titleBlock.js';
 import type {
   Defect,
   Mark,
@@ -159,12 +164,35 @@ export function anchorNorm(defect: Defect): NPoint | null {
 }
 
 /**
+ * 번호 풍선이 원에서 **좌우로 더 늘어나야 하는 양**(한쪽, 같은 단위로 들어온 값 그대로).
+ *
+ * 풍선은 원래 고정 반지름 원이었고, 글자가 몇 자든 중앙에 그냥 찍었다. `1F-01` 같은
+ * 층 접두어 번호는 원 밖으로 넘쳤다(검수 심각2). 이제 글자 폭에 맞춰 스타디움으로 늘린다.
+ *
+ * ⭐ **렌더 · 히트 · 자동배치가 전부 이 함수 하나를 쓴다.** 한 곳만 늘리면
+ *    "그림은 넓은데 클릭은 안 잡히는" 경계면 버그가 난다.
+ * ⭐ 1~2자리 숫자는 `0` 을 돌려준다 — 예전과 픽셀이 같다(회귀 없음).
+ *
+ * @param balloonR 풍선 반지름
+ * @param fontSize 글자 크기 (`balloonR` 과 **같은 단위**여야 한다 — 둘 다 스크린 px 이거나 둘 다 이미지 px)
+ */
+export function balloonHalfExtra(label: string, balloonR: number, fontSize: number): number {
+  if (label === '') return 0;
+  const textW = estimateEm(label) * fontSize;
+  const w = Math.max(balloonR * 2, textW + fontSize * BALLOON_TEXT_PAD_EM);
+  return Math.max(0, w / 2 - balloonR);
+}
+
+/**
  * 자동 배치 위치 (B14) — 마크에서 `angleDeg` 방향(기본 우상단 45도), 거리 = 풍선 반지름 × 3.
  * 거리는 **이미지 px** 로 잰다. 정규화 공간에서 재면 종횡비 때문에 그 각도로 안 보인다.
  *
  * ARROW 는 방향이 이미 고정돼 있으므로(`Mark.geometry.angleDeg`) 그 방향을 넘겨 쓴다 —
  * 화살촉이 가리키는 방향과 다른 쪽에 번호가 뜨면 "그려진 선이 곧 지시선"이 깨진다.
  * 호출자가 안 넘기면 기본값(우상단 45도)을 쓴다(POINT · AREA_*).
+ *
+ * `halfExtraImg` — 풍선이 스타디움으로 늘어난 만큼(한쪽, 이미지 px) 가로로 더 밀어낸다.
+ * 안 밀면 넓어진 풍선의 왼쪽 끝이 마크 위로 내려앉는다. 0(기본)이면 예전 좌표 그대로다.
  */
 export function autoLabelNorm(
   anchor: NPoint,
@@ -172,10 +200,13 @@ export function autoLabelNorm(
   iw: number,
   ih: number,
   angleDegOverride?: number,
+  halfExtraImg = 0,
 ): NPoint {
   const d = balloonRadiusImg * LABEL_AUTO_DIST_FACTOR;
   const a = radians(angleDegOverride ?? LABEL_AUTO_ANGLE_DEG);
-  return { x: anchor.x + (d * Math.cos(a)) / iw, y: anchor.y + (d * Math.sin(a)) / ih };
+  const cos = Math.cos(a);
+  const dx = d * cos + halfExtraImg * Math.sign(cos || 1);
+  return { x: anchor.x + dx / iw, y: anchor.y + (d * Math.sin(a)) / ih };
 }
 
 /**
@@ -190,6 +221,8 @@ export function effectiveLabelNorm(
   style: ResolvedStyle,
   iw: number,
   ih: number,
+  /** 그릴 번호 문자열. 넘기면 넓어진 풍선만큼 더 밀어낸다(검수 심각2) */
+  labelText = '',
 ): NPoint {
   if (defect.label.placed) return { x: defect.label.x, y: defect.label.y };
   const a = anchorNorm(defect);
@@ -198,7 +231,9 @@ export function effectiveLabelNorm(
   if (defect.marks.length === 1 && defect.marks[0]!.geometry.k === 'ARROW') {
     angleOverride = arrowLastLegAngleDeg(defect.marks[0]!.geometry.points, iw, ih) ?? undefined;
   }
-  return autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride);
+  // 이미지 px 단위로 잰다 — `autoLabelNorm` 의 거리와 같은 단위여야 한다
+  const extra = balloonHalfExtra(labelText, style.balloonRadius, style.fontSize);
+  return autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride, extra);
 }
 
 export type MarkScreen = {
@@ -225,6 +260,14 @@ export type DefectScreen = {
   marks: MarkScreen[];
   sketch: SketchScreen[];
   balloonR: number;
+  /**
+   * 번호 풍선이 원에서 좌우로 늘어난 양(한쪽, 스크린 px). 검수 심각2.
+   *
+   * `0` 이면 예전 그대로 반지름 `balloonR` 인 **원**이다. 0보다 크면 중심에서 좌우로
+   * 이만큼 벌어진 **스타디움**이다. 렌더 · 히트 · 자동배치가 전부 이 값을 본다.
+   * `buildScreens` 에 `displayNumbers` 를 안 넘기면 `0`(= 예전 동작).
+   */
+  labelHalfExtra: number;
   markR: number;
   style: ResolvedStyle;
 };
@@ -262,6 +305,8 @@ export function defectScreen(
   iw: number,
   ih: number,
   preview: PreviewOverride,
+  /** 이 결함에 그릴 번호 문자열. 풍선 폭 계산에만 쓴다. 생략하면 예전과 동일(원) */
+  labelText = '',
 ): DefectScreen {
   const p = preview && preview.defectId === defect.id ? preview : null;
 
@@ -286,7 +331,10 @@ export function defectScreen(
   // 앵커는 미리보기가 반영된 좌표로 다시 계산해야 리더선이 마크를 따라간다
   const anchorN = anchorNorm({ ...defect, marks: patchedMarks });
 
-  const labelN = p && p.label ? p.label : effectiveLabelNorm({ ...defect, marks: patchedMarks }, style, iw, ih);
+  const labelN =
+    p && p.label
+      ? p.label
+      : effectiveLabelNorm({ ...defect, marks: patchedMarks }, style, iw, ih, labelText);
 
   const sketch: SketchScreen[] = [];
   for (const path of sketchOf(defect)) {
@@ -314,6 +362,14 @@ export function defectScreen(
     // 번호까지는 일반 리더선(leaderSegment)이 마지막 점에서부터 잇는다
   }
 
+  // 렌더가 실제로 쓰는 값과 **같은 식**으로 잰다 (renderModel: br=max(4,balloonR), size=max(7,fontSize*zoom))
+  const balloonR = style.balloonRadius * vp.zoom;
+  const labelHalfExtra = balloonHalfExtra(
+    labelText,
+    Math.max(4, balloonR),
+    Math.max(7, style.fontSize * vp.zoom),
+  );
+
   return {
     defectId: defect.id,
     seq: defect.seq,
@@ -321,7 +377,8 @@ export function defectScreen(
     anchor,
     marks,
     sketch,
-    balloonR: style.balloonRadius * vp.zoom,
+    balloonR,
+    labelHalfExtra,
     markR: style.markRadius * vp.zoom,
     style,
   };

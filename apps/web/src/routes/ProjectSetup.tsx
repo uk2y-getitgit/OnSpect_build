@@ -294,7 +294,7 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
   );
 
   /**
-   * D19 — 층 접두어(`1F` · `B1F` · `W`). 비워 두면 이름에서 자동 파생한다(`floorCodeOf`).
+   * D19 · D20 — 층 접두어(`1F` · `B1F` · `W`). **옵트인이다** — 비워 두면 접두어 없이 번호만 나간다.
    * **좌표·순서에는 아무 영향이 없다** — 출력 결함번호 표기에만 쓰인다.
    */
   const setFloorCode = useCallback(
@@ -1250,10 +1250,10 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
 // ── 부품 ───────────────────────────────────────────────────────────────────
 
 /**
- * D19 — 층 접두어 입력칸.
+ * D19 · D20 — 층 접두어 입력칸. **접두어는 옵트인이다.**
  *
- * 비워 두면 **이름에서 자동 파생한 값을 회색 placeholder 로** 보여준다 —
- * 사용자가 아무것도 안 해도 `1F` 가 나온다는 것을 여기서 알 수 있어야 한다.
+ * 비워 두면 이름에서 딴 **제안값을 회색 placeholder 로** 보여준다 — 다만 그것은 어디까지나
+ * 제안이고, 여기에 직접 입력해야 출력에 반영된다. 비워 두면 예전처럼 번호만 나간다.
  * 저장은 `blur`/`Enter` 에서 한 번만 한다(글자마다 IndexedDB 를 때리지 않는다).
  */
 function FloorCodeInput({
@@ -1273,7 +1273,17 @@ function FloorCodeInput({
     if ((normalizeFloorCode(value) ?? '') !== (saved ?? '')) setValue(saved ?? '');
   }
 
+  // placeholder(제안) 전용 — 출력에는 쓰이지 않는다 (D20)
   const auto = floorCodeOf({ name: floor.name, code: null });
+
+  /**
+   * `Escape` 취소 가드 (검수 보통2).
+   *
+   * `blur()` 는 네이티브 focusout 을 **동기로** 일으키고 React 위임 리스너가 그 자리에서
+   * `onBlur` 를 부른다. 그때 `value` 는 `setValue` 반영 **전** 클로저 값 —
+   * 즉 취소하려던 문자열이 그대로 저장된다. 그래서 커밋을 한 번 건너뛴다.
+   */
+  const skipCommit = useRef(false);
 
   return (
     <input
@@ -1286,13 +1296,20 @@ function FloorCodeInput({
       title={
         auto === null
           ? '출력 결함번호 접두어입니다. 비우면 접두어 없이 번호만 나갑니다'
-          : `출력 결함번호 접두어입니다. 비우면 이름에서 딴 ${auto} 를 씁니다 (${auto}-01)`
+          : `출력 결함번호 접두어입니다. 비우면 접두어 없이 번호만 나갑니다 (${auto} 를 넣으면 ${auto}-01)`
       }
       onChange={(e) => setValue(e.target.value)}
-      onBlur={() => onCommit(floor.id, value)}
+      onBlur={() => {
+        if (skipCommit.current) {
+          skipCommit.current = false;
+          return;
+        }
+        onCommit(floor.id, value);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
         if (e.key === 'Escape') {
+          skipCommit.current = true;
           setValue(saved ?? '');
           (e.currentTarget as HTMLInputElement).blur();
         }
