@@ -96,6 +96,25 @@ const ITEMS: Item[] = [
       </svg>
     ),
   },
+  {
+    id: 'eraser',
+    label: '지우개',
+    // D14 — **필기 메모의 획만** 지운다. 결함 표기는 절대 안 지운다는 것을 문구로 못박는다
+    hint: '지우개 — 필기 메모의 획만 지웁니다. 점 · 화살표 · 영역 · 그리기 · 번호는 지워지지 않습니다',
+    tool: 'ERASER',
+    icon: (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path
+          d="M8.6 16.5 3.9 11.8a1.4 1.4 0 0 1 0-2l6.2-6.2a1.4 1.4 0 0 1 2 0l3.9 3.9a1.4 1.4 0 0 1 0 2l-7 7z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+        <path d="M7 16.5h9.5" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M7.2 8.5l4.7 4.7" stroke="currentColor" strokeWidth="1.2" opacity=".55" />
+      </svg>
+    ),
+  },
 ];
 
 const AREA_TOOLS: { tool: Tool; label: string; icon: JSX.Element }[] = [

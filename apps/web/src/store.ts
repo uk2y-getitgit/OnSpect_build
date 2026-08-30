@@ -21,7 +21,7 @@ import {
   EMPTY_HISTORY,
   initialCanvasState,
   isLocked,
-  memoTargetOf,
+  memoTargetsOf,
   pushHistory,
   redo as redoStack,
   reduce,
@@ -308,7 +308,9 @@ function recordMemoWrite(state: AppState, memoId: string | null): AppState {
 /** 커맨드 하나가 건드린 것을 결함·메모 양쪽에서 대기열에 올린다 */
 function recordCommandWrites(state: AppState, c: Command | null): AppState {
   if (!c) return state;
-  return recordMemoWrite(recordWrite(state, defectTargetOf(c)), memoTargetOf(c));
+  // ⚠️ 지우개(D14)는 커맨드 **하나가 여러 메모**를 건드린다 — 드래그 1회가 커맨드 1건이라
+  //    첫 메모만 올리면 나머지가 저장되지 않는다
+  return memoTargetsOf(c).reduce(recordMemoWrite, recordWrite(state, defectTargetOf(c)));
 }
 
 /** 선택 대상이 사라졌으면 선택을 해제한다 (undo 로 생성이 취소된 경우) */

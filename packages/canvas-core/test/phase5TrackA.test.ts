@@ -29,6 +29,8 @@ const FAT: HitProfile = {
   stroke: 22,
   handle: 30,
   clickSlop: 12,
+  // D14 — 필기 획 히트·지우개. 손가락은 12px 로 글씨 획을 못 집는다
+  memoInk: 22,
 };
 
 function ctxOf(defects: Defect[], over: Partial<ReduceContext> = {}): ReduceContext {
@@ -490,6 +492,8 @@ describe('A4 · 히트 프로파일 주입 (T5)', () => {
       stroke: 6,
       handle: 8,
       clickSlop: 4,
+      // D14 — 필기 획 히트·지우개 (HIT_MEMO_INK_PX)
+      memoInk: 12,
     });
   });
 });

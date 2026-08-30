@@ -73,6 +73,7 @@ export function hitTest(
   const HIT_LEADER_PX = profile.leader;
   const HIT_STROKE_PX = profile.stroke;
   const HIT_HANDLE_PX = profile.handle;
+  const HIT_MEMO_INK_PX = profile.memoInk;
 
   // 1. 라벨
   //    ⭐ 풍선은 원이 아니라 **스타디움**이다(검수 심각2). 늘어난 폭(`labelHalfExtra`)만큼
@@ -176,15 +177,12 @@ export function hitTest(
   // 7. 메모 — 결함 표기보다 아래. 메모가 결함 조작을 가로채면 안 된다
   for (let i = memos.length - 1; i >= 0; i -= 1) {
     const m = memos[i]!;
-    // F2 필기 메모는 **획 근처 또는 점선 테두리**만 잡는다.
-    // 상자 속을 통째로 잡으면 큰 낙서 하나가 그 안의 도면 조작을 전부 삼킨다
-    // (§S2a-3 "큰 것보다 작은 것이 이긴다" 와 같은 정신).
+    // ⭐ D14 — 필기 메모는 **획 근처만** 잡는다. 점선 테두리 판정을 뺐다.
+    //    점선 상자가 선택·hover 일 때만 보이게 됐으므로(D14-a), 보이지도 않는 테두리를
+    //    잡으면 "아무것도 없는 자리인데 메모가 잡힌다" 가 된다 — 그림과 클릭이 어긋난다.
+    //    획 사이의 빈 공간이 안 잡히는 것이 이 변경의 목적이다(글씨 사이로 도면이 보인다).
     if (m.paths) {
-      const near = m.paths.some(
-        (path) =>
-          distToPolyline(p, path.points) <= Math.max(HIT_STROKE_PX, path.width / 2 + HIT_PAD_PX),
-      );
-      if (near || distToRectBorder(p, m.box) <= HIT_STROKE_PX) {
+      if (nearestMemoPath(p, m, HIT_MEMO_INK_PX) !== null) {
         return { defectId: null, part: 'MEMO', markId: null, memoId: m.memoId };
       }
       continue;
@@ -210,6 +208,34 @@ export function hitTest(
 
   // 9. 빈 도면
   return null;
+}
+
+/**
+ * 필기 메모에서 커서에 **가장 가까운 획**의 인덱스 (D14).
+ * 허용치 안에 아무 획도 없으면 `null`.
+ *
+ * 히트 판정(7번)과 지우개가 **같은 함수를 쓴다.** 두 벌로 만들면
+ * "잡히는데 안 지워진다 / 안 잡히는데 지워진다" 가 생긴다.
+ *
+ * ⚠️ 돌려주는 인덱스는 **`MemoScreen.paths` 기준**이다. `memoScreen()` 이 점 1개짜리 획을
+ * 걸러내므로 `Memo.paths` 의 인덱스와 다를 수 있다 — 호출자는 `path.id` 로 원본을 찾아라.
+ *
+ * @param tol 스크린 px. 획 두께의 절반과 이 값 중 **큰 쪽**이 실제 허용치다
+ */
+export function nearestMemoPath(p: SPoint, m: MemoScreen, tol: number): number | null {
+  if (!m.paths) return null;
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < m.paths.length; i += 1) {
+    const path = m.paths[i]!;
+    const d = distToPolyline(p, path.points);
+    // 두꺼운 획은 **그려진 두께만큼** 잡힌다 — 그림과 판정이 어긋나지 않게
+    if (d <= Math.max(tol, path.width / 2) && d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best === -1 ? null : best;
 }
 
 /**

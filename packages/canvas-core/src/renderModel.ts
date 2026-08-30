@@ -22,7 +22,6 @@ import {
   HOVER_HALO_COLOR,
   HOVER_MARK_GROW_PX,
   HOVER_STROKE_GROW_PX,
-  MEMO_BOX_ALPHA,
   MEMO_BOX_DASH,
   MEMO_INK,
   MEMO_INK_ALPHA,
@@ -617,16 +616,24 @@ function memoOps_(m: MemoScreen, selected: boolean, hovered: boolean): DrawOp[] 
   // 그리기(결함)와 **눈으로 확실히 갈린다**: 중립 앰버 잉크 + 점선 상자.
   // 결함 상태색(빨강·보라·회색)은 여기 절대 오지 않는다.
   if (m.paths) {
-    ops.push({
-      k: 'rect',
-      at: { x: b.x, y: b.y },
-      w: b.w,
-      h: b.h,
-      stroke: selected ? SELECTION_COLOR : MEMO_INK,
-      width: selected ? 2 : hovered ? 1.6 : 1,
-      alpha: selected || hovered ? 0.9 : MEMO_BOX_ALPHA,
-      dash: [...MEMO_BOX_DASH],
-    });
+    // ⭐ D14 — 점선 상자는 **선택 또는 hover 일 때만** 그린다.
+    //    상시 표시하면 도면 위에 빈 사각형이 잔뜩 남아 무엇이 결함인지 안 보인다.
+    //    글씨(획) 자체가 메모 본체이므로 상자가 없어도 내용은 그대로 보인다.
+    //
+    //    출력(`locationMap.ts`)은 selection·hover 를 전부 비우므로 조사위치도에서는
+    //    자동으로 사라진다 — 출력 쪽에 별도 분기가 없다.
+    if (selected || hovered) {
+      ops.push({
+        k: 'rect',
+        at: { x: b.x, y: b.y },
+        w: b.w,
+        h: b.h,
+        stroke: selected ? SELECTION_COLOR : MEMO_INK,
+        width: selected ? 2 : 1.6,
+        alpha: 0.9,
+        dash: [...MEMO_BOX_DASH],
+      });
+    }
     for (const p of m.paths) {
       ops.push({
         k: 'polyline',

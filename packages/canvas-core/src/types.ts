@@ -295,9 +295,14 @@ export type Tool =
   | 'AREA_RECT'
   | 'AREA_ELLIPSE'
   | 'SKETCH'
-  | 'MEMO';
+  | 'MEMO'
+  /**
+   * D14 — 필기 메모 지우개. **필기 메모의 획만** 지운다.
+   * 점·화살표·영역·자유그리기(SKETCH)·번호 풍선·리더선은 절대 건드리지 않는다.
+   */
+  | 'ERASER';
 
-/** 도구가 만드는 마크 타입. SELECT·SKETCH·MEMO 는 마크를 만들지 않는다 */
+/** 도구가 만드는 마크 타입. SELECT·SKETCH·MEMO·ERASER 는 마크를 만들지 않는다 */
 export const TOOL_MARK_TYPE: Partial<Record<Tool, MarkType>> = {
   POINT: 'POINT',
   ARROW: 'ARROW',
@@ -370,7 +375,9 @@ export type DragKind =
   | 'RESIZE_SHAPE'
   /** 자유그리기 한 획 전체 이동 (점 단위 편집은 범위 밖) */
   | 'MOVE_SKETCH'
-  | 'MOVE_MEMO';
+  | 'MOVE_MEMO'
+  /** D14 지우개 — 지나간 자리의 필기 획을 계속 지운다. 문서 이동이 없다 */
+  | 'ERASE';
 
 export type DragState = {
   kind: DragKind;
@@ -420,6 +427,13 @@ export type DragState = {
    * 각도다. 새 구간이 열릴 때만 값이 늘어난다 — 길이가 바뀌어도 이미 정한 각도는 안 바뀐다
    */
   arrowAngles: number[] | null;
+  /**
+   * D14 지우개 — 이 드래그 1회의 식별자. `pushHistory` 가 같은 값의
+   * `DELETE_MEMO_PATH` 를 **Undo 한 단계로 합친다.** ERASE 가 아니면 null
+   */
+  eraseId: string | null;
+  /** D14 지우개 — 이 드래그가 지금까지 지운 획 수. 0 이면 손을 떼도 알리지 않는다 */
+  erasedCount: number;
 };
 
 /**

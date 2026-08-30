@@ -82,7 +82,7 @@ describe('ensureVisible', () => {
         moved: true, pointToolCandidate: false,
         createStart: null, createType: null, geomPreview: null, geomOrigin: null,
         handle: null, pathId: null, pathOrigin: null, pathPreview: null, memoId: null,
-        arrowAngles: null,
+        arrowAngles: null, eraseId: null, erasedCount: 0,
       },
     };
     expect(ensureVisible(s, [d], GS, 'd1')).toBeNull();

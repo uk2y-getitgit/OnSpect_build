@@ -44,7 +44,7 @@ import {
   translatePathInside,
   handleCursor,
 } from './shapes.js';
-import { hitTest } from './hitTest.js';
+import { hitTest, nearestMemoPath } from './hitTest.js';
 import { buildScreens, type GhostShape } from './renderModel.js';
 import { buildAlignSnapshot, findAlignSnap } from './snapAlign.js';
 import { computeAngleSnap } from './snapAngle.js';
@@ -224,6 +224,50 @@ export function memoScreensOf(state: CanvasState, ctx: ReduceContext): MemoScree
 }
 
 /**
+ * D14 지우개 — 커서 아래의 **필기 획 하나**를 지우는 커맨드를 만든다.
+ * 아무것도 안 걸리면 `null` (빈 자리를 문지르면 아무 일도 일어나지 않는다).
+ *
+ * ⚠️ **필기 메모의 획만** 지운다. 결함의 자유그리기(`SKETCH`)·점·화살표·영역·
+ * 번호 풍선·리더선은 여기 들어오지도 않는다 — `memoScreensOf` 는 메모만 준다.
+ *
+ * ⚠️ **획 1개 통째로**다. 획의 일부를 지우지 않는다 — 벡터 점 배열이라
+ * 부분 삭제는 자료구조가 다르다(사진 주석 지우개와 같은 판단, PhotoPolish §2-4).
+ *
+ * 한 번에 **가장 가까운 획 하나만** 지운다. 겹친 획을 한꺼번에 날리면
+ * *"다른 것이 지워지면 안 된다"* 는 사용자 요구를 어긴다 — 계속 문지르면 나머지도 지워진다.
+ */
+function eraseCommandAt(
+  state: CanvasState,
+  screen: SPoint,
+  ctx: ReduceContext,
+  eraseId: string,
+): Command | null {
+  const memos = memoScreensOf(state, ctx);
+  const tol = hitProfileOf(ctx).memoInk;
+  // 위에 그려진 것부터 — 히트 테스트(§2-4 7번)와 같은 순서다
+  for (let i = memos.length - 1; i >= 0; i -= 1) {
+    const ms = memos[i]!;
+    if (!ms.paths) continue; // 텍스트 메모는 지우개 대상이 아니다 (지울 획이 없다)
+    const idx = nearestMemoPath(screen, ms, tol);
+    if (idx === null) continue;
+    const hitPath = ms.paths[idx];
+    const memo = findMemo(ctx, ms.memoId);
+    if (!hitPath || !memo || !memo.paths) continue;
+    // ⚠️ 스크린 인덱스 ≠ 레코드 인덱스다 — `memoScreen()` 이 점 1개짜리 획을 걸러낸다.
+    //    반드시 id 로 찾는다
+    const index = memo.paths.findIndex((p) => p.id === hitPath.id);
+    const path = memo.paths[index];
+    if (index < 0 || !path) continue;
+    // 마지막 획이면 **메모 레코드째** 지운다 — 빈 메모를 남기지 않는다 (D14)
+    if (memo.paths.length === 1) {
+      return { k: 'DELETE_MEMO_PATH', eraseId, items: [], memos: [memo] };
+    }
+    return { k: 'DELETE_MEMO_PATH', eraseId, items: [{ memoId: memo.id, path, index }], memos: [] };
+  }
+  return null;
+}
+
+/**
  * 생성 중인 도형의 미리보기. 아직 문서에 없으므로 DefectScreen 이 아니다.
  * 어댑터는 `RenderInput.ghost` 에 그대로 넣는다.
  */
@@ -343,6 +387,8 @@ const TOOL_CURSOR: Partial<Record<Tool, Cursor>> = {
   SKETCH: 'crosshair',
   // F2 — 메모는 이제 손글씨다. 글자 입력 커서(text)가 아니라 그리기 커서
   MEMO: 'crosshair',
+  // D14 — 지우개. 원형 커서 링은 만들지 않는다(코어는 커서를 그리지 않는다)
+  ERASER: 'crosshair',
 };
 
 export function computeCursor(state: CanvasState, ctx: ReduceContext): Cursor {
@@ -353,12 +399,19 @@ export function computeCursor(state: CanvasState, ctx: ReduceContext): Cursor {
     if (state.drag.kind === 'RESIZE_SHAPE' && state.drag.handle) {
       return resizeCursor(state.drag.handle);
     }
-    if (state.drag.kind === 'CREATE_SHAPE' || state.drag.kind === 'CREATE_SKETCH') {
+    if (
+      state.drag.kind === 'CREATE_SHAPE' ||
+      state.drag.kind === 'CREATE_SKETCH' ||
+      state.drag.kind === 'ERASE'
+    ) {
       return 'crosshair';
     }
     return 'move';
   }
   if (state.keys.space) return 'grab';
+  // D14 — 지우개는 hover 보다 앞선다. 메모 위에서 'move' 를 보여 주면
+  // "끌어서 옮길 수 있다"는 거짓말이 된다 — 지우개는 옮기지 않는다
+  if (state.tool === 'ERASER') return 'crosshair';
   if (state.hover) {
     if (state.hover.part === 'HANDLE' && state.hover.handle) {
       return resizeCursor(state.hover.handle);
@@ -586,6 +639,9 @@ export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): 
 
     case 'DOUBLE_CLICK': {
       if (!state.drawing) return ok(state, ctx);
+      // D14 — 지우개로 같은 자리를 두 번 문지르면 브라우저가 더블클릭을 함께 보낸다.
+      // 그때 화면이 통째로 fit(줌 리셋)되면 사용자는 무슨 일이 일어났는지 모른다
+      if (state.tool === 'ERASER') return ok(state, ctx);
       const screens = screensOf(state, ctx);
       const hit = hitTest(
         ev.screen,
@@ -850,6 +906,19 @@ function onPointerDown(
   if (ev.button === 1 || (ev.button === 0 && ev.keys.space)) return startPan(false);
   if (ev.button !== 0) return ok(next0, ctx);
 
+  // ── D14 지우개 ──────────────────────────────────────────────────────────
+  // **히트 테스트보다 앞이다.** 지우개는 무엇을 선택하지도, 팬하지도 않는다.
+  // 뒤에 두면 메모 위에서 누르는 순간 `MOVE_MEMO` 드래그가 먼저 잡혀 메모가 끌려간다
+  if (next0.tool === 'ERASER') {
+    const eraseId = ctx.makeId();
+    const cmd = eraseCommandAt(next0, ev.screen, ctx, eraseId);
+    const drag = newDrag('ERASE', ev.pointerId, ev.screen, next0.viewport, {
+      eraseId,
+      erasedCount: cmd ? 1 : 0,
+    });
+    return ok({ ...next0, drag, guides: [], hover: null }, ctx, cmd ? [cmd] : []);
+  }
+
   const screens = screensOf(next0, ctx);
   const memos = memoScreensOf(next0, ctx);
   const hit = hitTest(ev.screen, screens, next0.selection, memos, hitProfileOf(ctx));
@@ -1113,6 +1182,8 @@ function newDrag(
     pathPreview: null,
     memoId: null,
     arrowAngles: null,
+    eraseId: null,
+    erasedCount: 0,
     ...extra,
   };
 }
@@ -1159,6 +1230,22 @@ function onPointerMove(
   }
 
   if (drag.pointerId !== ev.pointerId) return ok(state, ctx);
+
+  // ── D14 지우개 — 지나가는 동안 계속 지운다 ───────────────────────────────
+  // 커맨드는 매번 나가지만 `eraseId` 가 같아 `pushHistory` 가 **한 단계로 합친다**
+  if (drag.kind === 'ERASE') {
+    const cmd = eraseCommandAt(state, ev.screen, ctx, drag.eraseId ?? '');
+    const next: CanvasState = {
+      ...state,
+      keys: ev.keys,
+      drag: {
+        ...drag,
+        moved: true,
+        erasedCount: drag.erasedCount + (cmd ? 1 : 0),
+      },
+    };
+    return ok(next, ctx, cmd ? [cmd] : []);
+  }
 
   const moved = drag.moved || dist(ev.screen, drag.startScreen) > hitProfileOf(ctx).clickSlop;
   const iw = state.drawing.imageWidth;
@@ -1452,6 +1539,25 @@ function onPointerUp(
       if (state.tool === 'POINT') return createDefectAt(cleared, ev.screen, ctx);
     }
     return ok({ ...cleared, selection: { ...NO_SELECTION } }, ctx);
+  }
+
+  // ── D14 지우개 — 커맨드는 이미 나갔다. 여기서는 결과만 알린다 ───────────
+  if (drag.kind === 'ERASE') {
+    if (drag.erasedCount === 0) return ok(cleared, ctx);
+    return ok(
+      cleared,
+      ctx,
+      [],
+      [
+        {
+          k: 'TOAST',
+          kind: 'info',
+          text: drag.erasedCount === 1 ? '필기를 지웠습니다' : `필기 ${drag.erasedCount}획을 지웠습니다`,
+          // 드래그 1회 = Undo 1스텝이므로 [되돌리기] 한 번이면 전부 돌아온다
+          undoable: true,
+        },
+      ],
+    );
   }
 
   // ── S2a 커밋 ─────────────────────────────────────────────────────────────

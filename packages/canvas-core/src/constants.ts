@@ -48,6 +48,17 @@ export const HIT_HANDLE_PX = 8;
  * 코어는 어느 프로파일이 "터치용" 인지 모른다. 주면 그걸 쓰고, 안 주면
  * `DEFAULT_HIT_PROFILE`(= 지금까지의 마우스 값)을 쓴다. **PC 동작 변화 0.**
  */
+/**
+ * 필기 메모 **획**의 히트·지우개 허용 거리 (스크린 px · D14).
+ *
+ * 점선 상자가 상시로 보이지 않게 되면서(D14-a) 메모를 잡는 유일한 수단이 획이 됐다.
+ * 획 두께의 절반(`path.width / 2`)과 이 값 중 **큰 쪽**을 쓴다 — 얇은 획도 잡히게.
+ *
+ * ⚠️ **스크린 px 다.** 정규화 공간에서 거리를 재면 도면 종횡비 때문에 가로·세로 판정이
+ * 서로 다른 크기가 된다(프로젝트 절대 규칙).
+ */
+export const HIT_MEMO_INK_PX = 12;
+
 export type HitProfile = {
   /** 히트 여유 (= HIT_PAD_PX) */
   pad: number;
@@ -63,6 +74,8 @@ export type HitProfile = {
   handle: number;
   /** 클릭/드래그 구분 (= CLICK_SLOP_PX) */
   clickSlop: number;
+  /** 필기 메모 획 히트·지우개 허용 거리 (= HIT_MEMO_INK_PX · D14) */
+  memoInk: number;
 };
 
 /**
@@ -80,6 +93,7 @@ export const DEFAULT_HIT_PROFILE: Readonly<HitProfile> = Object.freeze({
   stroke: HIT_STROKE_PX,
   handle: HIT_HANDLE_PX,
   clickSlop: CLICK_SLOP_PX,
+  memoInk: HIT_MEMO_INK_PX,
 });
 
 /**
