@@ -204,58 +204,58 @@ describe('D14-b · 필기 메모는 획 근처에서만 잡힌다', () => {
   });
 });
 
+/**
+ * 지우개 드래그 1회를 그대로 재현한다.
+ *
+ * ⚠️ **매 이벤트마다 `ctx` 를 새로 만들어 문서 최신본을 넣는다** — 실제 앱(`store.runInput`)이
+ *    그렇게 돈다. 고정 ctx 로 돌리면 이미 지운 획을 다음 move 가 또 지워 결과가 달라진다.
+ *
+ * @param idSeed `makeId` 시작 번호. 드래그마다 다른 `eraseId` 가 나오게 한다
+ *               (앱에서는 `store` 의 `idSeed` 가 단조 증가한다)
+ */
+function erase(memos: Memo[], defects: Defect[], path: NPoint[], idSeed = 0) {
+  let doc: { defects: readonly Defect[]; memos: readonly Memo[] } = { defects, memos };
+  let n = idSeed;
+  const makeId = () => `e${(n += 1)}`;
+  const mk = (): ReduceContext => ({
+    defects: doc.defects,
+    memos: doc.memos,
+    globalStyle: GS,
+    makeId,
+    now: () => 1000,
+  });
+
+  let st = initialCanvasState();
+  st = reduce(st, { k: 'RESIZE', size: { w: 1000, h: 700 } }, mk()).state;
+  st = reduce(st, { k: 'SET_DRAWING', drawing: DRAWING }, mk()).state;
+  st = reduce(st, { k: 'SET_TOOL', tool: 'ERASER' }, mk()).state;
+
+  const cmds: Command[] = [];
+  const run = (ev: Parameters<typeof reduce>[1]) => {
+    const r = reduce(st, ev, mk());
+    st = r.state;
+    for (const c of r.commands) {
+      doc = applyToDoc(doc, c);
+      cmds.push(c);
+    }
+    return r;
+  };
+
+  run({ k: 'POINTER_DOWN', pointerId: 1, screen: at(st, path[0]!), button: 0, keys: K });
+  for (const p of path.slice(1)) {
+    run({ k: 'POINTER_MOVE', pointerId: 1, screen: at(st, p), keys: K });
+  }
+  const up = run({
+    k: 'POINTER_UP',
+    pointerId: 1,
+    screen: at(st, path[path.length - 1]!),
+    keys: K,
+  });
+  return { state: st, commands: cmds, effects: up.effects, doc };
+}
+
 // ── (d) 지우개 ─────────────────────────────────────────────────────────────
 describe('D14-d · 지우개', () => {
-  /**
-   * 지우개 드래그 1회를 그대로 재현한다.
-   *
-   * ⚠️ **매 이벤트마다 `ctx` 를 새로 만들어 문서 최신본을 넣는다** — 실제 앱(`store.runInput`)이
-   *    그렇게 돈다. 고정 ctx 로 돌리면 이미 지운 획을 다음 move 가 또 지워 결과가 달라진다.
-   *
-   * @param idSeed `makeId` 시작 번호. 드래그마다 다른 `eraseId` 가 나오게 한다
-   *               (앱에서는 `store` 의 `idSeed` 가 단조 증가한다)
-   */
-  function erase(memos: Memo[], defects: Defect[], path: NPoint[], idSeed = 0) {
-    let doc: { defects: readonly Defect[]; memos: readonly Memo[] } = { defects, memos };
-    let n = idSeed;
-    const makeId = () => `e${(n += 1)}`;
-    const mk = (): ReduceContext => ({
-      defects: doc.defects,
-      memos: doc.memos,
-      globalStyle: GS,
-      makeId,
-      now: () => 1000,
-    });
-
-    let st = initialCanvasState();
-    st = reduce(st, { k: 'RESIZE', size: { w: 1000, h: 700 } }, mk()).state;
-    st = reduce(st, { k: 'SET_DRAWING', drawing: DRAWING }, mk()).state;
-    st = reduce(st, { k: 'SET_TOOL', tool: 'ERASER' }, mk()).state;
-
-    const cmds: Command[] = [];
-    const run = (ev: Parameters<typeof reduce>[1]) => {
-      const r = reduce(st, ev, mk());
-      st = r.state;
-      for (const c of r.commands) {
-        doc = applyToDoc(doc, c);
-        cmds.push(c);
-      }
-      return r;
-    };
-
-    run({ k: 'POINTER_DOWN', pointerId: 1, screen: at(st, path[0]!), button: 0, keys: K });
-    for (const p of path.slice(1)) {
-      run({ k: 'POINTER_MOVE', pointerId: 1, screen: at(st, p), keys: K });
-    }
-    const up = run({
-      k: 'POINTER_UP',
-      pointerId: 1,
-      screen: at(st, path[path.length - 1]!),
-      keys: K,
-    });
-    return { state: st, commands: cmds, effects: up.effects, doc };
-  }
-
   it('획 하나를 지운다 — 나머지 획은 남는다', () => {
     const m = memo('m1', [P1, P2]);
     const { commands } = erase([m], [], [{ x: 0.2, y: 0.3 }]);
@@ -367,5 +367,155 @@ describe('D14-d · 지우개', () => {
     const t = memo('m2', null, '누수 확인');
     const { commands } = erase([t], [], [{ x: 0.12, y: 0.12 }]);
     expect(commands).toHaveLength(0);
+  });
+
+  it('⭐ 지우개로 누르면 이전 선택이 풀린다 — 지우개 모드의 Delete 키가 결함을 지우면 안 된다', () => {
+    const d = defect('d1', 1, { x: 0.7, y: 0.7 }, { x: 0.75, y: 0.7 });
+    const { state: st0, ctx } = boot([], [d]);
+    const on = at(st0, { x: 0.7, y: 0.7 });
+    let st = reduce(st0, { k: 'POINTER_DOWN', pointerId: 1, screen: on, button: 0, keys: K }, ctx).state;
+    st = reduce(st, { k: 'POINTER_UP', pointerId: 1, screen: on, keys: K }, ctx).state;
+    expect(st.selection.defectId).toBe('d1');
+
+    st = reduce(st, { k: 'SET_TOOL', tool: 'ERASER' }, ctx).state;
+    st = reduce(
+      st,
+      { k: 'POINTER_DOWN', pointerId: 1, screen: at(st, { x: 0.9, y: 0.9 }), button: 0, keys: K },
+      ctx,
+    ).state;
+    expect(st.selection.defectId).toBeNull();
+  });
+});
+
+// ── (e) 지운 뒤 옮기기 · 되돌리기 순서 (배치4 검수 회귀) ────────────────────
+describe('D14-e · 지우개 뒤에도 이동·되돌리기가 정확하다', () => {
+  const P3 = inkPath('p3', [
+    { x: 0.8, y: 0.2 },
+    { x: 0.8, y: 0.4 },
+  ]);
+
+  /** SELECT 도구로 메모를 잡아 한 번 끄는 드래그 */
+  function dragMemo(memos: Memo[], grabN: NPoint, d: { x: number; y: number }) {
+    const { state: st0, ctx } = boot(memos);
+    const g = at(st0, grabN);
+    const to = { x: g.x + d.x, y: g.y + d.y };
+    let st = reduce(
+      st0,
+      { k: 'POINTER_DOWN', pointerId: 1, screen: g, button: 0, keys: K },
+      ctx,
+    ).state;
+    st = reduce(st, { k: 'POINTER_MOVE', pointerId: 1, screen: to, keys: K }, ctx).state;
+    const moving = memoScreensOf(st, ctx);
+    const up = reduce(st, { k: 'POINTER_UP', pointerId: 1, screen: to, keys: K }, ctx);
+    return { commands: up.commands, viewport: st0.viewport, moving };
+  }
+
+  function moveCmdOf(commands: readonly Command[]) {
+    const c = commands.find((x) => x.k === 'MOVE_MEMO');
+    if (!c || c.k !== 'MOVE_MEMO') throw new Error('MOVE_MEMO 커맨드가 없다');
+    return c;
+  }
+
+  /**
+   * [심각1] 이동 델타는 **잡은 손가락이 움직인 거리**여야 한다.
+   * 예전에는 상자(획 bbox − 여백) 기준으로 오프셋을 잡고 커밋은 `memo.pos` 기준 델타로
+   * 나가서, 지우개가 앵커와 bbox 를 어긋내면 그만큼 메모가 멀리 튀었다.
+   */
+  it('⭐ 왼쪽 획을 지운 뒤 남은 획을 끌면 **끈 거리만큼만** 움직인다', () => {
+    const m = memo('m1', [P1, P2]);
+    const { doc } = erase([m], [], [{ x: 0.2, y: 0.3 }]);
+    const left = doc.memos[0]!;
+    expect(left.paths!.map((p) => p.id)).toEqual(['p2']);
+    // pos 는 지워진 p1 자리에 그대로 남는다 — 이것이 예전 점프 버그의 씨앗이었다
+    expect(left.pos.x).toBeCloseTo(0.2, 6);
+
+    const D = { x: 100, y: 40 };
+    const r = dragMemo([left], { x: 0.5, y: 0.3 }, D);
+    const c = moveCmdOf(r.commands);
+    const dx = c.to.x - c.from.x;
+    const dy = c.to.y - c.from.y;
+    expect(dx).toBeCloseTo(D.x / (r.viewport.zoom * DRAWING.imageWidth), 5);
+    expect(dy).toBeCloseTo(D.y / (r.viewport.zoom * DRAWING.imageHeight), 5);
+
+    // 실제 획도 딱 그만큼만 옮겨진다 (0.5 → 0.5 + dx)
+    const moved = applyToDoc({ defects: [], memos: [left] }, c).memos[0]!;
+    expect(moved.paths![0]!.points[0]!.x).toBeCloseTo(0.5 + dx, 5);
+  });
+
+  it('지우개를 안 써도 이동은 정확하다 — 상자 여백(MEMO_BOX_PAD)만큼도 어긋나지 않는다', () => {
+    const m = memo('m1', [P1, P2]);
+    const D = { x: 60, y: -25 };
+    const r = dragMemo([m], { x: 0.2, y: 0.3 }, D);
+    const c = moveCmdOf(r.commands);
+    expect(c.to.x - c.from.x).toBeCloseTo(D.x / (r.viewport.zoom * DRAWING.imageWidth), 5);
+    expect(c.to.y - c.from.y).toBeCloseTo(D.y / (r.viewport.zoom * DRAWING.imageHeight), 5);
+  });
+
+  it('드래그 미리보기도 끈 거리만큼만 움직인다 (커밋 결과와 어긋나지 않는다)', () => {
+    const m = memo('m1', [P1, P2]);
+    const { doc } = erase([m], [], [{ x: 0.2, y: 0.3 }]); // 왼쪽 획 삭제
+    const left = doc.memos[0]!;
+    const D = { x: 100, y: 40 };
+    const r = dragMemo([left], { x: 0.5, y: 0.3 }, D);
+    const before = memoScreens(
+      [left],
+      r.viewport,
+      DRAWING.imageWidth,
+      DRAWING.imageHeight,
+      null,
+    )[0]!;
+    const after = r.moving[0]!;
+    expect(after.paths![0]!.points[0]!.x - before.paths![0]!.points[0]!.x).toBeCloseTo(D.x, 3);
+    expect(after.paths![0]!.points[0]!.y - before.paths![0]!.points[0]!.y).toBeCloseTo(D.y, 3);
+    expect(after.box.x - before.box.x).toBeCloseTo(D.x, 3);
+  });
+
+  /** [보통1] 연속 삭제의 역연산은 index 오름차순이 아니라 **역-시간순**이다 */
+  it('⭐ 한 드래그로 1·3번째 획을 지우고 되돌리면 원래 순서 그대로 돌아온다', () => {
+    const m = memo('m1', [P1, P2, P3]);
+    const { commands, doc } = erase([m], [], [
+      { x: 0.2, y: 0.3 }, // p1 (그 시점 index 0)
+      { x: 0.8, y: 0.3 }, // p3 (그 시점 index 1)
+    ]);
+    expect(doc.memos[0]!.paths!.map((p) => p.id)).toEqual(['p2']);
+
+    let h = EMPTY_HISTORY;
+    for (const c of commands) h = pushHistory(h, c);
+    expect(h.undo).toHaveLength(1);
+    const step = h.undo[0]!;
+    if (step.k !== 'DELETE_MEMO_PATH') throw new Error('DELETE_MEMO_PATH 가 아니다');
+    // 시간순으로 쌓인다 — index 는 **지운 그 시점** 기준이라 오름차순 재삽입이면 틀린다
+    expect(step.items.map((i) => [i.path.id, i.index])).toEqual([
+      ['p1', 0],
+      ['p3', 1],
+    ]);
+
+    const back = applyToDoc(doc, invertCommand(step));
+    expect(back.memos[0]!.paths!.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('⭐ 마지막 획까지 지워 메모가 사라진 경우도 순서 그대로 되살아난다', () => {
+    const m = memo('m1', [P1, P2, P3]);
+    const { commands, doc } = erase([m], [], [
+      { x: 0.5, y: 0.3 }, // p2 (index 1)
+      { x: 0.2, y: 0.3 }, // p1 (index 0)
+      { x: 0.8, y: 0.3 }, // p3 — 마지막 획이라 레코드째 삭제
+    ]);
+    expect(doc.memos).toHaveLength(0);
+
+    let h = EMPTY_HISTORY;
+    for (const c of commands) h = pushHistory(h, c);
+    expect(h.undo).toHaveLength(1);
+    const step = h.undo[0]!;
+    if (step.k !== 'DELETE_MEMO_PATH') throw new Error('DELETE_MEMO_PATH 가 아니다');
+    expect(step.items.map((i) => [i.path.id, i.index])).toEqual([
+      ['p2', 1],
+      ['p1', 0],
+    ]);
+    expect(step.memos.map((x) => x.paths!.map((p) => p.id))).toEqual([['p3']]);
+
+    const back = applyToDoc(doc, invertCommand(step));
+    expect(back.memos).toHaveLength(1);
+    expect(back.memos[0]!.paths!.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
   });
 });

@@ -967,7 +967,9 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               defectId: selected.id,
               attrs: next,
               // 잠긴 결함·변경 없음이면 store 가 조기 반환하고 토스트도 안 뜬다
-              toast: `${label}(${item.seq}번)의 분류·판정을 불러왔습니다. 규모·개소·메모는 직접 입력하세요`,
+              // ⚠️ `sizeMode`(규모 입력 방식)는 14필드에 들어 있어 함께 바뀐다.
+              //    측정값(폭·길이·면적)은 안 따라오므로 탭이 비어 보인다 — 문구로 미리 알린다
+              toast: `${label}(${item.seq}번)의 분류·판정을 불러왔습니다. 규모 입력 방식(폭×길이/면적)도 함께 바뀌니 규모·개소·메모는 다시 입력하세요`,
             });
           }}
         />

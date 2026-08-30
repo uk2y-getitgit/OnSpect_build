@@ -39,16 +39,16 @@
 | # | 작업 | 담당 | 의존 | 상태 |
 |---|---|---|---|---|
 | 3-B | G-6·G-3·G-2 구현 | builder | 2-Fix | ✅ `35_builder_log_Batch3.md` · 커밋 `fc12efa`(G-6)·`efd9e00`(G-3)·`8770c42`(G-2) · 타입/테스트597/빌드 통과 · 가정 U17~U22 |
-| 3-R | 배치3 검수 | code-reviewer | 3-B | ⬜ |
-| 3-Fix | 배치3 지적사항 수정 | builder | 3-R | ⬜ |
+| 3-R | 배치3 검수 | code-reviewer | 3-B | ✅ `36_code-reviewer_findings_Batch3.md` — 심각2·보통3·경미4, 조건부통과. 심각1은 차단질문(Q54)→사용자 답변 D20(옵트인) |
+| 3-Fix | 배치3 지적사항 수정 (심각2+보통3, D20 반영) | builder | 3-R | ✅ `37_builder_log_Batch3Fix.md` · 커밋 `2574787` · 타입/테스트616/빌드 통과 |
 
 ## 배치 4
 
 | # | 작업 | 담당 | 의존 | 상태 |
 |---|---|---|---|---|
-| 4-B | G-5·G-1 구현 | builder | 3-Fix | ⬜ |
-| 4-R | 배치4 검수 | code-reviewer | 4-B | ⬜ |
-| 4-Fix | 배치4 지적사항 수정 | builder | 4-R | ⬜ |
+| 4-B | G-5·G-1 구현 | builder | 3-Fix | ✅ `38_builder_log_Batch4.md` · 커밋 `f358ae1`(G-5)·`8e92157`(G-1)·`80a62f4`(로그) · 타입/테스트638/빌드 통과 · 가정 U23~U26 |
+| 4-R | 배치4 검수 | code-reviewer | 4-B | ✅ `39_code-reviewer_findings_Batch4.md` — 심각1·보통2·경미5, 조건부통과 |
+| 4-Fix | 배치4 지적사항 수정 (심각1+보통2) | builder | 4-R | ✅ `40_builder_log_Batch4Fix.md` · 심각1(MOVE_MEMO 델타)·보통1(재삽입 역순)·보통2(토스트)+경미2(지우개 선택해제) · 타입/테스트644/빌드 통과 · 가정 U27~U28 |
 
 ## 통합
 

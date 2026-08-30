@@ -916,7 +916,13 @@ function onPointerDown(
       eraseId,
       erasedCount: cmd ? 1 : 0,
     });
-    return ok({ ...next0, drag, guides: [], hover: null }, ctx, cmd ? [cmd] : []);
+    // 선택을 비운다 — 지우개 모드에서 `Delete` 키가 **이전에 골라 둔 결함**을
+    // 지우는 사고를 막는다 (D14 "다른 것은 절대 안 지운다")
+    return ok(
+      { ...next0, selection: { ...NO_SELECTION }, drag, guides: [], hover: null },
+      ctx,
+      cmd ? [cmd] : [],
+    );
   }
 
   const screens = screensOf(next0, ctx);
@@ -960,10 +966,28 @@ function onPointerDown(
       selection: { ...NO_SELECTION, part: 'MEMO', memoId: hit.memoId },
     };
     if (!memo || !box) return ok(picked, ctx);
+    /**
+     * ⚠️ **잡은 지점 기준이 아니라 `memo.pos` 기준으로 오프셋을 잡는다.**
+     *
+     * 예전에는 `box.box`(획 bbox − pad)에서 잡았는데, 커밋은 `from: memo.pos → to: previewNorm`
+     * **델타**로 나간다. 즉 `pos` 와 상자가 어긋난 만큼이 그대로 이동량에 더해졌다.
+     *   · 항상 `MEMO_BOX_PAD`(6 이미지 px)만큼 미세하게 어긋났고,
+     *   · 지우개가 왼쪽 획을 지우면 `pos`(앵커)는 그대로인데 bbox 만 오른쪽으로 밀려
+     *     남은 글씨를 끌었을 때 **끈 거리보다 훨씬 멀리 튀었다.**
+     *
+     * `pos` 기준으로 잡으면 `previewNorm = pos + Δ` 가 되어 순수 델타가 된다 —
+     * `pos` 가 실제 bbox 와 달라도(지우개 뒤 staleness) 무해하다.
+     */
+    const anchor = toScreen(
+      memo.pos,
+      next0.viewport,
+      state.drawing.imageWidth,
+      state.drawing.imageHeight,
+    );
     const drag: DragState = {
       ...newDrag('MOVE_MEMO', ev.pointerId, ev.screen, next0.viewport, {}),
       memoId: memo.id,
-      grabOffsetScreen: { x: box.box.x - ev.screen.x, y: box.box.y - ev.screen.y },
+      grabOffsetScreen: { x: anchor.x - ev.screen.x, y: anchor.y - ev.screen.y },
       originNorm: { x: memo.pos.x, y: memo.pos.y },
       previewNorm: { x: memo.pos.x, y: memo.pos.y },
     };

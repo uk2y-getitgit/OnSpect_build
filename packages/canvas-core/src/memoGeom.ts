@@ -195,12 +195,20 @@ export function memoScreens(
   return memos.map((m) => {
     const s = memoScreen(m, vp, iw, ih);
     if (!preview || preview.memoId !== m.id) return s;
-    // 드래그 미리보기 — **획도 같은 델타만큼 함께 옮긴다** (상자만 옮기면 획이 남는다)
-    const dx = preview.pos.x - s.box.x;
-    const dy = preview.pos.y - s.box.y;
+    /**
+     * 드래그 미리보기 — **획도 같은 델타만큼 함께 옮긴다** (상자만 옮기면 획이 남는다).
+     *
+     * `preview.pos` 는 상자 좌상단이 아니라 **`memo.pos`(앵커)의 미리보기 위치**다.
+     * 델타로 환산해 상자·획을 함께 민다 — 앵커와 bbox 가 어긋나 있어도(지우개로 획을
+     * 지운 뒤) 미리보기가 커밋 델타와 정확히 일치한다.
+     * 텍스트 메모는 `box.x == toScreen(pos).x` 라 예전과 완전히 같은 결과가 나온다.
+     */
+    const anchor = toScreen(m.pos, vp, iw, ih);
+    const dx = preview.pos.x - anchor.x;
+    const dy = preview.pos.y - anchor.y;
     return {
       ...s,
-      box: { ...s.box, x: preview.pos.x, y: preview.pos.y },
+      box: { ...s.box, x: s.box.x + dx, y: s.box.y + dy },
       paths:
         s.paths?.map((p) => ({
           ...p,

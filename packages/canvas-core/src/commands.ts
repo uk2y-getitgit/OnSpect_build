@@ -332,12 +332,19 @@ export function applyMemoCommand(memos: readonly Memo[], c: Command): Memo[] {
       const revived = [...memos];
       for (const m of c.memos) if (!revived.some((x) => x.id === m.id)) revived.push(m);
       const out = revived.map((m) => {
-        // ⚠️ **오름차순으로 꽂아야** 원래 순서가 복원된다. 큰 index 부터 넣으면
-        //    앞쪽 삽입이 뒤쪽 위치를 밀어 순서가 어긋난다
+        /**
+         * ⚠️ **역-시간순으로 꽂는다.** `index` 는 *지운 그 시점의 배열* 기준이므로,
+         * 연속 삭제의 올바른 역연산은 "마지막에 지운 것부터 되돌리기" 다.
+         * index 오름차순으로 넣으면 앞선 삭제가 뒤 index 를 이미 당겨 놓은 상태라 순서가 어긋난다
+         * (예: `[p1,p2,p3]` 에서 p1(0) → p3(그 시점 1) 을 지우면 오름차순 복원은 `[p1,p3,p2]`).
+         *
+         * `mergeEraseCommand` 가 `[...prev.items, ...next.items]` 로 **시간순을 보존**하므로
+         * 그 배열을 뒤집기만 하면 된다. `Math.min` 클램프는 방어용으로 남긴다.
+         */
         const its = c.items
           .filter((i) => i.memoId === m.id)
           .slice()
-          .sort((a, b) => a.index - b.index);
+          .reverse();
         if (its.length === 0) return m;
         const paths = [...(m.paths ?? [])];
         for (const it of its) paths.splice(Math.min(it.index, paths.length), 0, it.path);
