@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
+  attrsOf,
   buildScreens,
   canRedo,
   canUndo,
@@ -18,6 +19,7 @@ import {
   pendingGhostsOf,
   isLocked,
   memoScreensOf,
+  pickCarryAttrs,
   previewOf,
   type InputEvent,
   type ReduceContext,
@@ -65,6 +67,7 @@ import {
 import { navigate, replace } from '../router';
 import { Sidebar } from '../ui/Sidebar';
 import { Inspector } from '../ui/Inspector';
+import { SimilarDefectPicker, type SimilarDefectItem } from '../ui/SimilarDefectPicker';
 import { ConfirmDialog, ContextMenu, Toasts } from '../ui/Overlays';
 import { useToast } from '../ui/ToastHost';
 
@@ -157,9 +160,10 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         projectId,
         defects: b.defects,
         memos: b.memos,
-        // 새 결함에 얹을 초기값 — 지금은 용역의 기본 구조유형뿐이다.
-        // 부재·결함유형은 현장에서 고르는 값이라 기본값을 두지 않는다
-        defectSeed: s ? seedAttrs(s, b.project) : {},
+        // 새 결함에 얹을 **프로젝트 고정 기본값** — 지금은 용역의 기본 구조유형뿐이다.
+        // 부재·결함유형은 현장에서 고르는 값이라 기본값을 두지 않는다.
+        // ⚠️ 이 값은 세션 내내 갱신되지 않는다 (D18 — D9 자동 이어받기 폐기)
+        defaultAttrs: s ? seedAttrs(s, b.project) : {},
       });
       setLoaded(true);
       void guard(() => storage.repo.touchProject(projectId, Date.now()));
@@ -483,6 +487,38 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     () => defects.find((d) => d.id === state.canvas.selection.defectId) ?? null,
     [defects, state.canvas.selection.defectId],
   );
+
+  // ── D18 유사결함 불러오기 ───────────────────────────────────────────────
+  const [similarOpen, setSimilarOpen] = useState(false);
+
+  /**
+   * 불러오기 후보 — **이 용역 전체**의 결함이다(현재 도면만이 아니다).
+   * 사용자가 "비슷한 유형"을 찾을 때 층을 넘나드는 것이 자연스럽다.
+   * 지금 선택된 결함은 뺀다 — 자기 자신을 불러와도 아무 일도 일어나지 않는다.
+   *
+   * 정렬은 `seq` 내림차순: 최근에 찍은 것이 위로 온다. 방금 입력한 결함을 다시 쓰는
+   * 경우가 압도적으로 많다(D9 가 자동 이어받기였던 이유이기도 하다).
+   */
+  const similarItems = useMemo<SimilarDefectItem[]>(() => {
+    const floorName = new Map(floors.map((f) => [f.id, f.name]));
+    return state.defects
+      .filter((d) => d.id !== selected?.id)
+      .map((d) => ({
+        id: d.id,
+        seq: d.seq,
+        memberName: d.memberName,
+        defectTypeName: d.defectTypeName,
+        floorName: floorName.get(d.floorId) ?? null,
+        status: d.status,
+      }))
+      .sort((a, b) => b.seq - a.seq);
+  }, [state.defects, selected?.id, floors]);
+
+  // 선택이 사라지면(결함 삭제·선택 해제) 열려 있던 다이얼로그도 닫는다 —
+  // 붙일 대상이 없는 채로 떠 있으면 고르는 순간 아무 일도 안 일어난다
+  useEffect(() => {
+    if (!selected) setSimilarOpen(false);
+  }, [selected]);
 
   // ── S5 사진 ─────────────────────────────────────────────────────────────
   const photoOps = usePhotos(projectId, loadedPhotos, toast);
@@ -889,6 +925,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               );
             }
           }}
+          onLoadSimilar={() => setSimilarOpen(true)}
+          similarCount={similarItems.length}
           onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
           onDelete={() => send({ k: 'DELETE_SELECTION' })}
         />
@@ -909,6 +947,29 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             send({ k: 'CONFIRM_DELETE_DEFECT', defectId: id });
           }}
           onCancel={() => dispatch({ t: 'CLOSE_CONFIRM' })}
+        />
+      )}
+
+      {similarOpen && selected && (
+        <SimilarDefectPicker
+          items={similarItems}
+          onClose={() => setSimilarOpen(false)}
+          onPick={(item) => {
+            setSimilarOpen(false);
+            const src = state.defects.find((d) => d.id === item.id);
+            if (!src) return;
+            // ⭐ 분류·판정 14필드만 덮어쓴다 — 규모·개소·메모는 사용자가 이미 적었을 수 있고
+            //    지우면 불러오기가 손해가 된다 (D18 (a))
+            const next = { ...attrsOf(selected), ...pickCarryAttrs(attrsOf(src)) };
+            const label = item.memberName ?? item.defectTypeName ?? '선택한 결함';
+            dispatch({
+              t: 'SET_DEFECT_ATTRS',
+              defectId: selected.id,
+              attrs: next,
+              // 잠긴 결함·변경 없음이면 store 가 조기 반환하고 토스트도 안 뜬다
+              toast: `${label}(${item.seq}번)의 분류·판정을 불러왔습니다. 규모·개소·메모는 직접 입력하세요`,
+            });
+          }}
         />
       )}
 

@@ -5,7 +5,7 @@
  *   · `SET_DEFECT_ATTRS` 가 속성만 갈아 끼우고 위치·스타일을 건드리지 않는가
  *   · Undo/Redo 왕복이 원래 값으로 되돌아오는가
  *   · 같은 필드 연타가 Undo 한 단계로 묶이는가 (다른 필드는 안 묶이는가)
- *   · `ctx.defectSeed` 가 새 결함에 실리는가
+ *   · `ctx.defaultAttrs` 가 새 결함에 실리는가
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -190,17 +190,17 @@ describe('Undo 병합 (§7 — 폭 프리셋 6번이 6단계가 되면 안 된�
   });
 });
 
-describe('ctx.defectSeed — 새 결함의 속성 초기값', () => {
+describe('ctx.defaultAttrs — 새 결함의 프로젝트 고정 기본값', () => {
   const DRAWING = { id: 'dw', imageWidth: 2400, imageHeight: 1600 };
   const K: Keys = { space: false, alt: false, shift: false, ctrl: false };
 
-  function createDefect(seed?: ReduceContext['defectSeed']): Defect {
+  function createDefect(defaults?: ReduceContext['defaultAttrs']): Defect {
     let n = 0;
     const ctx: ReduceContext = {
       defects: [],
       globalStyle: GS,
       makeId: () => `id${(n += 1)}`,
-      defectSeed: seed,
+      defaultAttrs: defaults,
     };
     let st = initialCanvasState();
     st = reduce(st, { k: 'RESIZE', size: { w: 1000, h: 700 } }, ctx).state;
@@ -221,7 +221,7 @@ describe('ctx.defectSeed — 새 결함의 속성 초기값', () => {
   it('주면 새 결함에 실린다 — 용역 기본 구조유형', () => {
     const d = createDefect({ structureType: 'RC' });
     expect(d.structureType).toBe('RC');
-    // 씨앗은 **초기값일 뿐**이다. 부재·결함유형은 여전히 비어 있어야 한다 (D3)
+    // 기본값은 **초기값일 뿐**이다. 부재·결함유형은 여전히 비어 있어야 한다 (D3)
     expect(d.memberName).toBeNull();
     expect(d.defectTypeName).toBeNull();
     expect(d.sizeMode).toBe('WL');

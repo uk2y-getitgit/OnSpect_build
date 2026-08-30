@@ -96,11 +96,15 @@ export type ReduceContext = {
   /** 새 결함이 속할 용역. 캔버스는 해석하지 않는 불투명 문자열이다 */
   projectId?: string;
   /**
-   * 새 결함에 얹을 속성 초기값 (S2b). 예: 용역의 기본 구조유형.
+   * 새 결함에 얹을 **프로젝트 고정 기본값** (S2b). 지금은 용역의 기본 구조유형뿐이다.
    * **캔버스는 이 값을 해석하지 않는다** — 받아서 펼치기만 한다.
    * 무엇을 넣을지는 `project-core` 의 `seedAttrs()` 가 정한다.
+   *
+   * ⚠️ 2026-08-28 `defectSeed` 에서 이름을 바꿨다 (D18). D9(직전 입력 자동 이어받기)가
+   * 폐기되면서 "직전 커밋이 이 값을 갈아 끼운다"는 성질이 사라졌다.
+   * **이 값은 용역을 여는 순간 정해지고 세션 내내 갱신되지 않는다.**
    */
-  defectSeed?: Partial<DefectAttrs>;
+  defaultAttrs?: Partial<DefectAttrs>;
   /**
    * 히트 허용치 (Phase 5 T5). **생략하면 `DEFAULT_HIT_PROFILE`(= 지금까지의 마우스 값)** 이라
    * PC 동작은 한 픽셀도 바뀌지 않는다. 손가락으로 쓰는 화면에서만 넓은 값을 주입한다.
@@ -1603,7 +1607,7 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
     ...EMPTY_DEFECT_ATTRS,
-    ...(ctx.defectSeed ?? {}),
+    ...(ctx.defaultAttrs ?? {}),
   };
 
   return ok(
@@ -1682,7 +1686,7 @@ function commitCreateShape(
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
     ...EMPTY_DEFECT_ATTRS,
-    ...(ctx.defectSeed ?? {}),
+    ...(ctx.defaultAttrs ?? {}),
   };
 
   return ok(
@@ -1779,7 +1783,7 @@ function pendingSketchToNewDefect(state: CanvasState, ctx: ReduceContext): Reduc
     sketch: pending.paths,
     style: null,
     ...EMPTY_DEFECT_ATTRS,
-    ...(ctx.defectSeed ?? {}),
+    ...(ctx.defaultAttrs ?? {}),
   };
 
   return ok(

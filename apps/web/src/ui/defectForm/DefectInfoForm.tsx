@@ -37,9 +37,27 @@ export type DefectInfoFormProps = {
   onChange: (next: DefectAttrs) => void;
   /** 전회차 표기 등 잠긴 결함 */
   disabled?: boolean;
+  /**
+   * D18 — `[유사결함 불러오기]` 를 눌렀을 때. 없으면 버튼을 아예 그리지 않는다
+   * (설정 미리보기처럼 결함 목록이 없는 자리).
+   *
+   * ⚠️ 다이얼로그는 **여기서 띄우지 않는다.** 후보 목록은 store 에 있고
+   * `ui/defectForm/*` 은 store·repo·캔버스를 import 하지 않는다(경계 규칙) —
+   * 목록을 아는 호출자(`CanvasRoute`)가 띄운다.
+   */
+  onLoadSimilar?: () => void;
+  /** D18 — 불러올 수 있는 다른 결함의 수. 0 이면 버튼을 눌러도 볼 게 없어 `disabled` */
+  similarCount?: number;
 };
 
-export function DefectInfoForm({ value, settings, onChange, disabled = false }: DefectInfoFormProps) {
+export function DefectInfoForm({
+  value,
+  settings,
+  onChange,
+  disabled = false,
+  onLoadSimilar,
+  similarCount = 0,
+}: DefectInfoFormProps) {
   // 폼이 한 화면에 두 벌 있어도(미리보기 + 우측 패널) label-for 가 어긋나지 않게 한다
   const uid = useId();
   const members = useMemo(
@@ -63,8 +81,34 @@ export function DefectInfoForm({ value, settings, onChange, disabled = false }: 
 
   return (
     <div className="idf" aria-disabled={disabled || undefined}>
-      {/* 조사구분 — **폼 최상단.** "이 결함이 어떤 조사에서 나왔는가" 라는 틀이고,
-          직전 입력에서 이어받으므로(DEFECT_SEED_CARRY.surveyKind) 한 번 정하면 계속 따라온다.
+      {/* D18 — 유사결함 불러오기. **폼 맨 위**에 둔다. 값을 채우기 *전에* 누르는 버튼이라
+          아래에 있으면 이미 다 입력한 뒤에야 눈에 띈다.
+          가져오는 것은 분류·판정 14필드뿐이고 규모·개소·메모는 그대로 남는다
+          (`DEFECT_CARRY_FIELDS`) */}
+      {onLoadSimilar && (
+        <div className="idf-field idf-field--action">
+          <button
+            type="button"
+            className="btn btn--full"
+            disabled={disabled || similarCount === 0}
+            onClick={onLoadSimilar}
+            title={
+              disabled
+                ? '전회차 표기는 값을 고칠 수 없습니다'
+                : similarCount === 0
+                  ? '이 용역에 불러올 다른 결함이 아직 없습니다'
+                  : '다른 결함의 부재 · 결함유형 · 원인 · 보수방안을 이 결함으로 가져옵니다'
+            }
+          >
+            유사결함 불러오기
+          </button>
+          <p className="idf-field__hint">
+            분류 · 판정만 가져옵니다. 규모 · 개소 · 메모는 직접 입력하세요.
+          </p>
+        </div>
+      )}
+
+      {/* 조사구분 — "이 결함이 어떤 조사에서 나왔는가" 라는 틀이다.
           연동 규칙이 없다 — 다른 필드를 건드리지 않는다 (PhotoPolish §2-7) */}
       <SegmentField
         label="조사구분"

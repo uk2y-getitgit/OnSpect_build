@@ -298,6 +298,18 @@ QUESTIONS.md 의 답이 오면 해당 항목만 바꾸면 된다. **builder가 �
 
 비차단 가정. **전부 D9 안쪽의 구현 디테일이다 — D9 를 뒤집지 않는다.** 최종 보고에 포함한다.
 
+> ⚠️ **2026-08-28 배치4(G-5) 정리 — D9 가 D18 로 폐기되면서 J 계열의 유효 범위가 바뀌었다.**
+>
+> | # | 2026-08-28 이후 상태 |
+> |---|---|
+> | **J1** | **유효.** 이름만 바뀌었다 — `defectSeed` → `pickCarryAttrs()` 의 반환값. "복사 안 하는 필드는 키 자체를 안 만든다" 규칙은 그대로다. 합성 자리가 `{ ...EMPTY_DEFECT_ATTRS, ...ctx.defaultAttrs }`(생성) 과 `{ ...현재값, ...pickCarryAttrs(고른결함) }`(불러오기) 둘로 늘었을 뿐 스프레드라는 성질이 같다 |
+> | **J2** | **소멸.** 되돌릴 씨앗 자체가 없다. 불러오기는 `SET_DEFECT_ATTRS` 커맨드 1건이라 `Ctrl+Z` 로 **정확히 1스텝** 되돌아간다 — J2 가 걱정하던 "세션은 앞으로만 간다" 문제가 구조적으로 사라졌다 |
+> | **J3** | **유효.** `DEFECT_SEED_CARRY` → `DEFECT_CARRY_FIELDS` 로 이름만 바꿨고 `Record<keyof DefectAttrs, boolean>` 구조는 유지했다. 필드가 늘면 여전히 타입 검사가 깨진다 |
+> | **J4** | **이미 2026-08-25 에 뒤집혔다**(§2-7 · Q44 — `surveyKind: true`). D18 도 이 판정을 그대로 쓴다 |
+> | **J5** | **유효.** 테스트는 여전히 `canvas-core/test/s6.test.ts` 에 있다(`pickCarryAttrs` 순수 검증). `store.ts` 쪽 배선(토스트 · 조기 반환)은 타입 검사 + 사용자 확인으로 덮는다 |
+>
+> **신규 가정 J6** — 불러오기 후보는 **현재 도면이 아니라 이 용역 전체**의 결함이고 `seq` **내림차순**(최근 입력 우선)으로 보인다. 스펙 §5-4-b 는 *"이 용역의 결함 목록"* 이라고만 적었고 정렬을 지정하지 않았다. 근거: 방금 찍은 결함을 다시 쓰는 경우가 압도적이다(D9 가 애초에 자동 이어받기였던 이유). 되돌리는 비용 0 — `sort` 한 줄.
+
 | # | 가정 | 근거 · 되돌리는 비용 |
 |---|---|---|
 | **J1** | **`defectSeed` 는 "이어받는 필드만 담은 화이트리스트 partial" 이다.** 새로 받는 필드는 `undefined` 로 넣지 않고 **키 자체를 넣지 않는다** | `interaction.ts` 의 `{ ...EMPTY_DEFECT_ATTRS, ...ctx.defectSeed }` 는 스프레드다 — `undefined` 값이 있으면 `EMPTY` 의 `null` 기본값을 덮어써 **저장 레코드에 `widthMm: undefined` 가 들어간다.** 그러면 `changedAttrKeys`(`!==` 비교)가 헛돌고 `normalizeDefectAttrs` 의 조기 반환이 매번 깨진다. 타입은 `Partial<DefectAttrs>` 그대로 두므로 `seedAttrs()`·`ReduceContext` 는 손대지 않는다 |

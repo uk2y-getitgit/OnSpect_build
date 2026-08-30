@@ -44,12 +44,26 @@ export type InspectorProps = {
    */
   photoSlot?: ReactNode;
   onAttrsChange: (attrs: DefectAttrs) => void;
+  /** D18 — `[유사결함 불러오기]`. 다이얼로그는 호출자가 띄운다 */
+  onLoadSimilar?: () => void;
+  /** D18 — 불러올 수 있는 다른 결함의 수 */
+  similarCount?: number;
   onResetLabel: () => void;
   onDelete: () => void;
 };
 
 export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Inspector(
-  { defect, settings, saving, photoSlot, onAttrsChange, onResetLabel, onDelete },
+  {
+    defect,
+    settings,
+    saving,
+    photoSlot,
+    onAttrsChange,
+    onLoadSimilar,
+    similarCount = 0,
+    onResetLabel,
+    onDelete,
+  },
   ref,
 ) {
   if (!defect) {
@@ -104,6 +118,8 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
             settings={settings}
             disabled={locked}
             onChange={onAttrsChange}
+            onLoadSimilar={onLoadSimilar}
+            similarCount={similarCount}
           />
         ) : (
           <>

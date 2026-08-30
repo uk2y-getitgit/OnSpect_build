@@ -22,7 +22,6 @@ import {
   initialCanvasState,
   isLocked,
   memoTargetOf,
-  pickDefectSeed,
   pushHistory,
   redo as redoStack,
   reduce,
@@ -84,18 +83,16 @@ export type AppState = {
   /** 텍스트 편집기를 열어야 할 메모. `EDIT_MEMO` 이펙트가 채운다 */
   editingMemoId: string | null;
   /**
-   * 새 결함에 얹을 속성 초기값.
+   * 새 결함에 얹을 **프로젝트 고정 기본값**. 지금은 이 용역의 기본 구조유형뿐이다.
    *
-   * · **최초값**은 이 용역의 **설정 스냅샷**에서 온다(S2b · D6) —
-   *   `project-core` 의 `seedAttrs()` 결과를 라우트가 `LOAD` 로 넣어 준다.
-   * · 그 뒤로는 **직전 커밋이 덮어쓴다**(S6 · D9) — `SET_DEFECT_ATTRS` 가 커밋될 때마다
-   *   `pickDefectSeed(to)` 로 "분류·판정" 필드만 골라 갈아 끼운다.
-   *   측정값·위치보조·메모는 담기지 않으므로 새 결함에서 매번 비어 있다.
+   * 이 용역의 **설정 스냅샷**에서 온다(S2b · D6) —
+   * `project-core` 의 `seedAttrs()` 결과를 라우트가 `LOAD` 로 넣어 준다.
    *
-   * ⚠️ **세션 상태다. 영속화하지 않는다** — 새로고침·용역 나가기에서 리셋된다(D9 §3).
-   *    층 전환(`SET_FLOOR`)에서는 유지된다. Undo/Redo 로 되돌아가지도 않는다(J2).
+   * ⚠️ 2026-08-28 D18 — **직전 입력 자동 이어받기(D9)는 폐기됐다.**
+   *    이 값은 `LOAD` 이후 **절대 갱신되지 않는다.** 분류·판정을 재사용하려면
+   *    결함정보 폼의 `[유사결함 불러오기]` 로 사용자가 직접 고른다.
    */
-  defectSeed: Partial<DefectAttrs>;
+  defaultAttrs: Partial<DefectAttrs>;
   idSeed: number;
   toastSeed: number;
 };
@@ -108,14 +105,18 @@ export type Action =
       projectId: string;
       defects: Defect[];
       memos: Memo[];
-      defectSeed?: Partial<DefectAttrs>;
+      defaultAttrs?: Partial<DefectAttrs>;
     }
   /**
    * 결함 속성 편집 (S2b). 폼은 **다음 값 전체**를 올린다 — 연동 규칙(§3-6)이 한 필드
    * 변경으로 3~4 필드를 함께 바꾸기 때문이다. 여기서 `SET_DEFECT_ATTRS` 커맨드로 바꿔
    * 마커 이동과 **같은 Undo 스택**에 쌓고, 같은 저장 대기열로 흘려보낸다.
    */
-  | { t: 'SET_DEFECT_ATTRS'; defectId: string; attrs: DefectAttrs }
+  /**
+   * `toast` 를 주면 **커밋에 성공했을 때만** 그 문구를 [되돌리기] 가능 토스트로 띄운다.
+   * `[유사결함 불러오기]`(D18) 가 쓴다 — 조기 반환(잠김·변경 없음)에서는 아무 말도 하지 않는다.
+   */
+  | { t: 'SET_DEFECT_ATTRS'; defectId: string; attrs: DefectAttrs; toast?: string }
   | { t: 'FLUSHED'; seq: number }
   | { t: 'UNDO' }
   | { t: 'REDO' }
@@ -145,7 +146,7 @@ export function initialAppState(init: {
     reveal: null,
     focusTick: 0,
     editingMemoId: null,
-    defectSeed: {},
+    defaultAttrs: {},
     idSeed: 1,
     toastSeed: 1,
   };
@@ -184,13 +185,13 @@ export function appReducer(state: AppState, action: Action): AppState {
         projectId: action.projectId,
         defects: action.defects,
         memos: action.memos,
-        defectSeed: action.defectSeed ?? {},
+        defaultAttrs: action.defaultAttrs ?? {},
         history: EMPTY_HISTORY,
         writes: NO_WRITES,
       };
 
     case 'SET_DEFECT_ATTRS':
-      return setDefectAttrs(state, action.defectId, action.attrs);
+      return setDefectAttrs(state, action.defectId, action.attrs, action.toast);
 
     case 'EDIT_MEMO':
       return { ...state, editingMemoId: action.memoId };
@@ -346,7 +347,7 @@ function runInput(state: AppState, ev: InputEvent): AppState {
     now: () => Date.now(),
     floorId: state.floorId,
     projectId: state.projectId,
-    defectSeed: state.defectSeed,
+    defaultAttrs: state.defaultAttrs,
   };
 
   const r = reduce(state.canvas, ev, ctx);
@@ -369,9 +370,14 @@ function runInput(state: AppState, ev: InputEvent): AppState {
  * · **잠긴 결함(전회차)은 거부한다** — 폼도 `disabled` 지만 마지막 관문을 여기 둔다
  * · 병합 키는 바뀐 필드 묶음이다. 같은 필드를 800ms 안에 또 고치면 Undo 한 단계로 합쳐진다
  *   (`pushHistory` 안의 `mergeAttrCommand`)
- * · **커밋된 값이 다음 결함의 씨앗이 된다** (S6 · D9) — 완성 여부와 무관하게 즉시 갱신한다
+ * · `toastText` 를 주면 **커밋에 성공했을 때만** [되돌리기] 토스트를 띄운다 (D18)
  */
-function setDefectAttrs(state: AppState, defectId: string, next: DefectAttrs): AppState {
+function setDefectAttrs(
+  state: AppState,
+  defectId: string,
+  next: DefectAttrs,
+  toastText?: string,
+): AppState {
   const d = state.defects.find((x) => x.id === defectId);
   if (!d || isLocked(d)) return state;
   const from = attrsOf(d);
@@ -387,10 +393,9 @@ function setDefectAttrs(state: AppState, defectId: string, next: DefectAttrs): A
     // 코어는 시간을 모른다. 어댑터가 넣어 준다 (경계 규칙 1)
     at: Date.now(),
   });
-  // ⚠️ 씨앗 갱신은 **조기 반환 두 개를 통과한 뒤**여야 한다 (D9 §2).
-  //    위에 두면 전회차(PREV_PENDING)·보수완료 결함을 클릭만 해도 씨앗이 오염된다.
-  //    출처는 `next` 가 아니라 `to` — 이미 attr 키로 정규화된 값이다.
-  return { ...committed, defectSeed: pickDefectSeed(to) };
+  // ⚠️ 토스트는 **조기 반환 두 개를 통과한 뒤**여야 한다 — 잠긴 결함이나 값이 그대로일 때
+  //    "불러왔습니다" 라고 말하면 거짓말이 된다.
+  return toastText ? withToast(committed, 'info', toastText, true) : committed;
 }
 
 function applyAndPush(state: AppState, c: Command): AppState {
