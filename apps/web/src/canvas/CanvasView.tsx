@@ -35,6 +35,7 @@ import {
   pointerMove,
   pointerUp,
   sameTouchPair,
+  touchesIn,
   wheel,
   type PinchSample,
 } from './pointerAdapter';
@@ -305,9 +306,14 @@ export function CanvasView({
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      // ⭐ B-1 — `e.touches` 는 화면 전체 접점이다. 팔레트·Inspector·Sidebar 는 host 밖
+      //    형제인데 도면 위에 겹쳐 보이므로, 거르지 않으면 거기 얹은 엄지가 두 번째
+      //    손가락으로 세어져 그리던 획이 핀치 롤백으로 사라진다.
+      //    세 핸들러가 **같은 필터**를 써야 한다 — 한쪽만 고치면 해제가 안 된다
+      const ts = touchesIn(el, e.touches);
       // 한 손가락은 기존 그대로 — pointerdown 이 그리기·팬을 이미 시작했다
-      if (e.touches.length < 2) return;
-      const s = pinchSample(el, e.touches);
+      if (ts.length < 2) return;
+      const s = pinchSample(el, ts);
       if (!s) return;
       e.preventDefault();
       if (!pinchRef.current.active) {
@@ -324,8 +330,9 @@ export function CanvasView({
       const st = pinchRef.current;
       if (!st.active) return;
       e.preventDefault();
-      if (e.touches.length < 2) return;
-      const s = pinchSample(el, e.touches);
+      const ts = touchesIn(el, e.touches); // B-1 — start 와 같은 필터
+      if (ts.length < 2) return;
+      const s = pinchSample(el, ts);
       if (!s) return;
       const prev = st.last;
       // 추적하던 두 손가락이 아니면 상대값이 순간이동한다 — 이 프레임은 기준 갱신만
@@ -340,9 +347,13 @@ export function CanvasView({
     const onTouchEnd = (e: TouchEvent) => {
       const st = pinchRef.current;
       if (!st.active) return;
+      // ⭐ B-1 — 여기도 **반드시** 같은 필터를 쓴다. start 만 고치고 여기를 날 `e.touches`
+      //    로 두면, 캔버스 손가락을 다 뗐는데 팔레트 위 엄지가 남아 `>= 2` 로 읽혀
+      //    핀치가 영영 안 끝나고 포인터 입력이 통째로 막힌다
+      const ts = touchesIn(el, e.touches);
       // 셋 이상에서 하나가 떨어졌다 → 핀치는 계속. 새 쌍으로 기준만 다시 잡는다
-      if (e.touches.length >= 2) {
-        st.last = pinchSample(el, e.touches) ?? st.last;
+      if (ts.length >= 2) {
+        st.last = pinchSample(el, ts) ?? st.last;
         return;
       }
       endPinch();
@@ -466,12 +477,20 @@ export function CanvasView({
       onPointerLeave={() => send({ k: 'POINTER_LEAVE' })}
       onDoubleClick={(e) => {
         const el = hostRef.current;
-        if (el) send(doubleClick(el, e.nativeEvent, spaceRef.current));
+        // C-1 — 포인터 3형제와 **같은 가드**. 핀치 중 합성 dblclick 이 새어 들어오면
+        //       확대하다 말고 편집기가 열린다
+        if (!el || pinchRef.current.active) return;
+        send(doubleClick(el, e.nativeEvent, spaceRef.current));
       }}
       onContextMenu={(e) => {
+        // preventDefault 는 가드보다 **먼저** — 핀치 중이라고 브라우저 기본 메뉴를
+        // 살려 두면 두 손가락 확대 중에 OS 메뉴가 뜬다
         e.preventDefault();
         const el = hostRef.current;
-        if (el) send(contextMenu(el, e.nativeEvent));
+        // C-1 — Android Chrome 은 접점을 길게 누르면 contextmenu 를 낸다.
+        //       두 손가락으로 확대한 채 잠시 멈추면 삭제 메뉴가 뜨는 것을 막는다
+        if (!el || pinchRef.current.active) return;
+        send(contextMenu(el, e.nativeEvent));
       }}
     >
       <canvas ref={bgRef} className="canvas-layer canvas-bg" aria-hidden="true" />

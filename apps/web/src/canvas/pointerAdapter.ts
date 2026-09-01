@@ -85,11 +85,37 @@ export function contextMenu(el: HTMLElement, e: MouseEvent): InputEvent {
 export type PinchSample = { center: SPoint; dist: number; ids: [number, number] };
 
 /**
- * `TouchList` 앞 두 개로 스냅샷을 만든다. 손가락이 2개 미만이거나 좌표가
+ * ⭐ B-1 — `TouchEvent.touches` 는 **화면 전체**의 접점 목록이다. 그 이벤트를 받은
+ * 요소의 접점만 주는 게 아니다.
+ *
+ * `.canvas-host` 는 `position:absolute; inset:0` 이라 도구 팔레트·Inspector·Sidebar 가
+ * **시각적으로는 도면 위에 겹쳐** 보이지만 DOM 상으로는 host 밖 형제다. 그래서 팔레트에
+ * 엄지를 얹은 채 도면에 그리면 접점이 2개로 집계돼 핀치로 오인식되고, 그리던 획이
+ * `GESTURE_PINCH_START` 의 `cancelDrag` 로 롤백된다 — "그려지지 않고 화면만 움직인다".
+ *
+ * `targetTouches` 는 실제 target 이 자식 `.canvas-layer` 캔버스라 여기서는 못 쓴다.
+ * 포함 관계(`el.contains`)로 직접 거른다. 접점의 `target` 은 **touchstart 시점 요소로
+ * 고정**되므로, 캔버스에서 시작한 손가락은 밖으로 끌고 나가도 계속 걸러지지 않는다.
+ */
+export function touchesIn(el: HTMLElement, list: TouchList): Touch[] {
+  const out: Touch[] = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const t = list[i];
+    if (!t) continue;
+    if (t.target instanceof Node && el.contains(t.target)) out.push(t);
+  }
+  return out;
+}
+
+/**
+ * 앞 두 접점으로 스냅샷을 만든다. 손가락이 2개 미만이거나 좌표가
  * 성하지 않으면 null — 코어에 NaN 을 흘리지 않기 위한 1차 방어다
  * (코어도 `finitePoint` 로 한 번 더 막는다).
+ *
+ * 인자는 **반드시 `touchesIn()` 으로 거른 배열**이어야 한다. 날 `TouchList` 를 넘기면
+ * 캔버스 밖 손가락이 `touches[0]` 자리를 차지해 중점·거리가 엉뚱해진다(B-1).
  */
-export function pinchSample(el: HTMLElement, touches: TouchList): PinchSample | null {
+export function pinchSample(el: HTMLElement, touches: readonly Touch[]): PinchSample | null {
   const a = touches[0];
   const b = touches[1];
   if (!a || !b) return null;
