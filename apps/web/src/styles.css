@@ -4114,3 +4114,25 @@ select.input { cursor: pointer; }
   font-size: 12px;
   line-height: 1.7;
 }
+
+/* ── 터치 전용 기기 (T-5, 2026-09-01) ─────────────────────────────────────
+ * 순수 터치 태블릿에는 **누를 키보드도 굴릴 휠도 없다.** 단축키 안내는 도면만 가린다.
+ *
+ * 판정은 표준 미디어쿼리로만 한다 — `(hover: none)` = 커서를 올려둘 수 없음,
+ * `(pointer: coarse)` = 주 입력이 손가락. **User-Agent 스니핑은 쓰지 않는다**(신뢰 불가).
+ * 마우스+터치 겸용(투인원)은 `hover: hover` 라 여기 걸리지 않는다 — 의도한 대로다.
+ *
+ * ⚠️ JS 가 아니라 CSS 로 지우는 이유: `.stage__help` 는 `data-floating` 이라
+ *    안전영역 계산(`CanvasView.tsx` — 크기 0 인 요소는 건너뛴다)에 들어간다.
+ *    `display:none` 이면 자동으로 계산에서 빠져 하단 여백까지 함께 돌려받는다.
+ */
+@media (hover: none) and (pointer: coarse) {
+  /* 휠·Space·Alt·Shift·Ctrl+Z 안내 */
+  .stage__help {
+    display: none;
+  }
+  /* Ctrl+Enter·Esc 안내 — 사용자가 직접 지목하진 않았으나 같은 종류다 (ASSUMPTIONS U1) */
+  .memo-editor__hint {
+    display: none;
+  }
+}

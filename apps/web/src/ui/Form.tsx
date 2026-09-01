@@ -82,11 +82,15 @@ const MODAL_FOCUSABLE =
   'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]):not(.modal__x)';
 
 /**
- * 모달 셸 — 스크림 클릭·Esc 로 닫히고, 열릴 때 첫 필드로 포커스가 간다.
+ * 모달 셸 — Esc·✕·취소로 닫히고, 열릴 때 첫 필드로 포커스가 간다.
  * Tab 이 모달 밖으로 새지 않게 가둔다 (ui-quality §7-2).
  *
  * ⚠️ **포커스 이펙트는 마운트 1회다** (버그 B1). 부모 리렌더마다 다시 돌면
  *    타이핑할 때마다 포커스가 첫 요소로 튀어 입력 자체가 불가능해진다.
+ *
+ * ⚠️ **스크림(배경) 클릭으로는 기본적으로 닫히지 않는다** (T-6, 2026-09-01).
+ *    태블릿에서 스크롤하다 배경을 스치면 입력 중이던 폼이 통째로 날아갔다.
+ *    닫는 길은 Esc · 헤더 ✕ · 푸터의 취소/닫기 셋이면 충분하다.
  */
 export function Modal({
   title,
@@ -96,6 +100,8 @@ export function Modal({
   children,
   wide = false,
   dock,
+  autoFocusFirst = true,
+  closeOnScrimClick = false,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -109,6 +115,17 @@ export function Modal({
    * 가리면 미리보기가 안 보인다.
    */
   dock?: 'right';
+  /**
+   * T-3 — 본문 첫 입력으로 자동 포커스(B1-b)를 끈다.
+   * **검색창이 본문 첫 요소인 모달만** 끈다 — 태블릿에서 열자마자 소프트 키보드가
+   * 올라와 목록을 절반 가린다. PC 폼 모달의 자동 포커스는 그대로 둔다.
+   */
+  autoFocusFirst?: boolean;
+  /**
+   * T-6 — 스크림 클릭으로 닫는 옵트인. **기본은 꺼져 있다.**
+   * 켜려면 "잘못 닫혀도 잃을 입력이 없다" 가 참이어야 한다.
+   */
+  closeOnScrimClick?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
@@ -129,6 +146,7 @@ export function Modal({
   //    매 렌더 확인하되 실제 포커스는 성공한 그 한 번뿐이므로 B1(포커스 뺏김)은 재발하지 않는다.
   const focusedRef = useRef(false);
   useEffect(() => {
+    if (!autoFocusFirst) return; // T-3 — 옵트아웃한 모달은 아무 데도 포커스하지 않는다
     if (focusedRef.current) return;
     const el = ref.current;
     if (!el) return;
@@ -174,7 +192,8 @@ export function Modal({
   return (
     <div
       className={dock === 'right' ? 'modal-scrim modal-scrim--dock' : 'modal-scrim'}
-      onPointerDown={onClose}
+      // T-6 — 기본은 스크림 클릭으로 닫지 않는다. 켠 모달만 닫는다
+      onPointerDown={closeOnScrimClick ? onClose : undefined}
     >
       <div
         ref={ref}

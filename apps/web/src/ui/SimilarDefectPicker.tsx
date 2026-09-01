@@ -54,6 +54,9 @@ export function SimilarDefectPicker({ items, onPick, onClose }: SimilarDefectPic
       title="유사결함 불러오기"
       subtitle="고른 결함의 부재 · 결함유형 · 원인 · 보수방안을 가져옵니다. 규모 · 개소 · 메모는 가져오지 않습니다."
       onClose={onClose}
+      // T-3 — 본문 첫 요소가 검색 입력이라 자동 포커스가 걸리면 태블릿에서 열자마자
+      //       소프트 키보드가 올라와 목록을 가린다. 대부분은 검색 없이 눈으로 고른다.
+      autoFocusFirst={false}
       footer={
         <button type="button" className="btn" onClick={onClose}>
           닫기

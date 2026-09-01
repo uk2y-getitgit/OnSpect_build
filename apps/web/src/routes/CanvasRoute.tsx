@@ -528,6 +528,10 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const toolbarAt = useMemo(() => {
     // 드래그 중에는 툴바를 숨긴다 — 손을 따라다니면 도면을 가린다
     if (!selected || !state.canvas.drawing || state.canvas.drag) return null;
+    // T-4 — **새로 그린 직후의 자동 선택에는 띄우지 않는다.** 연속으로 결함을 찍을 때
+    //       방금 찍은 자리 위에 툴바가 덮여 다음 위치가 안 보였다. 판정은 스토어에 있다
+    //       (생성 커맨드 발생 여부는 리듀서 안에서만 알 수 있다 — `store.ts` `toolbarFor`)
+    if (state.toolbarFor !== selected.id) return null;
     const screens = buildScreens({
       drawing: state.canvas.drawing,
       viewport: state.canvas.viewport,
@@ -549,7 +553,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       x: Math.min(Math.max(s.label.x, 150), Math.max(150, state.canvas.canvas.w - 150)),
       y,
     };
-  }, [selected, state.canvas, defects]);
+  }, [selected, state.canvas, state.toolbarFor, defects]);
 
   const selectFloor = useCallback(
     (f: Floor) => {

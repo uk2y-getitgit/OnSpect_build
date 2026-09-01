@@ -93,6 +93,19 @@ export type AppState = {
    *    결함정보 폼의 `[유사결함 불러오기]` 로 사용자가 직접 고른다.
    */
   defaultAttrs: Partial<DefectAttrs>;
+  /**
+   * T-4 (2026-09-01) — **플로팅 편집 툴바(ContextToolbar)를 띄워도 되는 결함.**
+   * `null` 이면 띄우지 않는다. 항상 `canvas.selection.defectId` 와 같거나 `null` 이다.
+   *
+   * 선택 자체와 분리한 이유: 결함을 새로 그리면 코어가 **자동으로 선택**한다
+   * (`interaction.ts` CREATE_DEFECT 세 경로). 선택만 보고 툴바를 띄우면 연속으로
+   * 결함을 찍을 때마다 방금 찍은 자리 위에 색상·모양·삭제 툴바가 덮여 다음 위치가 안 보인다.
+   *
+   * 규칙: **사용자가 캔버스에서 직접 고른 선택**(마커 탭 · 우클릭 · 더블클릭 · 리스트 선택)
+   * 에만 툴바를 허용한다. 생성 직후의 자동 선택에는 허용하지 않는다.
+   * 우측 Inspector 패널은 이 값과 무관하게 계속 뜬다 — 사이드라 도면을 가리지 않는다.
+   */
+  toolbarFor: string | null;
   idSeed: number;
   toastSeed: number;
 };
@@ -147,6 +160,7 @@ export function initialAppState(init: {
     focusTick: 0,
     editingMemoId: null,
     defaultAttrs: {},
+    toolbarFor: null,
     idSeed: 1,
     toastSeed: 1,
   };
@@ -174,7 +188,21 @@ export function displayNumbersOf(defects: readonly Defect[]): Record<string, str
   return out;
 }
 
+/**
+ * T-4 — `toolbarFor` 는 **항상 지금 선택된 결함이거나 `null`** 이라는 불변식을 지킨다.
+ * 선택이 다른 결함으로 옮겨가거나(리스트 클릭·삭제·Undo로 사라짐) 해제되면 툴바를 닫는다.
+ * 리듀서 출구 한 곳에서만 강제한다 — 케이스마다 챙기면 반드시 하나를 빠뜨린다.
+ */
+function clampToolbar(s: AppState): AppState {
+  if (s.toolbarFor === null) return s;
+  return s.canvas.selection.defectId === s.toolbarFor ? s : { ...s, toolbarFor: null };
+}
+
 export function appReducer(state: AppState, action: Action): AppState {
+  return clampToolbar(reduceApp(state, action));
+}
+
+function reduceApp(state: AppState, action: Action): AppState {
   switch (action.t) {
     case 'INPUT':
       return runInput(state, action.ev);
@@ -362,7 +390,39 @@ function runInput(state: AppState, ev: InputEvent): AppState {
   // 2. 부수효과 처리
   for (const e of r.effects) next = runEffect(next, e);
 
-  return next;
+  // 3. T-4 — 이번 입력의 선택이 "사용자가 직접 고른 것" 인지 판정한다.
+  //    ⚠️ 커맨드 목록은 **여기서만** 볼 수 있다. 나중에 상태만 보고는
+  //       "방금 만들어진 결함" 과 "원래 있던 결함" 을 구분할 수 없다.
+  return {
+    ...next,
+    toolbarFor: nextToolbarFor(state, next, ev, r.commands.some((c) => c.k === 'CREATE_DEFECT')),
+  };
+}
+
+/**
+ * T-4 — 캔버스에서 **사용자가 직접 고른** 선택. 이 이벤트들만 편집 툴바를 띄울 자격이 있다.
+ * (`POINTER_UP`·`SET_TOOL` 같은 나머지는 직전 판정을 그대로 유지한다)
+ */
+const EXPLICIT_SELECT_EVENTS: ReadonlySet<InputEvent['k']> = new Set([
+  'POINTER_DOWN', // 마커·풍선 탭
+  'DOUBLE_CLICK',
+  'CONTEXT_MENU',
+  'SELECT_DEFECT', // 좌측 결함 리스트에서 고름
+]);
+
+function nextToolbarFor(
+  prev: AppState,
+  next: AppState,
+  ev: InputEvent,
+  created: boolean,
+): string | null {
+  const selId = next.canvas.selection.defectId;
+  if (!selId) return null;
+  // 방금 그린 결함의 자동 선택 — 툴바를 띄우면 다음 표기 자리를 가린다.
+  // 같은 POINTER_DOWN 이 생성까지 했더라도 '직접 고름' 보다 이쪽이 우선이다.
+  if (created) return null;
+  if (EXPLICIT_SELECT_EVENTS.has(ev.k)) return selId;
+  return prev.toolbarFor === selId ? selId : null;
 }
 
 /**
