@@ -148,6 +148,18 @@ export type DrawOp =
       alpha?: number;
     };
 
+/**
+ * T-1 — 필기 메모를 **쓰고 있는 동안**의 상태. `interaction.inkSessionOf(state)` 가 만든다.
+ *
+ *   · `drawing` — 지금 획을 긋는 중(포인터 down~up). 선택·hover 와 **무관하게**
+ *                 모든 메모의 점선 상자를 숨긴다.
+ *   · `memoId`  — 이번 세션에서 방금 커밋한 메모. 손을 뗀 뒤에도 상자를 숨긴다
+ *                 (한 획 = 메모 하나라 커밋 즉시 자동 선택되기 때문).
+ *
+ * 넘기지 않으면(출력·테스트) D14 규칙(선택·hover 시 상자)이 그대로다.
+ */
+export type InkSession = { drawing: boolean; memoId: string | null };
+
 export type RenderInput = {
   drawing: DrawingRef;
   viewport: Viewport;
@@ -176,6 +188,8 @@ export type RenderInput = {
   titleBlock?: TitleBlockConfig | null;
   /** F5-2 범례. `null` = 그리지 않는다. **배경 레이어에서만 쓴다** */
   legend?: LegendConfig | null;
+  /** T-1 필기 세션. 생략하면 점선 상자는 D14 규칙(선택·hover) 그대로다 */
+  inkSession?: InkSession | null;
 };
 
 /** 아직 커밋되지 않은 생성 미리보기. 문서에 없으므로 DefectScreen 이 아니다 */
@@ -259,11 +273,15 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
 
   const angleSnapActive = guides.some((g) => g.k === 'ANGLE');
 
+  // T-1 — 필기 중에는 점선 상자를 숨긴다 (아래 memoOps_ 주석 참조)
+  const ink = input.inkSession ?? null;
+
   for (const m of input.memos ?? []) {
     if (!rectsIntersect(m.box.x, m.box.y, m.box.w, m.box.h, 0, 0, canvas.w, canvas.h)) continue;
     const selected = selection.memoId === m.memoId;
     const hovered = hover?.part === 'MEMO' && hover.memoId === m.memoId;
-    memoOps.push(...memoOps_(m, selected, hovered));
+    const inking = !!ink && (ink.drawing || ink.memoId === m.memoId);
+    memoOps.push(...memoOps_(m, selected, hovered, inking));
   }
 
   for (const s of screens) {
@@ -608,7 +626,13 @@ function arrowOps(
   }
 }
 
-function memoOps_(m: MemoScreen, selected: boolean, hovered: boolean): DrawOp[] {
+function memoOps_(
+  m: MemoScreen,
+  selected: boolean,
+  hovered: boolean,
+  /** T-1 — 지금 쓰고 있는 메모인가. true 면 선택·hover 여도 상자를 그리지 않는다 */
+  inking = false,
+): DrawOp[] {
   const ops: DrawOp[] = [];
   const b = m.box;
 
@@ -622,7 +646,12 @@ function memoOps_(m: MemoScreen, selected: boolean, hovered: boolean): DrawOp[] 
     //
     //    출력(`locationMap.ts`)은 selection·hover 를 전부 비우므로 조사위치도에서는
     //    자동으로 사라진다 — 출력 쪽에 별도 분기가 없다.
-    if (selected || hovered) {
+    //
+    // ⭐ T-1 — 다만 **쓰고 있는 도중에는** 선택 상태와 무관하게 숨긴다.
+    //    한 획 = 메모 하나라 커밋 즉시 자동 선택되므로, 글씨를 이어 쓰는 내내
+    //    방금 쓴 획마다 점선 상자가 따라붙어 필기를 가렸다.
+    //    세션이 끝나면(도구 변경 · 다른 곳 탭) `inking` 이 꺼지고 D14 로 돌아간다.
+    if (!inking && (selected || hovered)) {
       ops.push({
         k: 'rect',
         at: { x: b.x, y: b.y },

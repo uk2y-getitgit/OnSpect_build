@@ -45,7 +45,7 @@ import {
   handleCursor,
 } from './shapes.js';
 import { hitTest, nearestMemoPath } from './hitTest.js';
-import { buildScreens, type GhostShape } from './renderModel.js';
+import { buildScreens, type GhostShape, type InkSession } from './renderModel.js';
 import { buildAlignSnapshot, findAlignSnap } from './snapAlign.js';
 import { computeAngleSnap } from './snapAngle.js';
 import { resolveSnaps } from './snapResolve.js';
@@ -145,6 +145,22 @@ export function initialCanvasState(canvas: Size = { w: 0, h: 0 }): CanvasState {
     cursor: 'default',
     busy: false,
     pendingSketch: null,
+    inkMemoId: null,
+  };
+}
+
+/**
+ * T-1 — 렌더러에 넘길 **필기 세션** 요약. 순수 파생값이다.
+ *
+ * `RenderInput.inkSession` 으로 들어가 `memoOps_` 가 점선 상자를 숨길지 정한다.
+ * 출력(`locationMap`)은 이 값을 넘기지 않으므로 조사위치도는 영향을 받지 않는다.
+ */
+export function inkSessionOf(state: CanvasState): InkSession {
+  return {
+    // 획을 긋는 중 — 포인터 down~up. 선택 상태와 무관하게 **모든** 메모 상자를 숨긴다
+    drawing: state.tool === 'MEMO' && state.drag?.kind === 'CREATE_SKETCH',
+    // 방금 커밋한 획. 손을 뗀 뒤에도 세션이 끝날 때까지 상자를 숨긴다
+    memoId: state.inkMemoId,
   };
 }
 
@@ -493,7 +509,28 @@ function fitState(state: CanvasState): CanvasState {
 }
 
 // ── 리듀서 ─────────────────────────────────────────────────────────────────
+/**
+ * T-1 — 필기 세션이 끝났는지 판정해 `inkMemoId` 를 비운다.
+ *
+ * 모든 이벤트 뒤에 한 번씩 도는 **단일 지점**이다. 선택을 바꾸는 곳이 열 군데가 넘는데
+ * 그 전부에 `inkMemoId: null` 을 흩뿌리면 한 곳만 빠뜨려도 상자가 영영 안 나온다.
+ *
+ * 세션이 살아 있는 조건 (둘 다여야 한다):
+ *   · 도구가 아직 MEMO 다        → 도구를 바꾸면 끝난다
+ *   · 그 메모가 아직 선택돼 있다 → 다른 곳을 탭하면 끝난다
+ */
+function endInkSessionIfStale(r: ReduceResult): ReduceResult {
+  const s = r.state;
+  if (s.inkMemoId === null) return r;
+  if (s.tool === 'MEMO' && s.selection.memoId === s.inkMemoId) return r;
+  return { ...r, state: { ...s, inkMemoId: null } };
+}
+
 export function reduce(state: CanvasState, ev: InputEvent, ctx: ReduceContext): ReduceResult {
+  return endInkSessionIfStale(reduceCore(state, ev, ctx));
+}
+
+function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): ReduceResult {
   switch (ev.k) {
     case 'SET_BUSY':
       return ok({ ...state, busy: ev.busy }, ctx);
@@ -1976,7 +2013,13 @@ function commitCreateMemoInk(
     createdBy: null,
   };
   return ok(
-    { ...state, selection: { ...NO_SELECTION, part: 'MEMO', memoId: memo.id } },
+    {
+      ...state,
+      selection: { ...NO_SELECTION, part: 'MEMO', memoId: memo.id },
+      // T-1 — 이번 획은 "쓰는 중" 으로 표시해 점선 상자를 붙이지 않는다.
+      // 세션 종료(`endInkSessionIfStale`) 전까지 유지된다
+      inkMemoId: memo.id,
+    },
     ctx,
     [{ k: 'CREATE_MEMO', memo }],
     [{ k: 'TOAST', kind: 'info', text: '메모를 추가했습니다', undoable: true }],

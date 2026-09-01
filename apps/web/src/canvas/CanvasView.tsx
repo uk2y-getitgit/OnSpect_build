@@ -10,6 +10,7 @@ import {
   buildBackground,
   buildOverlay,
   buildScreens,
+  inkSessionOf,
   previewOf,
   type CanvasState,
   type Defect,
@@ -28,10 +29,14 @@ import {
   contextMenu,
   doubleClick,
   isTypingTarget,
+  pinchMove,
+  pinchSample,
   pointerDown,
   pointerMove,
   pointerUp,
+  sameTouchPair,
   wheel,
+  type PinchSample,
 } from './pointerAdapter';
 
 export type CanvasViewProps = {
@@ -82,6 +87,14 @@ export function CanvasView({
   const bgRef = useRef<HTMLCanvasElement | null>(null);
   const fgRef = useRef<HTMLCanvasElement | null>(null);
   const spaceRef = useRef(false);
+  /**
+   * T-2 — 진행 중인 핀치. `active` 인 동안에는 포인터 이벤트를 코어로 넘기지 않는다.
+   * (두 손가락은 "그리기" 가 아니라 항상 "화면 조작" 이다 — interaction.ts Phase 5 T3)
+   */
+  const pinchRef = useRef<{ active: boolean; last: PinchSample | null }>({
+    active: false,
+    last: null,
+  });
   const [image, setImage] = useState<LoadedDrawing | null>(null);
   const [load, setLoad] = useState<LoadState>({ phase: 'idle' });
   const [reloadTick, setReloadTick] = useState(0);
@@ -194,6 +207,8 @@ export function CanvasView({
       hover: state.hover,
       guides: state.guides,
       preview: previewOf(state),
+      // T-1 — 필기 중에는 메모 점선 상자를 숨긴다. 판정은 코어(순수 함수)가 한다
+      inkSession: inkSessionOf(state),
       dragDefectId: state.drag?.defectId ?? null,
       memos: memoScreens,
       ghost,
@@ -267,6 +282,84 @@ export function CanvasView({
     return () => el.removeEventListener('wheel', onWheel);
   }, [send]);
 
+  // ── T-2 핀치 (두 손가락) ─────────────────────────────────────────────────
+  //
+  // **왜 PointerEvent 가 아니라 TouchEvent 인가:** 포인터 이벤트는 손가락마다 별개의
+  // pointerId 로 따로 들어올 뿐, "두 접점의 중점과 거리" 는 어차피 앱이 직접 모아
+  // 계산해야 한다. TouchEvent 는 `e.touches` 로 **한 이벤트 안에 현재 접점 전부**를
+  // 주므로 두 손가락을 짝지어 추적하는 코드가 훨씬 짧고 어긋날 여지가 없다.
+  //
+  // 계산 결과는 코어의 `GESTURE_PINCH_*` 로만 넘긴다 — 줌/팬 수학·클램프는 전부
+  // 코어에 이미 있고 테스트도 돼 있다(phase5TrackA A1). 여기서 새로 만들지 않는다.
+  //
+  // `passive:false` — iPadOS 는 두 손가락을 페이지 확대/스크롤로 가로챈다.
+  // `.canvas-host { touch-action: none }` 만으로 안 잡히는 경우가 있어 명시적으로 막는다.
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+
+    const endPinch = () => {
+      if (!pinchRef.current.active) return;
+      pinchRef.current = { active: false, last: null };
+      send({ k: 'GESTURE_PINCH_END' });
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      // 한 손가락은 기존 그대로 — pointerdown 이 그리기·팬을 이미 시작했다
+      if (e.touches.length < 2) return;
+      const s = pinchSample(el, e.touches);
+      if (!s) return;
+      e.preventDefault();
+      if (!pinchRef.current.active) {
+        pinchRef.current = { active: true, last: s };
+        // 코어가 진행 중이던 한 손가락 드래그를 롤백한다 (T3 와 같은 규칙)
+        send({ k: 'GESTURE_PINCH_START', center: s.center });
+        return;
+      }
+      // 이미 핀치 중인데 손가락이 더 얹혔다 → 추적 쌍이 바뀔 수 있으니 기준만 다시 잡는다
+      pinchRef.current.last = s;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const st = pinchRef.current;
+      if (!st.active) return;
+      e.preventDefault();
+      if (e.touches.length < 2) return;
+      const s = pinchSample(el, e.touches);
+      if (!s) return;
+      const prev = st.last;
+      // 추적하던 두 손가락이 아니면 상대값이 순간이동한다 — 이 프레임은 기준 갱신만
+      if (!prev || !sameTouchPair(prev, s)) {
+        st.last = s;
+        return;
+      }
+      st.last = s;
+      send(pinchMove(prev, s));
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const st = pinchRef.current;
+      if (!st.active) return;
+      // 셋 이상에서 하나가 떨어졌다 → 핀치는 계속. 새 쌍으로 기준만 다시 잡는다
+      if (e.touches.length >= 2) {
+        st.last = pinchSample(el, e.touches) ?? st.last;
+        return;
+      }
+      endPinch();
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [send]);
+
   // ── 키보드 ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -297,6 +390,12 @@ export function CanvasView({
     };
     const onBlur = () => {
       spaceRef.current = false;
+      // T-2 안전망 — 창을 벗어나 touchend 를 못 받으면 핀치 플래그가 켜진 채 굳어
+      // 포인터 입력이 통째로 막힌다. 스페이스 해제와 같은 이유로 여기서도 푼다
+      if (pinchRef.current.active) {
+        pinchRef.current = { active: false, last: null };
+        send({ k: 'GESTURE_PINCH_END' });
+      }
       send({ k: 'KEY_UP', key: ' ', keys: { space: false, alt: false, shift: false, ctrl: false } });
     };
     window.addEventListener('keydown', onKeyDown);
@@ -313,6 +412,10 @@ export function CanvasView({
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = hostRef.current;
     if (!el) return;
+    // T-2 — 핀치 중에 세 번째 손가락이 닿아도 새 드래그를 시작하지 않는다.
+    // 코어의 T3 가드는 "진행 중인 드래그가 있을 때" 만 걸리는데, 핀치 시작이
+    // 이미 드래그를 롤백해 뒀으므로 여기서 막지 않으면 그대로 그려진다
+    if (pinchRef.current.active) return;
     if (e.button === 0 || e.button === 1) {
       // 합성 이벤트(자동화·테스트)로 들어오면 캡처가 실패할 수 있다. 조작 자체는 계속돼야 한다
       try {
@@ -328,16 +431,21 @@ export function CanvasView({
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = hostRef.current;
     if (!el) return;
+    if (pinchRef.current.active) return; // 핀치 중 — 화면 조작만 한다 (hover 계산도 낭비다)
     send(pointerMove(el, e.nativeEvent, spaceRef.current));
   };
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = hostRef.current;
     if (!el) return;
+    // 캡처 해제는 핀치 여부와 무관하게 **항상** 한다 — 빠뜨리면 포인터가 붙잡힌 채 남는다
     try {
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
     } catch {
       /* 무시 */
     }
+    // 핀치 중 손가락을 떼는 것은 클릭이 아니다. 그대로 넘기면 `POINTER_UP` 이
+    // "이동 없는 클릭" 으로 읽혀 점 결함이 생기거나 선택이 풀린다
+    if (pinchRef.current.active) return;
     send(pointerUp(el, e.nativeEvent, spaceRef.current));
   };
 
