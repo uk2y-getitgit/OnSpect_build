@@ -76,5 +76,7 @@
 | T2-Fix | T2 지적사항 수정 (보통1) | builder | T2-R | ✅ `46_builder_log_Tablet2Fix.md` · 커밋 `3cdf81a` · 타입/테스트657/빌드 통과 · 경미C-3 미수정(사용자 결정 대기) |
 | T3-B | T-7(G-8) 구현 | builder | T1-R, T2-R | ✅ `47_builder_log_Tablet3.md` · 커밋 `d2f03ec`·`f8f2a71` · 타입/테스트667/빌드 통과 · 가정 U40~U44 |
 | T3-R | T3 검수 | code-reviewer | T3-B | ✅ `48_code-reviewer_findings_Tablet3.md` — 심각0·보통1·경미4, 조건부통과 |
-| T3-Fix | T3 지적사항 수정 (보통1+경미1,2) | builder | T3-R | 🟦 |
-| TZ | 통합 판정 | 리더 | T3-R | ⬜ |
+| T3-Fix | T3 지적사항 수정 (보통1+경미1,2) | builder | T3-R | ✅ `49_builder_log_Tablet3Fix.md` · 커밋 `4f953c4` · 타입/테스트667/빌드 통과 |
+| TZ | 통합 판정 | 리더 | T3-R | ✅ 타입0오류·테스트667통과·빌드통과·서버 `--host 0.0.0.0`로 PC·태블릿 동시 접속 확인. `NEXT.md` 갱신 |
+
+## 전체 완료 — 태블릿 실사용 피드백 7건 전부 반영됨
