@@ -517,7 +517,11 @@ function setDefectStatus(
   if (!d || d.status === to) return state;
   const allowed =
     (d.status === 'PREV_PENDING' && to === 'CURRENT') ||
-    (d.status === 'CURRENT' && to === 'PREV_PENDING');
+    // 되돌릴 전회차 결함이 실제로 있을 때만 돌려보낸다. `prevDefectId` 가 없는 결함을
+    // 전회차로 만들면 `includePrevPending=false` 출력에서 통째로 사라진다.
+    // 뷰(`Inspector.tsx:98`)도 같은 조건으로 버튼을 감추지만 **마지막 관문은 여기다**
+    // (`setDefectAttrs` 와 같은 원칙 — 검수 48 경미1).
+    (d.status === 'CURRENT' && to === 'PREV_PENDING' && d.prevDefectId !== null);
   if (!allowed) return state;
   const committed = applyAndPush(state, {
     k: 'SET_DEFECT_STATUS',

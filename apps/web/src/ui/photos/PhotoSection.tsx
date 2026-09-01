@@ -31,13 +31,17 @@ export type PhotoSectionProps = {
    */
   disabled: boolean;
   /**
-   * G-8 (T-7) — **사진 추가만의** 잠금. 주지 않으면 `disabled` 를 따른다(기존 동작).
+   * G-8 (T-7) — **사진 추가만의** 잠금. `disabled` 와 갈래가 다르므로 **필수**다.
    *
    * 전회차(`PREV_PENDING`) 결함은 `disabled=true` 이면서 `addDisabled=false` 다:
    * 값은 못 고치지만 이번 회차에 새로 찍은 사진은 붙일 수 있다. 사진이 붙는 순간
    * 호출자가 상태를 `CURRENT` 로 전이시키므로 잠금 자체가 풀린다.
+   *
+   * 기본값(`= disabled`)을 두지 않는 이유: 그러면 생략한 소비자에게 전회차 결함이
+   * "보수완료라 추가 불가" 로 보인다 — 잠금 의미가 뒤바뀐다 (검수 48 경미2).
+   * 잠글 이유가 없으면 `false` 를 명시하라.
    */
-  addDisabled?: boolean;
+  addDisabled: boolean;
   busy: boolean;
   /** 인입에서 거절된 파일 — 토스트가 아니라 **섹션 안 인라인 경고**로 남긴다 (§2-4) */
   rejected: readonly RejectedPhoto[];
@@ -65,7 +69,7 @@ export function PhotoSection(props: PhotoSectionProps) {
     urls,
     ensureUrls,
     disabled,
-    addDisabled = disabled,
+    addDisabled,
     busy,
     rejected,
     onClearRejected,

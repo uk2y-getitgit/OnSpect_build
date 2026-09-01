@@ -59,3 +59,22 @@
 ## 전체 완료 — 사용자 수정사항(0828) 4개 배치 전부 병합됨
 
 ## 배치는 순차 진행이 원칙이나, 앞 배치 검수 대기 중 다음 배치 스펙 선독은 허용
+
+---
+
+# 태블릿 실사용 피드백 (2026-09-01)
+
+범위 문서: `_workspace/00_input/scope_TabletFeedback0901.md` (리더가 직접 원인 조사 완료 — plan-reviewer 생략)
+
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| T1-B | T-3·T-4·T-5·T-6 구현 (apps/web 전용) | builder | - | ✅ `41_builder_log_Tablet1.md` · 커밋 `14302a7`·`4199492` · 타입/테스트644/빌드 통과 · 가정 U29~U32 |
+| T1-R | T1 검수 | code-reviewer | T1-B | ✅ `43_code-reviewer_findings_Tablet1.md` — 심각0·보통2·경미3, 조건부통과 |
+| T1-Fix | T1 지적사항 수정 (보통2) | builder | T1-R | ✅ `45_builder_log_Tablet1Fix.md` · 커밋 `28bf30b` · 타입/테스트657/빌드 통과 · 가정 U37~U39 |
+| T2-B | T-1·T-2 구현 (canvas-core + pointerAdapter) | builder | - | ✅ `42_builder_log_Tablet2.md` · 커밋 `27c4b83`·`1499d61` · 타입/테스트657(canvas350+project307)/빌드 통과 · 가정 U33~U36 |
+| T2-R | T2 검수 | code-reviewer | T2-B | ✅ `44_code-reviewer_findings_Tablet2.md` — 심각0·보통1·경미3, 조건부통과 |
+| T2-Fix | T2 지적사항 수정 (보통1) | builder | T2-R | ✅ `46_builder_log_Tablet2Fix.md` · 커밋 `3cdf81a` · 타입/테스트657/빌드 통과 · 경미C-3 미수정(사용자 결정 대기) |
+| T3-B | T-7(G-8) 구현 | builder | T1-R, T2-R | ✅ `47_builder_log_Tablet3.md` · 커밋 `d2f03ec`·`f8f2a71` · 타입/테스트667/빌드 통과 · 가정 U40~U44 |
+| T3-R | T3 검수 | code-reviewer | T3-B | ✅ `48_code-reviewer_findings_Tablet3.md` — 심각0·보통1·경미4, 조건부통과 |
+| T3-Fix | T3 지적사항 수정 (보통1+경미1,2) | builder | T3-R | 🟦 |
+| TZ | 통합 판정 | 리더 | T3-R | ⬜ |

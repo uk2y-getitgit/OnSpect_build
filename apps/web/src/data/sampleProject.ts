@@ -221,7 +221,12 @@ export async function seedSampleProject(
       floorId: floor.id,
       seq: s.seq,
       status: s.status,
-      prevDefectId: null,
+      // 금회차가 아닌 표기(전회차 대기·보수완료)는 **전차 승계로 넘어온 것**이라는 뜻이다.
+      // 그래서 전회차 결함 id 를 갖고 있어야 한다 — 이게 null 이면 G-8 되돌리기 버튼이
+      // 뜨지 않아 전환이 편도가 된다(검수 48 보통1 · D21 확인요청1 승인).
+      // 실제 전차 용역이 없는 샘플이므로 값은 **존재하지 않는 id** 다. `prevDefectId` 는
+      // 어디에서도 역참조 조회하지 않고 FK 제약도 없으므로 안전하다.
+      prevDefectId: s.status === 'CURRENT' ? null : `prev-${uniqueId}`,
       marks: [m],
       label: {
         defectId: uniqueId,
