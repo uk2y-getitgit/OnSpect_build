@@ -30,6 +30,7 @@ import {
   type Command,
   type Defect,
   type DefectAttrs,
+  type DefectStatus,
   type Doc,
   type DrawingRef,
   type Effect,
@@ -130,6 +131,16 @@ export type Action =
    * `[유사결함 불러오기]`(D18) 가 쓴다 — 조기 반환(잠김·변경 없음)에서는 아무 말도 하지 않는다.
    */
   | { t: 'SET_DEFECT_ATTRS'; defectId: string; attrs: DefectAttrs; toast?: string }
+  /**
+   * G-8 (T-7) — 결함 상태 전이 `PREV_PENDING ↔ CURRENT`.
+   *
+   * 두 곳에서 온다:
+   *   · 전회차 결함에 **이번 회차 사진이 실제로 붙었을 때** → `CURRENT` (상세기획 §Phase 2-D)
+   *   · Inspector 의 `[전회차로 되돌리기]` → `PREV_PENDING` (가정 N8 — 자동 되돌림은 없다)
+   *
+   * 다른 전이(REPAIRED 관련)는 여기서 받지 않는다 — 리듀서가 조용히 무시한다.
+   */
+  | { t: 'SET_DEFECT_STATUS'; defectId: string; to: DefectStatus; toast?: string }
   | { t: 'FLUSHED'; seq: number }
   | { t: 'UNDO' }
   | { t: 'REDO' }
@@ -220,6 +231,9 @@ function reduceApp(state: AppState, action: Action): AppState {
 
     case 'SET_DEFECT_ATTRS':
       return setDefectAttrs(state, action.defectId, action.attrs, action.toast);
+
+    case 'SET_DEFECT_STATUS':
+      return setDefectStatus(state, action.defectId, action.to, action.toast);
 
     case 'EDIT_MEMO':
       return { ...state, editingMemoId: action.memoId };
@@ -476,6 +490,42 @@ function setDefectAttrs(
   });
   // ⚠️ 토스트는 **조기 반환 두 개를 통과한 뒤**여야 한다 — 잠긴 결함이나 값이 그대로일 때
   //    "불러왔습니다" 라고 말하면 거짓말이 된다.
+  return toastText ? withToast(committed, 'info', toastText, true) : committed;
+}
+
+/**
+ * G-8 (T-7) — 결함 상태 전이를 커맨드로 바꿔 문서·Undo·저장 대기열에 태운다.
+ *
+ * ⚠️ **`isLocked` 게이트를 통과하지 않는다.** 이 커맨드는 잠금의 *근거*(status)를 바꾸는
+ *    유일한 통로다. `setDefectAttrs` 처럼 `isLocked` 로 막으면 전회차 결함은 영원히
+ *    금회차가 될 수 없다 — 그래서 게이트 대신 **허용 전이 목록**으로 좁힌다.
+ *
+ * 허용하는 것은 두 방향뿐이다:
+ *   · `PREV_PENDING → CURRENT` — 이번 회차 사진이 붙었다 (상세기획 §Phase 2-D)
+ *   · `CURRENT → PREV_PENDING` — 사용자가 명시적으로 되돌렸다 (가정 N8)
+ *
+ * `REPAIRED` 가 얽힌 전이는 조용히 무시한다. 보수완료 결함의 잠금을 사진으로 푸는 것은
+ * 이번 범위가 아니고, 여기서 열어 두면 실수로 새는 통로가 된다.
+ */
+function setDefectStatus(
+  state: AppState,
+  defectId: string,
+  to: DefectStatus,
+  toastText?: string,
+): AppState {
+  const d = state.defects.find((x) => x.id === defectId);
+  if (!d || d.status === to) return state;
+  const allowed =
+    (d.status === 'PREV_PENDING' && to === 'CURRENT') ||
+    (d.status === 'CURRENT' && to === 'PREV_PENDING');
+  if (!allowed) return state;
+  const committed = applyAndPush(state, {
+    k: 'SET_DEFECT_STATUS',
+    defectId,
+    from: d.status,
+    to,
+  });
+  // 토스트는 **조기 반환 뒤**다 — 이미 그 상태였는데 "전환했습니다" 라고 하면 거짓말이다
   return toastText ? withToast(committed, 'info', toastText, true) : committed;
 }
 

@@ -55,7 +55,14 @@ export type PhotoOps = {
   rejected: RejectedPhoto[];
   clearRejected: () => void;
 
-  addFiles: (defectId: string, files: readonly File[]) => Promise<void>;
+  /**
+   * 고른 파일을 이 결함에 붙인다.
+   *
+   * **실제로 등록된 장수를 돌려준다** (0 이면 아무것도 안 붙었다 — 전부 거절됐거나
+   * 저장소를 못 썼거나). G-8(T-7) 이 이 값을 보고 `PREV_PENDING → CURRENT` 전이를
+   * 결정한다 — "성공했을 때만" 이라는 조건을 호출자가 알 방법이 이것뿐이다.
+   */
+  addFiles: (defectId: string, files: readonly File[]) => Promise<number>;
   replaceFile: (photoId: string, file: File) => Promise<void>;
   setPrimary: (defectId: string, photoId: string) => void;
   rotate: (photoId: string, deltaDeg: number) => void;
@@ -199,12 +206,12 @@ export function usePhotos(
 
   // ── 조작 ────────────────────────────────────────────────────────────────
   const addFiles = useCallback(
-    async (defectId: string, files: readonly File[]) => {
+    async (defectId: string, files: readonly File[]): Promise<number> => {
       const s = storageRef.current;
-      if (files.length === 0) return;
+      if (files.length === 0) return 0;
       if (s.phase !== 'READY') {
         toast('저장소를 쓸 수 없어 사진을 추가하지 못했습니다', { kind: 'warn' });
-        return;
+        return 0;
       }
       setBusy(true);
       setRejected([]);
@@ -216,7 +223,7 @@ export function usePhotos(
           });
         }
         setRejected(result.rejected);
-        if (result.ready.length === 0) return;
+        if (result.ready.length === 0) return 0;
 
         const existing = photosOf(defectId);
         const uploads = toPhotoUploads(result.ready, {
@@ -226,10 +233,11 @@ export function usePhotos(
           existing,
         });
         const ok = await guardRef.current(() => s.repo.registerPhotos(uploads));
-        if (ok === null) return; // 실패는 지속 배너가 알린다
+        if (ok === null) return 0; // 실패는 지속 배너가 알린다
         const added = uploads.map((u) => u.photo);
         setPhotos((cur) => [...cur, ...added]);
         toast(`사진 ${added.length}장을 추가했습니다`);
+        return added.length;
       } finally {
         setBusy(false);
       }

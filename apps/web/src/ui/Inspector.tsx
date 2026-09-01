@@ -50,6 +50,16 @@ export type InspectorProps = {
   similarCount?: number;
   onResetLabel: () => void;
   onDelete: () => void;
+  /**
+   * G-8 (T-7) — `[전회차로 되돌리기]`. 상태를 `CURRENT → PREV_PENDING` 으로 되돌린다.
+   *
+   * 가정 N8: 사진을 지워도 **자동으로는 되돌아가지 않는다.** 되돌리는 통로는 이 버튼뿐이고
+   * **사진 유무와 무관하게 항상 눌린다** — "사진이 없을 때만" 으로 좁히면, 사진을 지운 뒤
+   * 되돌리려던 사용자가 순서를 거꾸로 밟았을 때 길이 막힌다.
+   *
+   * 주지 않으면 버튼 자체가 뜨지 않는다.
+   */
+  onRevertToPrev?: () => void;
 };
 
 export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Inspector(
@@ -63,6 +73,7 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
     similarCount = 0,
     onResetLabel,
     onDelete,
+    onRevertToPrev,
   },
   ref,
 ) {
@@ -81,6 +92,10 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
 
   const locked = isLocked(defect);
   const incomplete = isIncomplete(defect);
+  // G-8 (T-7) — 전회차에서 승계된 결함만 되돌릴 곳이 있다.
+  // 이번 회차에 새로 그린 결함(`prevDefectId === null`)에 이 버튼을 주면
+  // 있지도 않은 "전회차" 로 보내 버려 출력에서 통째로 빠진다
+  const revertable = defect.status === 'CURRENT' && defect.prevDefectId !== null;
 
   return (
     <aside className="inspector" aria-label="결함 정보">
@@ -102,11 +117,18 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
           미완성 결함입니다 — {describeMissing(defect)}
         </p>
       )}
-      {locked && (
-        <p className="notice" role="status">
-          전회차 표기입니다. 이 화면에서는 <b>선택만</b> 가능하며 값을 고칠 수 없습니다.
-        </p>
-      )}
+      {locked &&
+        (defect.status === 'PREV_PENDING' ? (
+          // G-8 — 값은 여전히 잠겨 있지만 사진 한 가지만 열려 있다. 그 사실을 여기서 말해 준다
+          <p className="notice" role="status">
+            전회차 표기입니다. 값은 고칠 수 없지만, <b>이번 회차에 찍은 사진을 추가하면</b>{' '}
+            금회차 결함으로 전환됩니다.
+          </p>
+        ) : (
+          <p className="notice" role="status">
+            보수완료 표기입니다. 이 화면에서는 <b>선택만</b> 가능하며 값을 고칠 수 없습니다.
+          </p>
+        ))}
 
       <div className="inspector__form">
         {settings ? (
@@ -171,6 +193,17 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
         >
           번호 위치 초기화
         </button>
+        {/* G-8 (T-7) — 사진을 지워도 자동으로 돌아가지 않는다(N8). 되돌리는 문은 여기 하나뿐이다 */}
+        {revertable && onRevertToPrev && (
+          <button
+            type="button"
+            className="btn"
+            onClick={onRevertToPrev}
+            title="이 결함을 다시 전회차 미보수(보라)로 되돌립니다. 되돌리면 값 편집이 다시 잠깁니다"
+          >
+            전회차로 되돌리기
+          </button>
+        )}
         <button
           type="button"
           className="btn btn--danger"

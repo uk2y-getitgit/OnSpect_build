@@ -9,6 +9,7 @@
 import type {
   Defect,
   DefectAttrs,
+  DefectStatus,
   Mark,
   MarkGeometry,
   Memo,
@@ -140,7 +141,20 @@ export type Command =
       mergeKey: string;
       /** 병합 창 판정용 시각(ms). 코어는 시간을 모른다 — 어댑터가 넣어 준다 (경계 규칙 1) */
       at: number;
-    };
+    }
+  // ── G-8 (T-7) ────────────────────────────────────────────────────────────
+  /**
+   * 결함 **상태** 전이 (`PREV_PENDING` ↔ `CURRENT`).
+   *
+   * 상세기획 §Phase 2-D — *"촬영하는 순간 status = CURRENT, 보라 → 빨강"*.
+   * 사진을 붙이면 자동으로 한 방향, Inspector 의 `[전회차로 되돌리기]` 로 반대 방향.
+   *
+   * ⚠️ 상태는 **속성이 아니라 상태다.** `SET_DEFECT_ATTRS` 에 얹지 않는다 —
+   *   `DefectAttrs` 에 `status` 가 없고(경계), 잠금 판정(`isLocked`)의 근거 자체를
+   *   바꾸는 커맨드라 잠금 게이트를 통과하는 규칙도 다르다.
+   * ⚠️ **병합하지 않는다.** 전이 한 번이 Undo 한 단계다.
+   */
+  | { k: 'SET_DEFECT_STATUS'; defectId: string; from: DefectStatus; to: DefectStatus };
 
 /** 사람이 읽는 커맨드 이름 — 토스트·Undo 안내에 쓴다 */
 export function describeCommand(c: Command): string {
@@ -183,6 +197,8 @@ export function describeCommand(c: Command): string {
       return '필기 되살리기';
     case 'SET_DEFECT_ATTRS':
       return '결함정보 수정';
+    case 'SET_DEFECT_STATUS':
+      return c.to === 'CURRENT' ? '금회차로 전환' : '전회차로 되돌리기';
     default:
       return '변경';
   }
@@ -278,6 +294,12 @@ export function applyCommand(defects: readonly Defect[], c: Command): Defect[] {
     // 속성만 통째로 갈아 끼운다. `seq` 가 그대로이므로 재정렬(sorted)이 필요 없다.
     case 'SET_DEFECT_ATTRS':
       return replace(defects, c.defectId, (d) => ({ ...d, ...c.to }));
+
+    // ── G-8 ────────────────────────────────────────────────────────────────
+    // 상태 한 필드만 바꾼다. `seq` 도 `prevDefectId` 도 그대로다 —
+    // 되돌리기로 전회차로 돌아가도 원본 연결은 살아 있어야 한다
+    case 'SET_DEFECT_STATUS':
+      return replace(defects, c.defectId, (d) => ({ ...d, status: c.to }));
 
     default:
       return defects as Defect[];
@@ -495,6 +517,8 @@ export function invertCommand(c: Command): Command {
       return { ...c, k: 'DELETE_MEMO_PATH' };
     case 'SET_DEFECT_ATTRS':
       return { ...c, from: c.to, to: c.from };
+    case 'SET_DEFECT_STATUS':
+      return { k: 'SET_DEFECT_STATUS', defectId: c.defectId, from: c.to, to: c.from };
     default:
       return c;
   }

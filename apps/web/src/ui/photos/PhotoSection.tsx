@@ -24,8 +24,20 @@ export type PhotoSectionProps = {
   photos: Photo[];
   urls: ReadonlyMap<string, string>;
   ensureUrls: (blobKeys: readonly string[]) => void;
-  /** 전회차 표기 등 잠금 상태 */
+  /**
+   * 전회차 표기 등 잠금 상태 — 대표지정·회전·교체·삭제·순서변경을 모두 막는다.
+   *
+   * ⚠️ **사진 추가는 여기 걸리지 않는다.** 추가는 `addDisabled` 가 따로 판정한다 (G-8).
+   */
   disabled: boolean;
+  /**
+   * G-8 (T-7) — **사진 추가만의** 잠금. 주지 않으면 `disabled` 를 따른다(기존 동작).
+   *
+   * 전회차(`PREV_PENDING`) 결함은 `disabled=true` 이면서 `addDisabled=false` 다:
+   * 값은 못 고치지만 이번 회차에 새로 찍은 사진은 붙일 수 있다. 사진이 붙는 순간
+   * 호출자가 상태를 `CURRENT` 로 전이시키므로 잠금 자체가 풀린다.
+   */
+  addDisabled?: boolean;
   busy: boolean;
   /** 인입에서 거절된 파일 — 토스트가 아니라 **섹션 안 인라인 경고**로 남긴다 (§2-4) */
   rejected: readonly RejectedPhoto[];
@@ -53,6 +65,7 @@ export function PhotoSection(props: PhotoSectionProps) {
     urls,
     ensureUrls,
     disabled,
+    addDisabled = disabled,
     busy,
     rejected,
     onClearRejected,
@@ -145,11 +158,14 @@ export function PhotoSection(props: PhotoSectionProps) {
           type="button"
           className="btn btn--small"
           onClick={() => addInputRef.current?.click()}
-          disabled={disabled || busy}
+          disabled={addDisabled || busy}
           title={
-            disabled
-              ? '전회차 표기에는 사진을 추가할 수 없습니다'
-              : `파일을 골라 추가합니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
+            addDisabled
+              ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+              : disabled
+                ? // G-8 — 전회차 결함의 유일한 열린 문. 무엇이 일어나는지 미리 말해 준다
+                  `이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
+                : `파일을 골라 추가합니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
           }
         >
           {busy ? '처리 중…' : '+ 사진 추가'}

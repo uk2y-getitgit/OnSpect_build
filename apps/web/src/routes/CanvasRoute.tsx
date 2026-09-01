@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import {
   attrsOf,
   buildScreens,
+  canAddPhotos,
   canRedo,
   canUndo,
   DEFAULT_GLOBAL_STYLE,
@@ -524,6 +525,33 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const photoOps = usePhotos(projectId, loadedPhotos, toast);
   const selectedPhotos = photoOps.photosOf(selected?.id ?? null);
 
+  /**
+   * G-8 (T-7) — 사진 추가와 상태 전이를 한 흐름으로 묶는다.
+   * 상세기획 §Phase 2-D: *"촬영하는 순간 status = CURRENT, 보라 → 빨강"*.
+   *
+   * ⚠️ **전이는 사진이 실제로 붙었을 때만** 한다. 파일이 전부 거절됐거나(형식·용량)
+   *    저장에 실패했는데 색만 빨갛게 바뀌면 사진 없는 금회차 결함이 보고서로 나간다.
+   *    그래서 `addFiles` 가 돌려주는 **등록 장수**를 본다.
+   * ⚠️ 여기서 `selected.status` 를 읽어 분기하지 않는다 — `await` 앞뒤로 상태가 바뀔 수 있다.
+   *    허용 전이 판정은 최신 상태를 보는 리듀서(`setDefectStatus`)가 한다. 이미 `CURRENT`
+   *    이거나 `REPAIRED` 면 조용히 무시되고 토스트도 뜨지 않는다.
+   * ⚠️ 이것은 **이번 회차에 새로 찍은 사진**을 붙이는 경로다. 전회차 사진을 복사해 오는
+   *    사진 승계(K13)와는 무관하다 — 그쪽은 여전히 막혀 있다.
+   */
+  const addPhotosTo = useCallback(
+    async (defectId: string, files: File[]) => {
+      const added = await photoOps.addFiles(defectId, files);
+      if (added <= 0) return;
+      dispatch({
+        t: 'SET_DEFECT_STATUS',
+        defectId,
+        to: 'CURRENT',
+        toast: '이번 회차 사진이 붙어 금회차 결함으로 전환했습니다',
+      });
+    },
+    [photoOps.addFiles],
+  );
+
   // 컨텍스트 플로팅 툴바 위치 — 선택된 표기 아래. 대상을 덮지 않는다
   const toolbarAt = useMemo(() => {
     // 드래그 중에는 툴바를 숨긴다 — 손을 따라다니면 도면을 가린다
@@ -896,12 +924,15 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
                 photos={selectedPhotos}
                 urls={photoOps.urls}
                 ensureUrls={photoOps.ensureUrls}
-                // 전회차 표기는 이 화면에서 값을 고칠 수 없다 — 사진도 마찬가지다
+                // 전회차 표기는 이 화면에서 값을 고칠 수 없다 — 사진 조작도 마찬가지다
                 disabled={isLocked(selected)}
+                // G-8 (T-7) — 예외는 **사진 추가 하나뿐**이다. 전회차(PREV_PENDING)에는 열어 준다.
+                // 상세기획 §Phase 2-D 의 "촬영하는 순간 CURRENT" 전이는 이 문이 있어야 발동한다
+                addDisabled={!canAddPhotos(selected)}
                 busy={photoOps.busy}
                 rejected={photoOps.rejected}
                 onClearRejected={photoOps.clearRejected}
-                onAdd={(files) => void photoOps.addFiles(selected.id, files)}
+                onAdd={(files) => void addPhotosTo(selected.id, files)}
                 onSetPrimary={(photoId) => photoOps.setPrimary(selected.id, photoId)}
                 onRotate={photoOps.rotate}
                 onReplace={(photoId, file) => void photoOps.replaceFile(photoId, file)}
@@ -933,6 +964,17 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           similarCount={similarItems.length}
           onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
           onDelete={() => send({ k: 'DELETE_SELECTION' })}
+          onRevertToPrev={
+            selected
+              ? () =>
+                  dispatch({
+                    t: 'SET_DEFECT_STATUS',
+                    defectId: selected.id,
+                    to: 'PREV_PENDING',
+                    toast: '전회차 미보수로 되돌렸습니다',
+                  })
+              : undefined
+          }
         />
       </div>
 

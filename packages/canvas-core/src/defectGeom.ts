@@ -389,6 +389,24 @@ export function isLocked(defect: Defect): boolean {
   return defect.status !== 'CURRENT';
 }
 
+/**
+ * G-8 — 잠긴 결함이라도 **사진 추가 하나만은** 뚫어 준다.
+ *
+ * `isLocked`(A8)는 그대로 둔다. 값 편집·이동·삭제·스타일은 여전히 잠긴 채다.
+ * 예외를 두는 이유는 상세기획 §Phase 2-D 의 *"촬영하는 순간 status = CURRENT, 보라 → 빨강"*
+ * 때문이다 — 전이의 유일한 방아쇠가 사진인데 그 사진을 붙일 수 없으면 전이가 영원히 일어나지 않는다.
+ * 사진이 실제로 붙는 순간 호출자가 `PREV_PENDING → CURRENT` 로 전이시킨다.
+ *
+ * `REPAIRED`(보수완료)는 **계속 막는다** — 지난 회차에 고쳤다고 표시한 결함을 사진으로
+ * 되살리는 것은 이번 범위가 아니다.
+ *
+ * ⚠️ 이 함수는 "이번 회차에 새로 찍은 사진을 추가하는 것"만 허용한다.
+ *    전회차 사진을 이번 용역으로 **복사해 오는 것**(사진 승계 · K13)과는 무관하다.
+ */
+export function canAddPhotos(defect: Defect): boolean {
+  return defect.status === 'CURRENT' || defect.status === 'PREV_PENDING';
+}
+
 /** z-order: seq 오름차순, 동률이면 defectId 사전순 (§2-4 / §2-9-b) */
 export function byZAscending(a: Defect, b: Defect): number {
   if (a.seq !== b.seq) return a.seq - b.seq;
