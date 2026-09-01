@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-02 (태블릿 실사용 피드백 7건 전부 완료 시점)
+마지막 갱신: 2026-09-02 (태블릿 실사용 피드백 7건 완료 + Vercel 배포 설정 추가)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -24,6 +24,23 @@ npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(�
 
 테스트 **667개**(canvas-core 360 · project-core 307) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main` — 이번 라운드는 아직 `feat/photo-polish`에만 있음)
+
+### 2026-09-02 — 배포 준비 (Vercel, 사용자 계정 연결 대기)
+
+로컬 개발서버(`npm run dev`)로 같은 Wi-Fi에서만 테스트하던 것을 인터넷 어디서나 접속 가능한
+정식 URL로 옮기는 작업. **동기화 서버(D12, Phase 5)는 아직 미착수·미설계 — 이번엔 지금 앱을
+그대로 안정적으로 접속시키는 것만.** 기기(브라우저)마다 데이터가 로컬에만 저장되는 것은
+그대로다 — 여러 태블릿 간 결함 데이터 공유는 아직 안 된다.
+
+- `vercel.json` 추가(커밋 `f612b01`) — npm workspaces 모노레포라 Root Directory 를 `apps/web`
+  으로 좁히면 안 됨(`canvas-core`·`project-core` 를 vite alias 로 형제 소스 직접 참조,
+  패키지 미발행). 루트에서 `npm run build` → `apps/web/dist` 로 고정
+- **사용자가 해야 할 것(계정 필요라 대신할 수 없음):** Vercel 계정 생성 → GitHub 저장소
+  (`uk2y-getitgit/OnSpect_build`) 연결 → Import. Root Directory 는 리포 루트 그대로 두고
+  `vercel.json` 이 자동으로 읽힌다
+- 라우팅은 URL 기반이 아니라 앱 내부 상태다(react-router 등 미사용) — 리라이트 규칙 불필요
+- PWA manifest·서비스워커는 아직 없다(D11 "PWA 먼저"는 방향만 정해졌고 미구현) — 지금은
+  그냥 HTTPS 정적 사이트로 접속하는 수준
 
 ### 2026-09-02 완료 — 태블릿 실사용 피드백 7건 (`feat/photo-polish`)
 
