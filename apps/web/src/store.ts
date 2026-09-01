@@ -353,6 +353,10 @@ function dropStaleSelection(state: AppState): AppState {
       ...state.canvas,
       selection: { defectId: null, part: null, markId: null, pathId: null, memoId: null, handle: null },
       hover: null,
+      // C-2 — UNDO/REDO 는 `reduce()` 를 안 타므로 코어의 유일한 세션 종료 지점
+      //       `endInkSessionIfStale` 이 돌지 않는다. 선택을 비우는 여기서 필기 세션도
+      //       같이 닫아 "선택이 없으면 세션도 없다" 는 불변을 코드로 닫는다 (T-1)
+      inkMemoId: null,
     },
   };
 }
@@ -402,9 +406,11 @@ function runInput(state: AppState, ev: InputEvent): AppState {
 /**
  * T-4 — 캔버스에서 **사용자가 직접 고른** 선택. 이 이벤트들만 편집 툴바를 띄울 자격이 있다.
  * (`POINTER_UP`·`SET_TOOL` 같은 나머지는 직전 판정을 그대로 유지한다)
+ *
+ * `POINTER_DOWN` 은 여기 없다 — 이벤트 종류만으로는 부족해서
+ * `nextToolbarFor` 안에서 "무엇을 눌렀는지"까지 따로 본다.
  */
 const EXPLICIT_SELECT_EVENTS: ReadonlySet<InputEvent['k']> = new Set([
-  'POINTER_DOWN', // 마커·풍선 탭
   'DOUBLE_CLICK',
   'CONTEXT_MENU',
   'SELECT_DEFECT', // 좌측 결함 리스트에서 고름
@@ -421,6 +427,19 @@ function nextToolbarFor(
   // 방금 그린 결함의 자동 선택 — 툴바를 띄우면 다음 표기 자리를 가린다.
   // 같은 POINTER_DOWN 이 생성까지 했더라도 '직접 고름' 보다 이쪽이 우선이다.
   if (created) return null;
+  // ⚠️ `POINTER_DOWN` 은 **무엇을 눌렀는지**까지 봐야 한다. 이벤트 종류만 보고
+  //    "직접 고름" 으로 치면 — 결함을 찍은 직후 도면을 밀거나(팬) 핀치줌만 해도
+  //    선택이 그대로 남아 있어서 방금 숨긴 툴바가 다시 뜬다(검수 보통1·경미1).
+  if (ev.k === 'POINTER_DOWN') {
+    // 이번 눌림으로 선택이 이 결함으로 **옮겨왔다** — 다른 마커를 탭한 경우
+    const changed = prev.canvas.selection.defectId !== selId;
+    // 이 결함의 표기·풍선·획을 **실제로 잡았다** — 이미 선택된 마커 재탭·이동 드래그.
+    // (PAN·CREATE_SHAPE·CREATE_SKETCH·ERASE 드래그는 `defectId` 가 null 이고,
+    //  핀치 두 번째 손가락은 `cancelDrag` 로 드래그 자체가 사라진다)
+    const grabbed = next.canvas.drag?.defectId === selId;
+    if (changed || grabbed) return selId;
+    return prev.toolbarFor === selId ? selId : null; // 그 밖엔 직전 판정 유지
+  }
   if (EXPLICIT_SELECT_EVENTS.has(ev.k)) return selId;
   return prev.toolbarFor === selId ? selId : null;
 }

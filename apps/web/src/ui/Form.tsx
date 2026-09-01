@@ -146,10 +146,18 @@ export function Modal({
   //    매 렌더 확인하되 실제 포커스는 성공한 그 한 번뿐이므로 B1(포커스 뺏김)은 재발하지 않는다.
   const focusedRef = useRef(false);
   useEffect(() => {
-    if (!autoFocusFirst) return; // T-3 — 옵트아웃한 모달은 아무 데도 포커스하지 않는다
     if (focusedRef.current) return;
     const el = ref.current;
     if (!el) return;
+    // T-3 — 옵트아웃한 모달은 **첫 입력칸 대신 모달 컨테이너**(tabIndex=-1)를 잡는다.
+    // 포커스를 아예 끄면 포커스가 스크림 뒤 트리거 버튼에 남아 Tab 트랩이 개입할 수
+    // 없다(검수 보통2). `div` 는 텍스트 입력이 아니라 소프트 키보드가 올라오지 않으므로
+    // T-3 의 목적(태블릿 키보드 억제)은 그대로 달성된다.
+    if (!autoFocusFirst) {
+      focusedRef.current = true;
+      el.focus();
+      return;
+    }
     const scope = el.querySelector<HTMLElement>('.modal__scroll') ?? el;
     const first = scope.querySelector<HTMLElement>(MODAL_FOCUSABLE);
     // 본문에 입력칸이 아직 없다 — **아무 데도 포커스하지 않고** 다음 렌더에 다시 본다.
@@ -177,6 +185,15 @@ export function Modal({
       if (items.length === 0) return;
       const firstEl = items[0]!;
       const lastEl = items[items.length - 1]!;
+      const active = document.activeElement;
+      // 포커스가 모달 **밖**이거나 컨테이너 자신(tabIndex=-1, items 에 안 들어온다)에
+      // 있으면 첫/마지막 비교가 둘 다 거짓이라 브라우저 기본 Tab 이 배경으로 새어 나간다.
+      // 이때는 진행 방향에 맞춰 모달 안으로 끌어온다.
+      if (!(active instanceof HTMLElement) || active === el || !el.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? lastEl : firstEl).focus();
+        return;
+      }
       if (!e.shiftKey && document.activeElement === lastEl) {
         e.preventDefault();
         firstEl.focus();
@@ -207,6 +224,8 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        // 자동포커스를 끈 모달(T-3)이 잡을 자리. 탭 순서에는 들어가지 않는다
+        tabIndex={-1}
         onPointerDown={(e) => e.stopPropagation()}
       >
         <header className="modal__head">

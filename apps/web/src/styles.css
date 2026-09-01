@@ -1887,6 +1887,11 @@ select.input { cursor: pointer; }
   max-height: min(88vh, 760px);
 }
 
+/* 자동포커스를 끈 모달(T-3)이 컨테이너를 잡을 때 상자 전체에 초점 테두리가 생기지 않게.
+   컨테이너는 조작 대상이 아니라 포커스를 가둘 자리일 뿐이다 — 내부 요소의 초점 표시는 그대로다 */
+.modal:focus,
+.modal:focus-visible { outline: none; }
+
 .modal--wide { width: min(880px, calc(100vw - 32px)); }
 
 .modal__head {
@@ -4131,7 +4136,7 @@ select.input { cursor: pointer; }
   .stage__help {
     display: none;
   }
-  /* Ctrl+Enter·Esc 안내 — 사용자가 직접 지목하진 않았으나 같은 종류다 (ASSUMPTIONS U1) */
+  /* Ctrl+Enter·Esc 안내 — 사용자가 직접 지목하진 않았으나 같은 종류다 (ASSUMPTIONS U29) */
   .memo-editor__hint {
     display: none;
   }
