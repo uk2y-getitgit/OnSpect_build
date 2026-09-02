@@ -3,16 +3,19 @@
 --
 -- 설계 원칙 (S1~S6, 스펙 §3-6): 서버는 저장소일 뿐이다 — payload 를 해석하지 않고,
 -- 번호·면적·정렬 등 어떤 파생값도 계산하지 않는다. id 는 전부 클라이언트가 만든 uuid.
+--
+-- ⚠️ 이 스크립트는 몇 번을 다시 실행해도 안전하다(idempotent) — 이미 있는 테이블/인덱스는
+--    건너뛰고, 정책·함수는 지웠다 새로 만든다. "already exists" 오류 없이 항상 최종 상태로 수렴한다.
 
 -- ── 팀 (D24 — 팀=조직 1계층. team_members.user_id 가 PK 라 사용자당 팀 1개) ──────
-create table teams (
+create table if not exists teams (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
   created_at timestamptz not null default now()
 );
 
-create table team_members (
+create table if not exists team_members (
   user_id uuid primary key references auth.users (id) on delete cascade,
   team_id uuid not null references teams (id) on delete cascade,
   login_id text not null unique, -- 팀장이 발급하는 아이디 (사용자 확인 — 이메일 아님)
@@ -23,10 +26,11 @@ create table team_members (
 );
 
 -- 팀당 OWNER(팀장)는 정확히 1인만 허용
-create unique index team_members_one_owner on team_members (team_id) where role = 'OWNER';
+create unique index if not exists team_members_one_owner
+  on team_members (team_id) where role = 'OWNER';
 
 -- ── 프로젝트 (D24 — 팀 소유, 팀원 전체 공개. 담당 배정 없음) ────────────────────
-create table projects (
+create table if not exists projects (
   id uuid primary key,          -- 로컬 Project.id 를 그대로 쓴다 (S6)
   team_id uuid not null references teams (id) on delete cascade,
   updated_at bigint not null,   -- 로컬 epoch ms 를 그대로 (D23)
@@ -34,10 +38,10 @@ create table projects (
   payload jsonb not null        -- Project 레코드 전체 (S2 — 서버는 해석하지 않는다)
 );
 
-create index projects_team_idx on projects (team_id);
+create index if not exists projects_team_idx on projects (team_id);
 
 -- ── 결함·도면 등 레코드 (D23 병합필드 + D25 삭제전파의 서버측 대응) ──────────────
-create table records (
+create table if not exists records (
   project_id uuid not null references projects (id) on delete cascade,
   kind text not null check (kind in ('BUILDING', 'FLOOR', 'DRAWING', 'DEFECT', 'PHOTO', 'MEMO')),
   id uuid not null,
@@ -50,10 +54,10 @@ create table records (
   primary key (project_id, kind, id)
 );
 
-create index records_pull_cursor_idx on records (project_id, server_seq);
+create index if not exists records_pull_cursor_idx on records (project_id, server_seq);
 
 -- ── Blob 메타 (실 바이트는 Storage 버킷 blobs/{teamId}/{projectId}/{key}) ──────
-create table blobs (
+create table if not exists blobs (
   key text primary key,        -- 로컬 blobKey 그대로 (uuid 라 기기 간 충돌 없음, S6)
   project_id uuid not null references projects (id) on delete cascade,
   byte_size bigint not null,
@@ -61,7 +65,7 @@ create table blobs (
   uploaded_at bigint not null
 );
 
-create index blobs_project_idx on blobs (project_id);
+create index if not exists blobs_project_idx on blobs (project_id);
 
 -- ── RLS — S5: records·blobs 는 projects.team_id 가 내 팀일 때만 보인다 ─────────
 alter table teams enable row level security;
@@ -71,36 +75,46 @@ alter table records enable row level security;
 alter table blobs enable row level security;
 
 -- 내 팀 id (team_members.user_id 가 PK 라 사용자당 최대 1행)
-create function my_team_id() returns uuid
+create or replace function my_team_id() returns uuid
   language sql stable security definer set search_path = public as $$
   select team_id from team_members where user_id = auth.uid() and active
 $$;
 
+drop policy if exists teams_select on teams;
 create policy teams_select on teams for select
   using (id = my_team_id());
 
+drop policy if exists team_members_select on team_members;
 create policy team_members_select on team_members for select
   using (team_id = my_team_id());
 
 -- 팀원 발급·해제는 팀장(OWNER)만 — apps/web/api/team/* 가 service role 로 대신 처리하므로
 -- 일반 사용자 쓰기 정책은 select 만 둔다(발급 API는 RLS 를 우회하는 service role 키를 쓴다)
 
+drop policy if exists projects_select on projects;
 create policy projects_select on projects for select
   using (team_id = my_team_id());
+drop policy if exists projects_write on projects;
 create policy projects_write on projects for insert with check (team_id = my_team_id());
+drop policy if exists projects_update on projects;
 create policy projects_update on projects for update using (team_id = my_team_id());
 
+drop policy if exists records_select on records;
 create policy records_select on records for select
   using (project_id in (select id from projects where team_id = my_team_id()));
+drop policy if exists records_write on records;
 create policy records_write on records for insert with check (
   project_id in (select id from projects where team_id = my_team_id())
 );
+drop policy if exists records_update on records;
 create policy records_update on records for update using (
   project_id in (select id from projects where team_id = my_team_id())
 );
 
+drop policy if exists blobs_select on blobs;
 create policy blobs_select on blobs for select
   using (project_id in (select id from projects where team_id = my_team_id()));
+drop policy if exists blobs_write on blobs;
 create policy blobs_write on blobs for insert with check (
   project_id in (select id from projects where team_id = my_team_id())
 );
