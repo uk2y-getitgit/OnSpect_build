@@ -133,6 +133,11 @@
 | T2-1-B | 태블릿 셸 — 방향감지·터치프로파일 주입·좌측 세로 툴바 | builder | - | ✅ `61_builder_log_Phase5_TabletShell.md` · 커밋 `6c06141`·`c4ed288` · 타입/테스트700(canvas392+project308)/빌드 통과 |
 | T2-5-B | 마지막 뷰포트 영속(`lastView:{projectId}`) | builder | - | ✅ `62_builder_log_Phase5_LastView.md` · 커밋 `9a34101` · 타입/테스트700/빌드 통과 · T2-1과 같은 파일 동시편집을 hunk 단위로 안전 분리 |
 | T2-Z1 | 리더 재검증 (T2-1+T2-5 병합 상태) | 리더 | T2-1-B, T2-5-B | ✅ 타입0오류·테스트700(canvas392+project308)통과·빌드통과 — 공유트리 동시편집 후유증 없음 확인 |
+| T2-1-R | T2-1+T2-5 검수 | code-reviewer | T2-Z1 | ✅ `63_code-reviewer_findings_*.md` — 통과, 지적사항 없음 |
+| T2AB-B | T2-3(층칩)+T2-4(미니맵)+T2-6(안전영역) — 한 builder가 순차로, CanvasRoute.tsx 동시편집 위험 회피 | builder | T2-1-R | ✅ `64_builder_log_Phase5_ChipsMinimapInsets.md` · 커밋 `cc7d267` · 타입/테스트700/빌드 통과 · canvas-core 무변경 |
+| T2AB-B-R | T2-3+T2-4+T2-6 검수 | code-reviewer | T2AB-B | 🟦 |
+| T2-Z2 | 태블릿 1차(T2-1~T2-7) 전체 통합 판정 | 리더 | T2AB-B-R, T2-7-B | ⬜ |
+| T2-7-B | T2-7 — 결함폼 터치프로파일(44pt·가로3열) | builder | T2-1-R | ✅ `65_builder_log_Phase5_DefectFormTouch.md` · 커밋 `b3a21b4` · CSS전용(tsx무변경) · 타입/테스트700/빌드 통과 |
 | U3-B-R | U-3 검수 (canvas-core 변경 + DB호환 주장) | code-reviewer | U3-B | ✅ `60_code-reviewer_findings_UI3_Legend.md` — 통과, 지적사항 없음 |
 | U3-B | U-3 결함유형범례 제거 + 상태범례 문구 축약(신규/결함/보수완료) | builder | - | ✅ `58_builder_log_UI3_Legend.md` · 커밋 `cea85b1` · 타입/테스트676(canvas368+project308)/빌드 통과 · DB_VERSION 1 유지 · 확인요청2건(라벨 확정, 다이얼로그 체크박스 문구 통일 여부) |
 | U4 | PC/태블릿 구분 배포 — 리더 직접 처리 | 리더 | - | ⬜ |
