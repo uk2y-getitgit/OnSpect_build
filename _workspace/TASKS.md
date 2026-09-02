@@ -90,4 +90,8 @@
 | # | 작업 | 담당 | 의존 | 상태 |
 |---|---|---|---|---|
 | P5-1 | 스펙 검토 — 팀·로그인·동기화(1) + PWA 태블릿 UI(2), 블로킹 질문 정리 | plan-reviewer | - | ✅ `50_plan-reviewer_spec_Phase5_TeamSync.md` — 착수불가(차단5·Q55~59), PWA껍데기만 바로착수가능, 비차단 Q60·Q61은 가정(V7·V8) |
-| P5-2A | PWA 껍데기 P1~P6(manifest·SW·persist·버전배너·용량경고·촬영진입) — 차단 질문과 무관, 바로 착수 | builder | P5-1 | 🟦 |
+| P5-2A | PWA 껍데기 P1~P6(manifest·SW·persist·버전배너·용량경고·촬영진입) — 차단 질문과 무관, 바로 착수 | builder | P5-1 | ✅ `51_builder_log_Phase5_PWAShell.md` · 커밋 `5750688`·`994b376` · 타입/테스트307/빌드 통과 · 가정 V9~V16 |
+| P5-2B | T1-2 — `Defect` 병합필드(updatedAt·deviceId·createdBy) 신설, D23 반영 | builder | D23 | ✅ `52_builder_log_Phase5_DefectMergeFields.md` · 커밋 `64fc3fe`·`28548ca` · 타입/테스트686(canvas379+project307)/빌드 통과 · 가정 W1~W6 |
+| P5-2B-R | T1-2 검수 (canvas-core 변경 — 고위험 영역) | code-reviewer | P5-2B | 🟦 |
+| P5-2C | T2-2 — 정밀표기(조준 크로스헤어) 구현, D22 반영 | builder | D22 | ✅ `53_builder_log_Phase5_AimCrosshair.md` · 커밋 `d80477a`·`b541cc8` · 타입/테스트686/빌드 통과 · canvas-core 무변경 · 가정 X1~X6 |
+| P5-2C-R | T2-2 검수 | code-reviewer | P5-2C | 🟦 |
