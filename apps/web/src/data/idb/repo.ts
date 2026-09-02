@@ -61,6 +61,7 @@ import {
   putExportRun,
 } from './exportRuns.js';
 import { getLastView, putLastView, type LastView } from './lastView.js';
+import { recordDeletion, unrecordDeletions } from './deletionLog.js';
 import {
   purgePhotoIdsIn,
   purgePhotoRecordsIn,
@@ -111,6 +112,23 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
    */
   private stampDefect(d: Defect, now = Date.now()): Defect {
     return stampDefect(d, now, this.deviceId);
+  }
+
+  /**
+   * 되돌리기(Ctrl+Z)로 되살아난 결함·메모의 삭제 기록을 뺀다(Phase 5 T1-3 · D25).
+   * upsert 배치는 보통 한 용역 안에서 오지만, 방어적으로 `projectId` 별로 묶어서 뺀다.
+   */
+  private async cleanupResurrected(
+    tx: IDBTransaction,
+    items: readonly { id: string; projectId: string }[],
+  ): Promise<void> {
+    const byProject = new Map<string, string[]>();
+    for (const it of items) {
+      const ids = byProject.get(it.projectId);
+      if (ids) ids.push(it.id);
+      else byProject.set(it.projectId, [it.id]);
+    }
+    for (const [projectId, ids] of byProject) await unrecordDeletions(tx, projectId, ids);
   }
 
   // ── 용역 ────────────────────────────────────────────────────────────────
@@ -264,6 +282,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
   async deleteBuilding(buildingId: string): Promise<void> {
     const tx = this.db.transaction(
       // 사진까지 같은 트랜잭션에 연다 — 결함이 사라지면 사진도 함께 간다 (K13)
+      // meta 도 함께 연다 — 삭제 전파 기록(Phase 5 T1-3 · D25)이 같은 트랜잭션에서 남는다
       [
         STORE.buildings,
         STORE.floors,
@@ -272,16 +291,20 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
         STORE.blobs,
         STORE.memos,
         STORE.photos,
+        STORE.meta,
       ],
       'readwrite',
     );
+    const buildingsStore = tx.objectStore(STORE.buildings);
+    const building = await reqAsPromise<Building | undefined>(buildingsStore.get(buildingId));
     const floors = await getAllByIndex<Floor>(
       tx.objectStore(STORE.floors),
       'by_building',
       buildingId,
     );
     for (const f of floors) await this.purgeFloorIn(tx, f.id);
-    tx.objectStore(STORE.buildings).delete(buildingId);
+    buildingsStore.delete(buildingId);
+    if (building) await recordDeletion(tx, 'BUILDING', buildingId, building.projectId, this.deviceId);
     await txDone(tx);
   }
 
@@ -301,14 +324,19 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
 
   async deleteFloor(floorId: string): Promise<void> {
     const tx = this.db.transaction(
-      [STORE.floors, STORE.drawings, STORE.defects, STORE.blobs, STORE.memos, STORE.photos],
+      // meta 도 함께 연다 — 삭제 전파 기록(Phase 5 T1-3 · D25)이 같은 트랜잭션에서 남는다
+      [STORE.floors, STORE.drawings, STORE.defects, STORE.blobs, STORE.memos, STORE.photos, STORE.meta],
       'readwrite',
     );
     await this.purgeFloorIn(tx, floorId);
     await txDone(tx);
   }
 
-  /** 층 1개와 그 하위(도면·결함·Blob 참조)를 같은 트랜잭션에서 지운다 */
+  /**
+   * 층 1개와 그 하위(도면·결함·Blob 참조)를 같은 트랜잭션에서 지운다.
+   * `deleteFloor` · `deleteBuilding`(연쇄) 양쪽에서 부른다 — 두 호출자의 트랜잭션 스코프에
+   * `STORE.meta` 가 이미 포함돼 있어야 삭제 전파 기록(Phase 5 T1-3 · D25)이 실패하지 않는다.
+   */
   private async purgeFloorIn(tx: IDBTransaction, floorId: string): Promise<void> {
     const ds = tx.objectStore(STORE.drawings);
     const xs = tx.objectStore(STORE.defects);
@@ -317,6 +345,13 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     const memoStore = tx.objectStoreNames.contains(STORE.memos)
       ? tx.objectStore(STORE.memos)
       : null;
+    const floorStore = tx.objectStoreNames.contains(STORE.floors)
+      ? tx.objectStore(STORE.floors)
+      : null;
+    // 층 자체의 삭제 기록에 projectId 가 필요해서 지우기 전에 먼저 읽어 둔다
+    const floor = floorStore
+      ? await reqAsPromise<Floor | undefined>(floorStore.get(floorId))
+      : undefined;
 
     const drawings = await getAllByIndex<Drawing>(ds, 'by_floor', floorId);
     for (const d of drawings) {
@@ -327,16 +362,26 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
       // 도면이 사라지면 그 위의 메모도 갈 곳이 없다
       if (memoStore) {
         const ms = await getAllByIndex<Memo>(memoStore, 'by_drawing', d.id);
-        for (const m of ms) memoStore.delete(m.id);
+        for (const m of ms) {
+          memoStore.delete(m.id);
+          await recordDeletion(tx, 'MEMO', m.id, m.projectId, this.deviceId);
+        }
       }
       ds.delete(d.id);
+      await recordDeletion(tx, 'DRAWING', d.id, d.projectId, this.deviceId);
     }
     const defects = await getAllByIndex<Defect>(xs, 'by_floor', floorId);
-    for (const x of defects) xs.delete(x.id);
+    for (const x of defects) {
+      xs.delete(x.id);
+      await recordDeletion(tx, 'DEFECT', x.id, x.projectId, this.deviceId);
+    }
     // 결함이 사라지면 그 결함의 사진도 갈 곳이 없다 (K13). Blob refCount 까지 정리한다
-    await purgePhotosOfDefectsIn(tx, defects.map((x) => x.id));
+    await purgePhotosOfDefectsIn(tx, defects.map((x) => x.id), this.deviceId);
 
-    if (tx.objectStoreNames.contains(STORE.floors)) tx.objectStore(STORE.floors).delete(floorId);
+    if (floorStore) {
+      floorStore.delete(floorId);
+      if (floor) await recordDeletion(tx, 'FLOOR', floorId, floor.projectId, this.deviceId);
+    }
   }
 
   // ── 도면 ────────────────────────────────────────────────────────────────
@@ -364,7 +409,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
   async registerDrawings(uploads: readonly DrawingUpload[]): Promise<void> {
     if (uploads.length === 0) return;
     const tx = this.db.transaction(
-      [STORE.drawings, STORE.blobs, STORE.defects],
+      // meta 도 함께 연다 — 걷어낸 기존 도면의 삭제 전파 기록(Phase 5 T1-3 · D25)이 여기서 남는다
+      [STORE.drawings, STORE.blobs, STORE.defects, STORE.meta],
       'readwrite',
     );
     const ds = tx.objectStore(STORE.drawings);
@@ -384,6 +430,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
           revokeUrl(k);
         }
         ds.delete(old.id);
+        await recordDeletion(tx, 'DRAWING', old.id, old.projectId, this.deviceId);
       }
 
       // 2. 그 층의 결함을 새 도면으로 재연결한다. **좌표는 손대지 않는다**
@@ -411,7 +458,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
    * **결함은 유지된다** (§2-11). 같은 층에 새 도면을 올리면 다시 붙는다.
    */
   async deleteDrawing(drawingId: string): Promise<void> {
-    const tx = this.db.transaction([STORE.drawings, STORE.blobs], 'readwrite');
+    const tx = this.db.transaction([STORE.drawings, STORE.blobs, STORE.meta], 'readwrite');
     const ds = tx.objectStore(STORE.drawings);
     const blobs = tx.objectStore(STORE.blobs);
     const d = await reqAsPromise<Drawing | undefined>(ds.get(drawingId));
@@ -421,6 +468,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
         revokeUrl(k);
       }
       ds.delete(drawingId);
+      await recordDeletion(tx, 'DRAWING', drawingId, d.projectId, this.deviceId);
     }
     await txDone(tx);
   }
@@ -441,10 +489,12 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
    */
   async upsertDefects(items: readonly Defect[]): Promise<void> {
     if (items.length === 0) return;
-    const tx = this.db.transaction(STORE.defects, 'readwrite');
+    const tx = this.db.transaction([STORE.defects, STORE.meta], 'readwrite');
     const store = tx.objectStore(STORE.defects);
     const now = Date.now();
     for (const d of items) store.put(this.stampDefect(d, now));
+    // 되돌리기(Ctrl+Z)로 되살아난 결함이 섞여 있을 수 있다 — 삭제 기록에서 뺀다(Phase 5 T1-3 · D25)
+    await this.cleanupResurrected(tx, items);
     await txDone(tx);
   }
 
@@ -463,9 +513,13 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
    */
   async deleteDefects(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
-    const tx = this.db.transaction(STORE.defects, 'readwrite');
+    const tx = this.db.transaction([STORE.defects, STORE.meta], 'readwrite');
     const store = tx.objectStore(STORE.defects);
-    for (const id of ids) store.delete(id);
+    for (const id of ids) {
+      const d = await reqAsPromise<Defect | undefined>(store.get(id));
+      store.delete(id);
+      if (d) await recordDeletion(tx, 'DEFECT', id, d.projectId, this.deviceId);
+    }
     await txDone(tx);
   }
 
@@ -500,8 +554,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
 
   async deletePhotos(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
-    const tx = this.db.transaction([STORE.photos, STORE.blobs], 'readwrite');
-    await purgePhotoIdsIn(tx, ids);
+    const tx = this.db.transaction([STORE.photos, STORE.blobs, STORE.meta], 'readwrite');
+    await purgePhotoIdsIn(tx, ids, this.deviceId);
     await txDone(tx);
   }
 
@@ -513,7 +567,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
    * 이것이 `deleteDefects` 의 즉시 연쇄삭제를 대신한다 (검수 지적 1 · K13).
    */
   async purgeOrphanPhotos(projectId: string): Promise<number> {
-    const tx = this.db.transaction([STORE.photos, STORE.defects, STORE.blobs], 'readwrite');
+    const tx = this.db.transaction([STORE.photos, STORE.defects, STORE.blobs, STORE.meta], 'readwrite');
     const rows = await getAllByIndex<Photo>(tx.objectStore(STORE.photos), 'by_project', projectId);
     if (rows.length === 0) {
       await txDone(tx);
@@ -531,7 +585,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
       }
       if (!ok) orphans.push(p);
     }
-    await purgePhotoRecordsIn(tx, orphans);
+    await purgePhotoRecordsIn(tx, orphans, this.deviceId);
     await txDone(tx);
     return orphans.length;
   }
@@ -560,9 +614,11 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
 
   async upsertMemos(items: readonly Memo[]): Promise<void> {
     if (items.length === 0) return;
-    const tx = this.db.transaction(STORE.memos, 'readwrite');
+    const tx = this.db.transaction([STORE.memos, STORE.meta], 'readwrite');
     const store = tx.objectStore(STORE.memos);
     for (const m of items) store.put(this.stamp(m));
+    // 되돌리기(Ctrl+Z)로 되살아난 메모가 섞여 있을 수 있다 — 삭제 기록에서 뺀다(Phase 5 T1-3 · D25)
+    await this.cleanupResurrected(tx, items);
     await txDone(tx);
   }
 
@@ -600,9 +656,13 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
 
   async deleteMemos(ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
-    const tx = this.db.transaction(STORE.memos, 'readwrite');
+    const tx = this.db.transaction([STORE.memos, STORE.meta], 'readwrite');
     const store = tx.objectStore(STORE.memos);
-    for (const id of ids) store.delete(id);
+    for (const id of ids) {
+      const m = await reqAsPromise<Memo | undefined>(store.get(id));
+      store.delete(id);
+      if (m) await recordDeletion(tx, 'MEMO', id, m.projectId, this.deviceId);
+    }
     await txDone(tx);
   }
 
