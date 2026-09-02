@@ -57,6 +57,17 @@ export type CanvasViewProps = {
   /** F6 — 번호 풍선 크기 등 전역 렌더 스타일. 생략하면 `DEFAULT_GLOBAL_STYLE` */
   globalStyle?: GlobalStyle;
   send: (ev: InputEvent) => void;
+  /**
+   * D22 조준 모드가 켜져 있는가. 켜져 있으면 **도면 위 손가락은 팬/줌 전용**이 된다 —
+   * 표기는 오직 `[여기]` 버튼(중앙 좌표 합성 탭)으로만 생긴다. 판정 로직은 아래 포인터
+   * 핸들러 한 곳에만 있고 **코어는 이 값을 모른다**(코어 변경 0).
+   */
+  aiming?: boolean;
+  /**
+   * 조준 모드가 화면 중앙 좌표를 재려면 호스트 요소가 필요하다.
+   * 넘기면 여기에 채워 준다 — 내부 ref 는 그대로 살아 있어 이 prop 은 선택이다.
+   */
+  hostElRef?: React.MutableRefObject<HTMLDivElement | null>;
   drawingUrl: string | null;
   /** 도면 없는 층의 빈 상태에서 P4 로 보낸다 (§2-10-c) */
   onUploadDrawing: () => void;
@@ -80,11 +91,16 @@ export function CanvasView({
   legend,
   globalStyle = DEFAULT_GLOBAL_STYLE,
   send,
+  aiming = false,
+  hostElRef,
   drawingUrl,
   onUploadDrawing,
   children,
 }: CanvasViewProps) {
-  const hostRef = useRef<HTMLDivElement | null>(null);
+  const innerHostRef = useRef<HTMLDivElement | null>(null);
+  // 바깥에서 ref 를 주면 그것을 쓴다(조준 모드가 중앙 좌표를 재려면 요소가 필요하다).
+  // 어느 쪽이든 **같은 요소 하나**를 가리킨다
+  const hostRef = hostElRef ?? innerHostRef;
   const bgRef = useRef<HTMLCanvasElement | null>(null);
   const fgRef = useRef<HTMLCanvasElement | null>(null);
   const spaceRef = useRef(false);
@@ -419,6 +435,28 @@ export function CanvasView({
     };
   }, [send]);
 
+  // ── D22 조준 모드 ────────────────────────────────────────────────────────
+  //
+  // **어떻게 "팬 전용" 으로 만드는가:** 코어는 `button===0 && keys.space` 를 팬으로 읽는다
+  // (`interaction.ts` onPointerDown). 조준 중에는 손가락 입력에 `space: true` 를 실어 보내
+  // **Space+드래그(=화면 조작)와 완전히 같은 경로**를 타게 한다. 새 분기도, 코어 변경도 없다.
+  // 그 결과 도면 탭은 팬/줌만 하고, 표기는 `[여기]` 의 합성 탭(`aimSynth.ts`)으로만 생긴다.
+  //
+  // ⚠️ **함수다.** `spaceRef` 는 렌더 없이 바뀌므로(keydown 핸들러가 ref 만 만진다)
+  //    렌더 시점에 값으로 굳히면 스페이스 상태가 한 박자 늦게 반영된다.
+  //    이벤트가 실제로 들어온 순간에 읽는다 — 예전 코드(`spaceRef.current` 직접 전달)와 같다.
+  const panOnly = () => spaceRef.current || aiming;
+
+  // 조준을 끌 때 코어에 남은 `keys.space` 를 푼다. 안 풀면 마지막 포인터 이벤트로 눌린 채
+  // 남아 커서가 손 모양(grab)으로 굳는다 — onBlur 안전망과 같은 이유다
+  const wasAiming = useRef(false);
+  useEffect(() => {
+    if (wasAiming.current && !aiming) {
+      send({ k: 'KEY_UP', key: ' ', keys: { space: false, alt: false, shift: false, ctrl: false } });
+    }
+    wasAiming.current = aiming;
+  }, [aiming, send]);
+
   // ── 포인터 ───────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = hostRef.current;
@@ -437,13 +475,13 @@ export function CanvasView({
       if (e.button === 1) e.preventDefault(); // 중클릭 자동 스크롤 차단
     }
     el.focus({ preventScroll: true });
-    send(pointerDown(el, e.nativeEvent, spaceRef.current));
+    send(pointerDown(el, e.nativeEvent, panOnly()));
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = hostRef.current;
     if (!el) return;
     if (pinchRef.current.active) return; // 핀치 중 — 화면 조작만 한다 (hover 계산도 낭비다)
-    send(pointerMove(el, e.nativeEvent, spaceRef.current));
+    send(pointerMove(el, e.nativeEvent, panOnly()));
   };
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = hostRef.current;
@@ -457,7 +495,7 @@ export function CanvasView({
     // 핀치 중 손가락을 떼는 것은 클릭이 아니다. 그대로 넘기면 `POINTER_UP` 이
     // "이동 없는 클릭" 으로 읽혀 점 결함이 생기거나 선택이 풀린다
     if (pinchRef.current.active) return;
-    send(pointerUp(el, e.nativeEvent, spaceRef.current));
+    send(pointerUp(el, e.nativeEvent, panOnly()));
   };
 
   const busy = load.phase === 'loading';
@@ -479,7 +517,8 @@ export function CanvasView({
         const el = hostRef.current;
         // C-1 — 포인터 3형제와 **같은 가드**. 핀치 중 합성 dblclick 이 새어 들어오면
         //       확대하다 말고 편집기가 열린다
-        if (!el || pinchRef.current.active) return;
+        // D22 — 조준 중 도면은 "팬/줌 전용" 이다. 두 번 톡 쳐서 무언가 열리면 안 된다
+        if (!el || pinchRef.current.active || aiming) return;
         send(doubleClick(el, e.nativeEvent, spaceRef.current));
       }}
       onContextMenu={(e) => {
@@ -489,7 +528,8 @@ export function CanvasView({
         const el = hostRef.current;
         // C-1 — Android Chrome 은 접점을 길게 누르면 contextmenu 를 낸다.
         //       두 손가락으로 확대한 채 잠시 멈추면 삭제 메뉴가 뜨는 것을 막는다
-        if (!el || pinchRef.current.active) return;
+        // D22 — 조준 중에는 도면을 밀다 잠시 멈추는 일이 잦다. 그때마다 메뉴가 뜨면 안 된다
+        if (!el || pinchRef.current.active || aiming) return;
         send(contextMenu(el, e.nativeEvent));
       }}
     >

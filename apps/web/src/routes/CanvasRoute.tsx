@@ -41,6 +41,8 @@ import {
   type ProjectLegend,
   type ProjectTitleBlock,
 } from '@onspect/project-core';
+import { AimControls, AimCrosshair } from '../canvas/AimOverlay';
+import { aimCenterOf, aimTapEvents } from '../canvas/aimSynth';
 import { CanvasView } from '../canvas/CanvasView';
 import { ContextToolbar } from '../canvas/ContextToolbar';
 import { MemoEditor } from '../canvas/MemoEditor';
@@ -119,6 +121,24 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   );
   const inspectorRef = useRef<HTMLDivElement | null>(null);
   const send = useCallback((ev: InputEvent) => dispatch({ t: 'INPUT', ev }), []);
+
+  /**
+   * D22(Q55 안 A) 조준 모드 — 켜져 있으면 도면 위 손가락은 팬/줌만 하고,
+   * 표기는 화면 중앙 십자선 + `[여기]` 로만 생긴다.
+   *
+   * 화면에 남는 상태다(저장하지 않는다). 한 번 켜면 여러 개를 연속으로 찍을 수 있게
+   * **확정 후에도 꺼지지 않는다** — Q55 가 꼽은 안 A 의 장점("연속 표기가 빠르다").
+   */
+  const [aimOn, setAimOn] = useState(false);
+  /** 조준이 화면 정중앙 좌표를 재려면 캔버스 호스트 요소가 필요하다 */
+  const canvasHostRef = useRef<HTMLDivElement | null>(null);
+  const fireAim = useCallback(() => {
+    const el = canvasHostRef.current;
+    if (!el) return;
+    // 십자선 자리를 손가락으로 탭한 것과 **같은 이벤트 쌍**을 기존 경로로 흘려보낸다.
+    // 지금 켜진 도구가 무엇이든 코어가 알아서 판단한다 (코어 변경 0)
+    for (const ev of aimTapEvents(aimCenterOf(el))) send(ev);
+  }, [send]);
 
   // ── 로드 ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -828,6 +848,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             legend={legend}
             globalStyle={globalStyle}
             send={send}
+            aiming={aimOn}
+            hostElRef={canvasHostRef}
             drawingUrl={drawingUrl}
             onUploadDrawing={() => resolvedFloor && goUpload(resolvedFloor.id)}
           >
@@ -848,6 +870,10 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
                 }}
               />
             )}
+
+            {/* D22 십자선 — **호스트 안**이라 `left:50%/top:50%` 가 곧 합성 탭 좌표다.
+                `pointer-events:none` 이므로 입력에는 관여하지 않는다 */}
+            {aimOn && <AimCrosshair />}
           </CanvasView>
 
           {/* `data-floating` 요소는 안전 영역 계산에 들어간다 (§2-10-a) */}
@@ -856,8 +882,14 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               tool={state.canvas.tool}
               disabled={!state.canvas.drawing}
               onChange={(tool) => send({ k: 'SET_TOOL', tool })}
+              aimOn={aimOn}
+              onToggleAim={() => setAimOn((v) => !v)}
             />
           </div>
+
+          {/* D22 안내 띠 + `[여기]` — **호스트 밖**에 둔다(엄지가 핀치 접점으로 세어지지 않게).
+              `data-floating` 을 붙이지 않는다 — 붙이면 조준을 켤 때마다 도면이 움찔한다 */}
+          {aimOn && <AimControls disabled={!state.canvas.drawing} onConfirm={fireAim} />}
 
           {selected && toolbarAt && (
             <ContextToolbar

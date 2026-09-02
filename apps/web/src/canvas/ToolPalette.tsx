@@ -14,6 +14,15 @@ export type ToolPaletteProps = {
   tool: Tool;
   disabled: boolean;
   onChange: (tool: Tool) => void;
+  /**
+   * D22 조준 모드 토글. **도구가 아니다** — 도구(`Tool`)는 무엇을 그리는가이고,
+   * 조준은 그것을 어떻게 찍는가다. 그래서 `tool` 과 따로 산다.
+   *
+   * 터치 전용 기기에서만 보인다(`styles.css` — `(hover:none) and (pointer:coarse)`).
+   * PC 에는 정확한 마우스가 있어 조준이 필요 없다.
+   */
+  aimOn?: boolean;
+  onToggleAim?: () => void;
 };
 
 type Item = {
@@ -140,7 +149,7 @@ const AREA_TOOLS: { tool: Tool; label: string; icon: JSX.Element }[] = [
 
 const AREA_SET: Tool[] = ['AREA_RECT', 'AREA_ELLIPSE'];
 
-export function ToolPalette({ tool, disabled, onChange }: ToolPaletteProps) {
+export function ToolPalette({ tool, disabled, onChange, aimOn = false, onToggleAim }: ToolPaletteProps) {
   const areaActive = AREA_SET.includes(tool);
 
   return (
@@ -186,6 +195,38 @@ export function ToolPalette({ tool, disabled, onChange }: ToolPaletteProps) {
           </div>
         );
       })}
+
+      {/* D22 조준 — 목업 M-05a 처럼 구분선 아래 따로 선다. 도구가 아니라 **입력 방식**이다.
+          `palette__slot--aim` 은 기본이 숨김이고 터치 전용 기기에서만 켜진다 */}
+      {onToggleAim && (
+        <div className="palette__slot palette__slot--aim">
+          <div className="palette__divider" aria-hidden="true" />
+          <button
+            type="button"
+            className="palette__btn"
+            aria-pressed={aimOn}
+            aria-label="조준 모드"
+            disabled={disabled}
+            title={
+              disabled
+                ? '조준 · 도면을 먼저 올려주세요'
+                : '조준 — 화면 중앙 십자선에 맞추고 [여기]로 찍는다'
+            }
+            onClick={onToggleAim}
+          >
+            <span className="palette__icon">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                <line x1="10" y1="1.5" x2="10" y2="5" stroke="currentColor" strokeWidth="1.6" />
+                <line x1="10" y1="15" x2="10" y2="18.5" stroke="currentColor" strokeWidth="1.6" />
+                <line x1="1.5" y1="10" x2="5" y2="10" stroke="currentColor" strokeWidth="1.6" />
+                <line x1="15" y1="10" x2="18.5" y2="10" stroke="currentColor" strokeWidth="1.6" />
+              </svg>
+            </span>
+            <span className="palette__label">조준</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
