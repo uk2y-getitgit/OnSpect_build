@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-03 (태블릿 1차 화면 T2-1~T2-7 전부 완료 — 셸·정밀표기·층칩·미니맵·안전영역·뷰포트기억·폼터치)
+마지막 갱신: 2026-09-03 (Supabase 서버 스키마 적용 완료 + 로컬 삭제전파 장치 완료)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -25,6 +25,28 @@ npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(�
 
 테스트 **667개**(canvas-core 360 · project-core 307) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
+
+### 2026-09-03 — 팀 동기화 서버 착수 (T1-1~T1-3)
+
+사용자가 Supabase 프로젝트(`jaglifijobsjugmsnuvl`)를 만들고 URL·publishable 키를 전달 →
+D26(Q59, 태블릿 다중사용자 로그아웃)까지 마지막 남은 블로킹 질문을 답변받아 트랙1 착수 조건이
+전부 갖춰졌다.
+
+| # | 내용 | 커밋 |
+|---|---|---|
+| T1-1 | Supabase 스키마 적용 — `teams`·`team_members`·`projects`·`records`(결함 등 6종 통합)·`blobs` 5테이블 + 팀 격리 RLS. SQL Editor 붙여넣기 방식으로 사용자가 직접 적용(CLI 인증 없이). **재실행해도 안전하게(idempotent) 작성** — 첫 시도에서 부분 적용된 상태로 "already exists" 오류가 나서 즉시 고쳤다. Storage 버킷(`blobs/{teamId}/{projectId}/{key}`)도 같은 방식으로 완료 | `4a0c0a2`·`a8b9079`·`896def6` |
+| T1-2 | (전날 완료) `Defect` 병합필드 | `64fc3fe` 등 |
+| T1-3 | 로컬 삭제 전파 — `Building`~`Memo` 6종 하드삭제 10개 경로 전부에 `meta` KV 삭제기록(`deleted:{projectId}`) 배선, Ctrl+Z 되돌리면 기록에서 제거. **아직 아무도 이 기록을 안 읽는다** — T1-7(동기화 push)이 쓸 재료만 지금 만들어 둔 것 | `af6354e` |
+
+구현 로그: `68_builder_log_Phase5_DeleteLog.md` · 검수: `69_code-reviewer_findings_Phase5_DeleteLog.md`(통과) ·
+서버 스키마: `supabase/migrations/*.sql`(저장소에 커밋, 재실행 안전) · 결정: D26.
+
+**통합 판정(리더):** 타입검사 3워크스페이스 0오류 · 단위테스트 **717개 전부 통과**
+(canvas-core 392 · project-core 325) · 프로덕션 빌드 통과.
+
+**다음 막힌 지점 — Supabase `service_role` 키가 있어야 T1-4(로그인·팀원 발급 API)에 착수한다.**
+사용자에게 요청함(Settings → API → service_role). **절대 소스코드에 넣지 않고 Vercel 서버
+환경변수로만 저장한다.** `apps/web/.env.example`에 필요한 변수명 문서화 완료.
 
 ### 2026-09-03 — 태블릿 1차 화면 완성 (T2-1~T2-7)
 
