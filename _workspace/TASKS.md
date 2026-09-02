@@ -105,3 +105,22 @@
 | P5-4 | T1-3 — 삭제 전파(meta KV 로그, D25) | D25 | 서버 없이도 착수 가능 |
 | P5-5 | T1-1 — Supabase 프로젝트·스키마·RLS | **사용자의 Supabase 계정 필요** | 계정 없인 착수 불가 — 안내 필요 |
 | P5-6 | T1-4~T1-10 — 인증API·동기화API·로그인화면·팀관리화면 | P5-5, Q59 | 서버 골격 이후, Q59 답변도 필요 |
+
+---
+
+# UI 정리 4건 (2026-09-02, 사용자 실사용 확인)
+
+범위 문서: `_workspace/00_input/scope_UIPolish0902.md`
+
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| U1-B | U-1 편집툴바 미구현버튼(표기종류변경·복제·추가) 제거 | builder | - | ✅ `56_builder_log_UI1_ToolbarButtons.md` · 커밋 `3baadcc`(+연장`d0bb816` 우클릭메뉴도) · 타입/빌드 통과 · legend.test.ts 9건 실패는 U3와 무관(U3 진행중 파일공유) |
+| U1-B-R | U-1 검수 | code-reviewer | U2-B, U3-B (legend.test 안정화 후) | ⬜ |
+| U2-B | U-2 캔버스 토스트 정리(성공확인류 제거, 삭제+경고는 유지) | builder | - | ✅ `57_builder_log_UI2_ToastCleanup.md` · 커밋 `58d35fd`(+연장`d411925` 색상·크기변경 토스트도) · 타입/테스트691(canvas383+project308)/빌드 통과 · toastPolicy.test.ts 신설 |
+| U2-B-R | U-2 검수 (canvas-core 다수 변경) | code-reviewer | U2-B | ✅ `59_code-reviewer_findings_UI2_Toast.md` — 통과, 경미1(회귀테스트 커버리지 공백, 필수아님) |
+| UZ | UI정리 4건 통합 판정 | 리더 | U1-B, U2-B-R, U3-B-R, U4 | ✅ 타입0오류·테스트691(canvas383+project308)통과·빌드통과 |
+
+## 전체 완료 — UI 정리 4건(편집버튼·팝업·범례·PC태블릿구분배포) 전부 반영됨
+| U3-B-R | U-3 검수 (canvas-core 변경 + DB호환 주장) | code-reviewer | U3-B | ✅ `60_code-reviewer_findings_UI3_Legend.md` — 통과, 지적사항 없음 |
+| U3-B | U-3 결함유형범례 제거 + 상태범례 문구 축약(신규/결함/보수완료) | builder | - | ✅ `58_builder_log_UI3_Legend.md` · 커밋 `cea85b1` · 타입/테스트676(canvas368+project308)/빌드 통과 · DB_VERSION 1 유지 · 확인요청2건(라벨 확정, 다이얼로그 체크박스 문구 통일 여부) |
+| U4 | PC/태블릿 구분 배포 — 리더 직접 처리 | 리더 | - | ⬜ |
