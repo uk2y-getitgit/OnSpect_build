@@ -3,7 +3,7 @@
 작성: builder · 2026-09-02
 스펙: `_workspace/50_plan-reviewer_spec_Phase5_TeamSync.md` §4-1 · §4-2 · §5 · §6-0
 브랜치: `feat/photo-polish` (main 아님)
-커밋: `01f6f89`
+커밋: `5750688` — *PWA 껍데기 P1~P6 — 매니페스트·서비스워커·영속저장·새버전배너·용량표시·촬영*
 
 **손대지 않은 것 (지시대로):** 트랙1(팀동기화) 전부 · T2-2(태블릿 캔버스 정밀표기) ·
 `packages/canvas-core` **한 줄도** · `DB_VERSION`(1 유지, 스토어·인덱스 변경 0건).
