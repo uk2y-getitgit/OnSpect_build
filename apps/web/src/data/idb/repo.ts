@@ -60,6 +60,7 @@ import {
   pruneExportRuns,
   putExportRun,
 } from './exportRuns.js';
+import { getLastView, putLastView, type LastView } from './lastView.js';
 import {
   purgePhotoIdsIn,
   purgePhotoRecordsIn,
@@ -783,6 +784,20 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
 
   deleteExportRun(id: string): Promise<void> {
     return deleteExportRun(this.db, id);
+  }
+
+  // ── 마지막 뷰포트 (Phase 5 T2-5) ────────────────────────────────────────
+  /**
+   * `exportRun:` 과 **같은 관용구**다 — `meta` KV 재사용, `DB_VERSION` 은 1 그대로,
+   * 화면은 `openDb()` 를 직접 부르지 않고 여기 위임 메서드만 부른다.
+   * **기기 로컬 값이라 동기화 대상이 아니다** (스펙 §3 표).
+   */
+  getLastView(projectId: string): Promise<LastView | null> {
+    return getLastView(this.db, projectId);
+  }
+
+  putLastView(view: LastView): Promise<void> {
+    return putLastView(this.db, view);
   }
 
   // ── Blob 읽기 (캔버스·썸네일) ───────────────────────────────────────────

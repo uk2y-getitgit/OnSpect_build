@@ -57,6 +57,7 @@ import {
   needsCompose,
 } from '../canvas/drawingComposite';
 import { useAppData } from '../data/appData';
+import { useLastView } from '../data/useLastView';
 import { usePhotos } from '../data/usePhotos';
 import { revokeProjectUrls } from '../data/idb/blobs';
 import { PhotoSection } from '../ui/photos/PhotoSection';
@@ -141,6 +142,13 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   useEffect(() => {
     dispatch({ t: 'SET_HIT_PROFILE', profile: tablet ? TOUCH_HIT_PROFILE : null });
   }, [tablet]);
+
+  /**
+   * T2-5 — 마지막 뷰포트(줌 배율 · 팬 위치)를 `meta` KV `lastView:{projectId}` 에 기억했다가
+   * 이 용역을 다시 열 때 되돌린다. 저장·복원·디바운스·이탈 플러시가 전부 훅 안에 있다.
+   * **저장소를 못 쓰거나 저장된 값이 없으면 아무 일도 일어나지 않는다** — 전체 맞춤 그대로다.
+   */
+  useLastView(projectId, state.canvas, send);
 
 
   /**
