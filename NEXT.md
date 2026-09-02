@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-02 (태블릿 실사용 피드백 7건 완료 + Vercel 배포 설정 추가)
+마지막 갱신: 2026-09-02 (`main` 병합 완료 + Vercel 실배포 성공)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -13,31 +13,33 @@
 손상결함표·결함리스트·사진첩·조사위치도까지 뽑을 수 있다. 사진 자르기·주석,
 층 접두 번호, 도곽·범례 프로젝트 스코프, 상태 범례, 유사결함 불러오기,
 필기메모 지우개까지 나왔고, 이번 라운드로 **태블릿에서 핀치줌·필기·전차결함→금차 전환**까지
-됐다. ⚠️ **아직 `main`에 병합 전 — 브랜치 `feat/photo-polish`에서 사용자 실행 검증 대기 중.**
+됐다. ✅ **`main`에 병합 완료. Vercel 실배포도 성공** —
+https://on-spect-build-web.vercel.app/ (PC·태블릿 어디서나 접속 가능, 인터넷 필요).
 
 ```
 cd C:\Users\samsung\Desktop\OnSpect
-git checkout feat/photo-polish   # 아직 main이 아니다
+git checkout main
 npm install
 npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(같은 Wi-Fi): http://<이 PC의 LAN IP>:5173/
 ```
 
 테스트 **667개**(canvas-core 360 · project-core 307) · 타입 검사 · 프로덕션 빌드 전부 통과.
-GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main` — 이번 라운드는 아직 `feat/photo-polish`에만 있음)
+GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
 
-### 2026-09-02 — 배포 준비 (Vercel, 사용자 계정 연결 대기)
+### 2026-09-02 — Vercel 실배포 완료
 
-로컬 개발서버(`npm run dev`)로 같은 Wi-Fi에서만 테스트하던 것을 인터넷 어디서나 접속 가능한
-정식 URL로 옮기는 작업. **동기화 서버(D12, Phase 5)는 아직 미착수·미설계 — 이번엔 지금 앱을
-그대로 안정적으로 접속시키는 것만.** 기기(브라우저)마다 데이터가 로컬에만 저장되는 것은
-그대로다 — 여러 태블릿 간 결함 데이터 공유는 아직 안 된다.
+로컬 개발서버로 같은 Wi-Fi에서만 테스트하던 것을 인터넷 어디서나 접속 가능한 정식 URL로 옮겼다.
+**동기화 서버(D12, Phase 5)는 아직 미착수·미설계 — 이번엔 지금 앱을 그대로 안정적으로 접속시키는
+것만.** 기기(브라우저)마다 데이터가 로컬에만 저장되는 것은 그대로다 — 여러 태블릿 간 결함 데이터
+공유는 아직 안 된다.
 
-- `vercel.json` 추가(커밋 `f612b01`) — npm workspaces 모노레포라 Root Directory 를 `apps/web`
-  으로 좁히면 안 됨(`canvas-core`·`project-core` 를 vite alias 로 형제 소스 직접 참조,
-  패키지 미발행). 루트에서 `npm run build` → `apps/web/dist` 로 고정
-- **사용자가 해야 할 것(계정 필요라 대신할 수 없음):** Vercel 계정 생성 → GitHub 저장소
-  (`uk2y-getitgit/OnSpect_build`) 연결 → Import. Root Directory 는 리포 루트 그대로 두고
-  `vercel.json` 이 자동으로 읽힌다
+- URL: **https://on-spect-build-web.vercel.app/** (`main` 자동배포 연결됨 — 앞으로 `main`에
+  푸시하면 자동으로 갱신된다)
+- `vercel.json`(커밋 `452cb71`까지 2차 수정) — 겪은 문제 2건과 수정:
+  1. Vercel 기본 npm이 새 "설치 스크립트 승인" 기능으로 `esbuild`의 postinstall을 막아 빌드가
+     죽음 → `installCommand`를 로컬과 같은 `npm@11.9.0`으로 고정
+  2. Vercel 프로젝트의 **Root Directory가 `apps/web`로 설정돼 있어**(Import 시 자동 감지된 듯)
+     `outputDirectory`가 그 기준으로 재해석돼 어긋남 → `"dist"`(Root 상대경로)로 수정
 - 라우팅은 URL 기반이 아니라 앱 내부 상태다(react-router 등 미사용) — 리라이트 규칙 불필요
 - PWA manifest·서비스워커는 아직 없다(D11 "PWA 먼저"는 방향만 정해졌고 미구현) — 지금은
   그냥 HTTPS 정적 사이트로 접속하는 수준
@@ -70,7 +72,8 @@ GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main` — 이�
 
 **통합 판정(TZ, 리더):** 타입검사 3워크스페이스 0오류 · 단위테스트 **667개 전부 통과**
 (canvas-core 360 · project-core 307, 이전 라운드 644 대비 +23) · 프로덕션 빌드 통과 ·
-개발서버 `--host 0.0.0.0`로 기동해 PC·태블릿 동시 접속 확인. **`main` 병합은 아직 안 함.**
+개발서버 `--host 0.0.0.0`로 기동해 PC·태블릿 동시 접속 확인. `main` 병합 완료(같은 날 진행,
+아래 Vercel 절 참고).
 
 ### 2026-08-30 완료 — 사용자 수정사항(0828) 4개 배치 (`feat/photo-polish`)
 
@@ -279,16 +282,20 @@ builder(Phase B: 출력 4종) → code-reviewer → builder(수정) → 리더 �
   (다만 태블릿 라운드의 판정 로직 일부 — `nextToolbarFor`·전차→금차 화이트리스트 — 는 `apps/web`에 있어 이 방식으로 못 덮음, `48_code-reviewer_findings_Tablet3.md` 경미3)
 - **핀치줌 DOM 배선은 자동 회귀테스트 없음** — 리듀서(코어)는 테스트로 고정돼 있으나 터치이벤트 배선 자체는 실기기 확인만 가능
 - **전차→금차 전환에서 "사진 승계"(전회차 사진을 그대로 복사)는 이번 범위가 아니다** — 의도적으로 안 만듦(K13, Phase 2-D 소관). 이번엔 "이번 회차 새 사진을 추가하면 상태만 전환"까지만
-- **`main` 미병합** — `feat/photo-polish`에 전부 있고 아직 병합 안 함
+- **D21(N9) 확인 필요** — Undo로 되돌린 뒤 남는 "사진 있는 전회차 결함"이 사진첩·손상결함표에
+  전회차 신분 그대로 실리는 것을 실무상 허용할지 — 위 표 참고, 아직 사용자 확답 없음
+- **배치2(태블릿) 검수 경미3 미반영** — 필기 세션 중 다른 메모를 더블클릭/선택하는 극단적 케이스를
+  세션 종료 이벤트로 승격할지 여부. 화면 동작을 바꾸는 문제라 builder가 임의로 안 정하고 대기 중
 
 ---
 
 ## 다음 작업 — 이 순서
 
-### 1️⃣ 지금 — 사용자 실행 검증 (`feat/photo-polish` 브랜치)
+### 1️⃣ 지금 — 실사용 테스트 (https://on-spect-build-web.vercel.app/)
 
 위 체크리스트를 처음부터 끝까지 직접 눌러보고, 발견한 오류는 하나씩 `onspect-fix`로 좁게 고친다.
-문제 없으면 `main`으로 병합해달라고 요청하면 된다(리더가 병합 진행).
+`main`에 이미 병합·배포돼 있으니 고치는 즉시 같은 URL에 반영된다(수동 배포 조작 불필요 —
+`main`에 푸시만 하면 Vercel이 자동으로 다시 빌드한다).
 
 ### 2️⃣ 그 뒤 — Phase 5 오프라인 동기화·병합 → 모바일(React Native)
 
