@@ -165,13 +165,6 @@ export function ContextMenu({
       role="menu"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <button type="button" role="menuitem" className="menu__item" disabled title="준비 중">
-        복제
-      </button>
-      <button type="button" role="menuitem" className="menu__item" disabled title="준비 중">
-        마크 추가
-      </button>
-      <div className="menu__sep" role="separator" />
       <button
         type="button"
         role="menuitem"
