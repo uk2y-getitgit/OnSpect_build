@@ -17,7 +17,9 @@
  *   · 시트 밖 도면을 만지면 PEEK 로 내려간다 — 배선은 호출자(`CanvasRoute`)에 있다.
  *     이 컴포넌트는 캔버스를 모른다
  *
- * ⛔ 범위 밖: `SET_SAFE_INSETS` 배선은 **T2-6** 이다. 지금은 시트가 도면 하단을 덮을 수 있다.
+ * `SET_SAFE_INSETS` 배선(T2-6)은 이 파일이 아니라 호출자(`CanvasRoute`→`CanvasView`)에 있다 —
+ * 이 컴포넌트는 여전히 "자리"만 알고 캔버스를 모른다. `viewportHeight()`(아래)를 그쪽이
+ * 그대로 가져다 써서 실제 CSS 높이(`SHEET_SNAP_RATIO[snap] * vh`)와 어긋나지 않게 한다.
  */
 import {
   useCallback,
@@ -50,8 +52,12 @@ const SNAP_LABEL: Record<SheetSnap, string> = {
 /** 드래그로 볼 최소 이동 — 이보다 작으면 "탭" 으로 본다 */
 const DRAG_SLOP_PX = 6;
 
-function viewportHeight(): number {
-  // 주소창이 접히는 브라우저에서는 `visualViewport` 가 실제로 보이는 높이다
+/**
+ * `export` — T2-6 이 안전영역(하단 인셋) 픽셀을 계산할 때 **같은 값**을 써야
+ * `.sheet` 의 실제 CSS 높이(`SHEET_SNAP_RATIO[snap] * vh`)와 어긋나지 않는다.
+ * 주소창이 접히는 브라우저에서는 `visualViewport` 가 실제로 보이는 높이다.
+ */
+export function viewportHeight(): number {
   return window.visualViewport?.height ?? window.innerHeight;
 }
 

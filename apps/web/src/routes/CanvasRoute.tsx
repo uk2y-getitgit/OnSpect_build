@@ -70,7 +70,9 @@ import {
 } from '../store';
 import { navigate, replace } from '../router';
 import { TOUCH_HIT_PROFILE, useUiMode } from '../shell/useUiMode';
-import { InspectorPlacement, type SheetSnap } from '../shell/TabletSheet';
+import { InspectorPlacement, SHEET_SNAP_RATIO, viewportHeight, type SheetSnap } from '../shell/TabletSheet';
+import { FloorChips } from '../shell/FloorChips';
+import { Minimap } from '../shell/Minimap';
 import { Sidebar } from '../ui/Sidebar';
 import { Inspector } from '../ui/Inspector';
 import { SimilarDefectPicker, type SimilarDefectItem } from '../ui/SimilarDefectPicker';
@@ -125,6 +127,24 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   /** 세로 태블릿에서만 결함정보가 바텀시트로 간다 (D10 · 스펙 §5-1) */
   const sheetMode = shell === 'tablet-portrait';
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('PEEK');
+
+  /**
+   * T2-6 — 바텀시트가 실제로 잡아먹는 하단 px. `.sheet` 의 CSS 높이(`styles.css`
+   * `.sheet[data-snap=…] { height: N% }`)와 **같은 공식**(`SHEET_SNAP_RATIO * vh`)으로
+   * 계산해야 어긋나지 않는다 — `TabletSheet.tsx` 의 `viewportHeight()` 를 그대로 가져다 쓴다.
+   * 시트가 안 떠 있으면(결함 미선택 · PC · 태블릿 가로) 0 — 안전영역이 줄지 않는다.
+   */
+  const [vh, setVh] = useState(() => viewportHeight());
+  useEffect(() => {
+    if (!sheetMode) return;
+    const onResize = () => setVh(viewportHeight());
+    window.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
+    };
+  }, [sheetMode]);
 
   const [state, dispatch] = useReducer(
     appReducer,
@@ -551,6 +571,16 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     if (id !== null && sheetMode) setSheetSnap('HALF');
   }, [selected?.id, sheetMode]);
 
+  /**
+   * T2-6 — 시트가 실제로 뜬 동안만(§5-2 "선택 없이 시트가 열려 있지 않는다") 하단을 예약한다.
+   * `InspectorPlacement` 의 `visible` 판정(`selected !== null`)과 **같은 조건**이어야
+   * 시트가 안 보이는데 안전영역만 줄어드는 어긋남이 생기지 않는다.
+   */
+  const sheetBottomPx = useMemo(() => {
+    if (!sheetMode || selected === null) return 0;
+    return Math.round(SHEET_SNAP_RATIO[sheetSnap] * vh);
+  }, [sheetMode, selected, sheetSnap, vh]);
+
   // ── D18 유사결함 불러오기 ───────────────────────────────────────────────
   const [similarOpen, setSimilarOpen] = useState(false);
 
@@ -895,6 +925,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             hostElRef={canvasHostRef}
             drawingUrl={drawingUrl}
             onUploadDrawing={() => resolvedFloor && goUpload(resolvedFloor.id)}
+            reserveBottomPx={sheetBottomPx}
           >
             {editingMemo && (
               <MemoEditor
@@ -929,6 +960,29 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               onToggleAim={() => setAimOn((v) => !v)}
             />
           </div>
+
+          {/* T2-3 — 층 전환 보완. Sidebar 트리를 대체하지 않는다(같은 onSelectFloor) */}
+          {tablet && (
+            <FloorChips
+              floors={orderedFloors}
+              drawingByFloor={drawingByFloor}
+              defectCountByFloor={defectCountByFloor}
+              currentFloorId={resolvedFloor?.id ?? ''}
+              onSelect={selectFloor}
+            />
+          )}
+
+          {/* T2-4 — 미니맵. 이동은 CENTER_ON_NORM(코어, Phase5 트랙A) 그대로 재사용 */}
+          {tablet && (
+            <Minimap
+              drawingUrl={drawingUrl}
+              imageWidth={currentDrawing?.imageWidth ?? 0}
+              imageHeight={currentDrawing?.imageHeight ?? 0}
+              viewport={state.canvas.viewport}
+              canvas={state.canvas.canvas}
+              onCenterOn={(n) => send({ k: 'CENTER_ON_NORM', n })}
+            />
+          )}
 
           {/* D22 안내 띠 + `[여기]` — **호스트 밖**에 둔다(엄지가 핀치 접점으로 세어지지 않게).
               `data-floating` 을 붙이지 않는다 — 붙이면 조준을 켤 때마다 도면이 움찔한다 */}

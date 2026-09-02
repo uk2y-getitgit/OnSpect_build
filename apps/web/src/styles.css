@@ -4512,6 +4512,116 @@ select.input { cursor: pointer; }
   padding-top: 0;
 }
 
+/* ── T2-3 층 칩 스트립 ─────────────────────────────────────────────────
+ * 좌측 세로 팔레트(위 `.stage__palette`)와 겹치지 않는 상단 가로 띠.
+ * 태블릿(가로·세로 둘 다)에서만 렌더된다(JS 조건, `CanvasRoute` `{tablet && …}`) —
+ * PC 는 이 규칙이 아예 안 걸린다(DOM 에 없다). */
+.stage__floorchips {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  /* 스크롤은 세로 드래그(팬)와 겹치지 않는다 — 가로만 허용 */
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+.stage__floorchips::-webkit-scrollbar { display: none; }
+
+.floorchip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 44px; /* §5-4 터치 타깃 */
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.floorchip[data-active] {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: #fff;
+}
+
+.floorchip__nodrawing {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.floorchip[data-active] .floorchip__nodrawing {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.floorchip__count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.floorchip[data-active] .floorchip__count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── T2-4 미니맵 ────────────────────────────────────────────────────────
+ * `stage__help`(좌하단)와 대칭인 우하단. 바텀시트(z-index 30)가 뜨면 그 아래 깔린다 —
+ * 겹치는 동안은 안 보여도 된다(시트가 열려 있으면 사용자가 이미 그 결함에 집중 중이다). */
+.minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+}
+
+.minimap__box {
+  position: relative;
+  width: 130px;
+  max-height: 100px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.minimap__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.minimap__viewport {
+  position: absolute;
+  border: 2px solid var(--accent-ink);
+  background: rgba(58, 108, 255, 0.14);
+  pointer-events: none;
+}
+
 /* ── T2-7 결함정보 입력 폼 터치 프로파일 (2026-09-03, 스펙 §6-2 표) ─────────
  * `ui/defectForm/*`(ChoiceGrid·SegmentField·NumberField·SizeBlock·DefectInfoForm)의
  * 버튼·입력요소를 태블릿에서 44pt 터치 타깃으로 키우고, 프리셋(균열폭 등 단일값) 버튼은

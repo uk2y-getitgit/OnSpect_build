@@ -71,6 +71,12 @@ export type CanvasViewProps = {
   drawingUrl: string | null;
   /** 도면 없는 층의 빈 상태에서 P4 로 보낸다 (§2-10-c) */
   onUploadDrawing: () => void;
+  /**
+   * T2-6 — 태블릿 세로 바텀시트가 예약하는 하단 픽셀. `[data-floating]` 스캔으로는 안 잡힌다
+   * (시트는 `position:fixed` 라 `.stage` 밖에 형제로 뜬다 — DOM 조상 기준 스캔의 사각지대).
+   * `measureInsets` 가 계산한 `bottom` 과 **max** 로 합쳐 보낸다. 0(기본) 이면 지금까지와 동일.
+   */
+  reserveBottomPx?: number;
   /** 메모 편집기 등 캔버스 위에 얹히는 것 */
   children?: React.ReactNode;
 };
@@ -95,6 +101,7 @@ export function CanvasView({
   hostElRef,
   drawingUrl,
   onUploadDrawing,
+  reserveBottomPx = 0,
   children,
 }: CanvasViewProps) {
   const innerHostRef = useRef<HTMLDivElement | null>(null);
@@ -115,6 +122,11 @@ export function CanvasView({
   const [image, setImage] = useState<LoadedDrawing | null>(null);
   const [load, setLoad] = useState<LoadState>({ phase: 'idle' });
   const [reloadTick, setReloadTick] = useState(0);
+  // T2-6 — 최신 예약값을 ref 로 들고 있는다. `measureInsets`(아래 effect)가 재생성되지
+  // 않고도 항상 최신 값을 읽는다. `writesRef`(CanvasRoute)와 같은 관용구
+  const reserveBottomRef = useRef(0);
+  reserveBottomRef.current = Math.max(0, Math.round(reserveBottomPx));
+  const measureInsetsRef = useRef<() => void>(() => {});
 
   const drawing = state.drawing;
 
@@ -186,8 +198,13 @@ export function CanvasView({
         const [side, value] = cands[0]!;
         insets[side] = Math.max(insets[side], Math.round(value));
       }
+      // T2-6 — 바텀시트는 `.stage` 밖(형제)에 `position:fixed` 로 뜨므로 위 스캔에
+      // 안 잡힌다. 호출자가 실측해 넘긴 값을 **max** 로 얹는다 — 다른 떠 있는 UI 가
+      // 이미 그 이상을 잡아먹고 있으면 그 값을 존중한다
+      insets.bottom = Math.max(insets.bottom, reserveBottomRef.current);
       send({ k: 'SET_SAFE_INSETS', insets });
     };
+    measureInsetsRef.current = measureInsets;
 
     const ro = new ResizeObserver((entries) => {
       const box = entries.find((e) => e.target === el)?.contentRect;
@@ -209,6 +226,12 @@ export function CanvasView({
       mo.disconnect();
     };
   }, [send]);
+
+  // T2-6 — 예약값이 바뀔 때마다(시트 3단 전환 등) 다시 계산해 보낸다.
+  // 위 effect 를 통째로 재구성하지 않고 같은 `measureInsets` 를 다시 부르기만 한다
+  useEffect(() => {
+    measureInsetsRef.current();
+  }, [reserveBottomPx]);
 
   // ── 렌더 ─────────────────────────────────────────────────────────────────
   const renderInput = useCallback((): RenderInput | null => {
