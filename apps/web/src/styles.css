@@ -4511,3 +4511,62 @@ select.input { cursor: pointer; }
   border-left: none;
   padding-top: 0;
 }
+
+/* ── T2-7 결함정보 입력 폼 터치 프로파일 (2026-09-03, 스펙 §6-2 표) ─────────
+ * `ui/defectForm/*`(ChoiceGrid·SegmentField·NumberField·SizeBlock·DefectInfoForm)의
+ * 버튼·입력요소를 태블릿에서 44pt 터치 타깃으로 키우고, 프리셋(균열폭 등 단일값) 버튼은
+ * 가로 3열로 고정한다. **CSS 전용** — 컴포넌트는 손대지 않는다.
+ *
+ * 전부 `.idf`(DefectInfoForm 루트, `DefectInfoForm.tsx` 83행) 로 스코프한다 —
+ * `.segmented__item`·`.btn--small`·`.idf-choice` 같은 클래스는 설정 화면 등 다른
+ * 곳에서도 재사용되므로, `.idf` 없이 걸면 그쪽까지 커진다. `.app[data-shell^='tablet']`
+ * 가 안 찍히면(=PC) 이 절 전체가 매칭되지 않아 PC 레이아웃은 완전히 불변이다.
+ *
+ * `--btn-h` 를 `.idf` 안에서만 44px 로 재선언해 `.btn`·`.iconbtn`·`.input` 기본 규칙이
+ * 그대로 따라 커진다(U-4·T2-1 과 같은 변수 재선언 수법). `--small`/`--tiny`/`--num` 류
+ * 변형은 고정 높이를 하드코딩해 변수를 안 타므로 아래에서 개별로 덮어쓴다.
+ */
+.app[data-shell^='tablet'] .idf {
+  --btn-h: 44px;
+}
+
+/* ChoiceGrid `변경/선택`, `idf-rect-toggle`(가로×세로로 계산), ChoiceGrid `더보기 N` */
+.app[data-shell^='tablet'] .idf .btn--small,
+.app[data-shell^='tablet'] .idf .btn--tiny {
+  height: 44px;
+  min-height: 44px;
+}
+
+/* NumberField 스테퍼 −/+ — 아이콘 버튼이라 폭도 함께 정사각형으로 키운다 */
+.app[data-shell^='tablet'] .idf .iconbtn--small {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+}
+
+/* 위치보조 입력 · 스테퍼 숫자입력(`input--small`) */
+.app[data-shell^='tablet'] .idf .input--small {
+  height: 44px;
+}
+
+/* 조사구분·구조유형·구조체여부·진행여부·누수여부·규모모드(WL/AREA) 세그먼트 */
+.app[data-shell^='tablet'] .idf .segmented__item {
+  height: 44px;
+}
+
+/* ChoiceGrid 옵션 버튼(부재·결함유형·발생원인·보수방안) */
+.app[data-shell^='tablet'] .idf .idf-choice {
+  min-height: 44px;
+}
+
+/* NumberField 프리셋 버튼(폭·길이·개소·면적·가로·세로 — 균열폭 등 단일값) */
+.app[data-shell^='tablet'] .idf .idf-preset {
+  height: 44px;
+}
+
+/* 프리셋 그리드는 auto-fill 대신 **가로 3열 고정** — 폭에 따라 열 수가 들쭉날쭉하면
+ * 탭 위치가 매번 바뀌어 손이 값을 외워서 못 짚는다(§6-2 T2-7). `.idf-preset--over`
+ * (`0.5 초과 → 직접입력`)의 `grid-column: span 2` 는 3열 안에서도 그대로 유효하다. */
+.app[data-shell^='tablet'] .idf .idf-presetgrid {
+  grid-template-columns: repeat(3, 1fr);
+}
