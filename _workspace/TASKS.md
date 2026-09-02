@@ -94,4 +94,14 @@
 | P5-2B | T1-2 — `Defect` 병합필드(updatedAt·deviceId·createdBy) 신설, D23 반영 | builder | D23 | ✅ `52_builder_log_Phase5_DefectMergeFields.md` · 커밋 `64fc3fe`·`28548ca` · 타입/테스트686(canvas379+project307)/빌드 통과 · 가정 W1~W6 |
 | P5-2B-R | T1-2 검수 (canvas-core 변경 — 고위험 영역) | code-reviewer | P5-2B | ✅ `54_code-reviewer_findings_Phase5_DefectMergeFields.md` — 통과, 경미1(writeRenormalize now고정) → 리더가 직접 수정 |
 | P5-2C | T2-2 — 정밀표기(조준 크로스헤어) 구현, D22 반영 | builder | D22 | ✅ `53_builder_log_Phase5_AimCrosshair.md` · 커밋 `d80477a`·`b541cc8` · 타입/테스트686/빌드 통과 · canvas-core 무변경 · 가정 X1~X6 |
-| P5-2C-R | T2-2 검수 | code-reviewer | P5-2C | 🟦 |
+| P5-2C-R | T2-2 검수 | code-reviewer | P5-2C | ✅ `55_code-reviewer_findings_Phase5_AimCrosshair.md` — 통과, 지적사항 없음 |
+| P5-Z1 | 중간 통합 판정 (P1~P6, T1-2, T2-2) | 리더 | P5-2B-R, P5-2C-R | ✅ 타입0오류·테스트686(canvas379+project307)통과·빌드통과(sw.js 산출 확인) |
+
+## 다음 배치 (착수 대기)
+
+| # | 작업 | 의존 | 비고 |
+|---|---|---|---|
+| P5-3 | T2-1·T2-3~T2-7 — 태블릿 셸(방향감지·좌측툴바)·층칩·미니맵·뷰포트영속·안전영역·폼터치프로파일 | T2-2 | 화면이 계속 나오는 트랙, 다음 착수 후보 1순위 |
+| P5-4 | T1-3 — 삭제 전파(meta KV 로그, D25) | D25 | 서버 없이도 착수 가능 |
+| P5-5 | T1-1 — Supabase 프로젝트·스키마·RLS | **사용자의 Supabase 계정 필요** | 계정 없인 착수 불가 — 안내 필요 |
+| P5-6 | T1-4~T1-10 — 인증API·동기화API·로그인화면·팀관리화면 | P5-5, Q59 | 서버 골격 이후, Q59 답변도 필요 |
