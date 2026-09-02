@@ -4380,3 +4380,134 @@ select.input { cursor: pointer; }
   outline: 3px solid var(--accent-ink);
   outline-offset: 3px;
 }
+
+/* ── T2-1 태블릿 셸 (2026-09-02) ───────────────────────────────────────────
+ * 방향에 따라 결함정보 패널의 **자리**가 바뀐다 (D10 · 스펙 §5-1).
+ *   가로 = 우측 사이드시트 400pt (PC 와 같은 구조 — 열 너비만 넓힌다)
+ *   세로 = 바텀시트 3단 (`shell/TabletSheet.tsx`)
+ * 툴 팔레트는 두 방향 모두 **왼쪽**으로 간다 (§5-5 — 왼손 엄지 자리).
+ *
+ * 판정은 `shell/useUiMode.ts` 가 한다. 규칙은 위 U-4 절과 **같다** —
+ * 실기기는 `(hover:none) and (pointer:coarse)`, 강제 전환은 `<html data-ui-mode>`.
+ * 그 결과가 `.app[data-shell]` 로 찍힌다.
+ *
+ * ⚠️ **`data-shell='pc'` 에는 규칙이 하나도 없다.** 아래 전부가 `tablet-*` 로만 걸린다 —
+ *    PC 화면은 이 절이 없는 것과 완전히 같다. 여기 규칙을 늘릴 때도 그 선을 넘지 마라.
+ *    (JS 가 실패해 속성이 안 찍혀도 마찬가지다 — 지금까지의 PC 레이아웃 그대로 뜬다)
+ */
+
+/* 좌측 세로 툴바 — 세로 중앙이 손이 가장 편한 자리다. 팔레트가 길어져도 잘리지 않게 스크롤 */
+.app[data-shell^='tablet'] .stage__palette {
+  left: 12px;
+  right: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+}
+
+/* 44pt 터치 타깃 (§5-4). PC 는 28~32px 그대로 둔다 */
+.app[data-shell^='tablet'] .palette {
+  gap: 4px;
+  padding: 6px;
+}
+
+.app[data-shell^='tablet'] .palette__btn {
+  width: 60px;
+  min-height: 48px;
+  padding: 8px 2px 6px;
+}
+
+.app[data-shell^='tablet'] .palette__subbtn {
+  height: 40px;
+}
+
+/* ── 가로 = 우측 사이드시트 400pt (D10) ───────────────────────────────────
+ * 구조는 PC 와 똑같다. `--inspector-w` 만 이 화면에서 다시 정한다 —
+ * `:root` 의 폭 미디어쿼리(1200/980px)보다 이쪽이 가까워서 이긴다. */
+.app[data-shell='tablet-landscape'] {
+  --inspector-w: 400px;
+}
+
+/* ── 세로 = 바텀시트 3단 ──────────────────────────────────────────────────
+ * 시트는 `position: fixed` 라 그리드에서 빠진다 → 우측 열을 없애 준다.
+ * 안 그러면 캔버스 옆에 `--inspector-w` 만큼 빈 칸이 남는다. */
+.app[data-shell='tablet-portrait'] .body {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+
+.app[data-shell='tablet-portrait'][data-sidebar='closed'] .body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 도면·떠 있는 UI(≤6) 위, 다이얼로그·토스트(60~90) 아래. 시트는 모달이 아니다 */
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -6px 24px rgba(31, 39, 52, 0.16);
+  transition: height var(--t-panel);
+  /* 시트 안쪽 스크롤이 끝에 닿아도 뒤 도면이 따라 움직이지 않게 */
+  overscroll-behavior: contain;
+}
+
+/* 손잡이를 끄는 동안에는 전환을 끈다 — 안 그러면 높이가 손가락보다 늦게 따라온다 */
+.sheet[data-dragging] {
+  transition: none;
+}
+
+/* 3단 높이 (§5-2). 드래그 중에는 인라인 style 의 px 높이가 이긴다 */
+.sheet[data-snap='PEEK'] { height: 16%; }
+.sheet[data-snap='HALF'] { height: 55%; }
+.sheet[data-snap='FULL'] { height: 92%; }
+
+.sheet__grab {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 손잡이 자체가 터치 타깃이다 — 44pt 를 채운다 */
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: grab;
+  /* 세로 드래그를 브라우저 스크롤·당겨서새로고침에 뺏기지 않는다 */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sheet__grabline {
+  display: block;
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.sheet__grab:active .sheet__grabline {
+  background: var(--text-dim);
+}
+
+.sheet__grab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+  border-radius: var(--radius);
+}
+
+/* 시트에 담기는 것은 **PC 와 같은 `.inspector`** 다. 자리에 맞게 테두리만 지운다 */
+.sheet .inspector {
+  flex: 1;
+  min-height: 0;
+  border-left: none;
+  padding-top: 0;
+}

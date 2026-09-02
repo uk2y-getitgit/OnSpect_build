@@ -121,6 +121,17 @@
 | UZ | UI정리 4건 통합 판정 | 리더 | U1-B, U2-B-R, U3-B-R, U4 | ✅ 타입0오류·테스트691(canvas383+project308)통과·빌드통과 |
 
 ## 전체 완료 — UI 정리 4건(편집버튼·팝업·범례·PC태블릿구분배포) 전부 반영됨
+
+---
+
+# 태블릿 1차 화면 나머지 (T2-1·T2-3~T2-7)
+
+범위: `_workspace/50_plan-reviewer_spec_Phase5_TeamSync.md` §6-2
+
+| # | 작업 | 담당 | 의존 | 상태 |
+|---|---|---|---|---|
+| T2-1-B | 태블릿 셸 — 방향감지·터치프로파일 주입·좌측 세로 툴바 | builder | - | ✅ `61_builder_log_Phase5_TabletShell.md` · 타입/테스트700(canvas392+project308)/빌드 통과 (커밋 해시는 로그 참고) |
+| T2-5-B | 마지막 뷰포트 영속(`lastView:{projectId}`) | builder | - | 🟦 (이번 배치 범위 밖 — 다른 배치 진행 중 코드가 작업트리에 남아 있음, 미커밋) |
 | U3-B-R | U-3 검수 (canvas-core 변경 + DB호환 주장) | code-reviewer | U3-B | ✅ `60_code-reviewer_findings_UI3_Legend.md` — 통과, 지적사항 없음 |
 | U3-B | U-3 결함유형범례 제거 + 상태범례 문구 축약(신규/결함/보수완료) | builder | - | ✅ `58_builder_log_UI3_Legend.md` · 커밋 `cea85b1` · 타입/테스트676(canvas368+project308)/빌드 통과 · DB_VERSION 1 유지 · 확인요청2건(라벨 확정, 다이얼로그 체크박스 문구 통일 여부) |
 | U4 | PC/태블릿 구분 배포 — 리더 직접 처리 | 리더 | - | ⬜ |

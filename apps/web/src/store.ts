@@ -35,6 +35,7 @@ import {
   type DrawingRef,
   type Effect,
   type History,
+  type HitProfile,
   type InputEvent,
   type Memo,
   type ReduceContext,
@@ -107,6 +108,16 @@ export type AppState = {
    * 우측 Inspector 패널은 이 값과 무관하게 계속 뜬다 — 사이드라 도면을 가리지 않는다.
    */
   toolbarFor: string | null;
+  /**
+   * T2-1 — 손가락 히트 허용치 (트랙 A T5 · `ReduceContext.hitProfile`).
+   *
+   * `null` = 주지 않는다 → 코어가 `DEFAULT_HIT_PROFILE`(마우스 값)을 쓴다.
+   * **PC 는 영원히 `null` 이라 히트 판정이 한 픽셀도 바뀌지 않는다.**
+   *
+   * 액션이 아니라 상태로 둔 이유: `INPUT` 을 보내는 곳이 늘어나도 한 곳만 보면 된다.
+   * 어느 프로파일이 터치인지 아는 것은 어댑터뿐이다(경계 규칙 1 — 코어는 `navigator` 를 모른다).
+   */
+  hitProfile: HitProfile | null;
   idSeed: number;
   toastSeed: number;
 };
@@ -141,6 +152,8 @@ export type Action =
    * 다른 전이(REPAIRED 관련)는 여기서 받지 않는다 — 리듀서가 조용히 무시한다.
    */
   | { t: 'SET_DEFECT_STATUS'; defectId: string; to: DefectStatus; toast?: string }
+  /** T2-1 — 태블릿 모드 진입/이탈. `null` 이면 마우스 기본값으로 돌아간다 */
+  | { t: 'SET_HIT_PROFILE'; profile: HitProfile | null }
   | { t: 'FLUSHED'; seq: number }
   | { t: 'UNDO' }
   | { t: 'REDO' }
@@ -172,6 +185,7 @@ export function initialAppState(init: {
     editingMemoId: null,
     defaultAttrs: {},
     toolbarFor: null,
+    hitProfile: null,
     idSeed: 1,
     toastSeed: 1,
   };
@@ -237,6 +251,10 @@ function reduceApp(state: AppState, action: Action): AppState {
 
     case 'EDIT_MEMO':
       return { ...state, editingMemoId: action.memoId };
+
+    case 'SET_HIT_PROFILE':
+      // 같은 값이면 상태를 갈지 않는다 — 방향 전환마다 캔버스가 통째로 다시 그려지지 않게
+      return state.hitProfile === action.profile ? state : { ...state, hitProfile: action.profile };
 
     case 'FLUSHED':
       // 흘려보낸 뒤에도 새 변경이 들어왔으면 그대로 둔다
@@ -396,6 +414,8 @@ function runInput(state: AppState, ev: InputEvent): AppState {
     floorId: state.floorId,
     projectId: state.projectId,
     defaultAttrs: state.defaultAttrs,
+    // T2-1 — 태블릿에서만 채워진다. `null` 이면 키 자체를 넘기지 않아 코어가 마우스 값을 쓴다
+    ...(state.hitProfile ? { hitProfile: state.hitProfile } : {}),
   };
 
   const r = reduce(state.canvas, ev, ctx);

@@ -68,6 +68,8 @@ import {
   memosOfDrawing,
 } from '../store';
 import { navigate, replace } from '../router';
+import { TOUCH_HIT_PROFILE, useUiMode } from '../shell/useUiMode';
+import { InspectorPlacement, type SheetSnap } from '../shell/TabletSheet';
 import { Sidebar } from '../ui/Sidebar';
 import { Inspector } from '../ui/Inspector';
 import { SimilarDefectPicker, type SimilarDefectItem } from '../ui/SimilarDefectPicker';
@@ -114,6 +116,15 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [tbPreview, setTbPreview] = useState<ProjectTitleBlock | null>(null);
   const [lgPreview, setLgPreview] = useState<ProjectLegend | null>(null);
 
+  /**
+   * T2-1 태블릿 셸 — 이 화면이 손가락용인가, 세로인가 (`shell/useUiMode.ts`).
+   * PC 면 `shell === 'pc'` 하나뿐이고 아래 분기가 전부 꺼진다 = **PC 동작 변화 0.**
+   */
+  const { shell, tablet } = useUiMode();
+  /** 세로 태블릿에서만 결함정보가 바텀시트로 간다 (D10 · 스펙 §5-1) */
+  const sheetMode = shell === 'tablet-portrait';
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('PEEK');
+
   const [state, dispatch] = useReducer(
     appReducer,
     { projectId, floorId: floorId ?? '', defects: [], memos: [] },
@@ -121,6 +132,16 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   );
   const inspectorRef = useRef<HTMLDivElement | null>(null);
   const send = useCallback((ev: InputEvent) => dispatch({ t: 'INPUT', ev }), []);
+
+  /**
+   * T2-1 — 손가락 화면이면 넓은 히트 허용치를 **스토어에 넣는다.**
+   * 코어(`reduce`)가 이 값을 타는 자리는 `store.ts` `runInput` 하나뿐이다.
+   * PC 면 `null` 을 넣어 코어 기본값(마우스)으로 되돌린다 = 동작 불변.
+   */
+  useEffect(() => {
+    dispatch({ t: 'SET_HIT_PROFILE', profile: tablet ? TOUCH_HIT_PROFILE : null });
+  }, [tablet]);
+
 
   /**
    * D22(Q55 안 A) 조준 모드 — 켜져 있으면 도면 위 손가락은 팬/줌만 하고,
@@ -373,8 +394,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       makeId: () => '',
       floorId: state.floorId,
       projectId,
+      // T2-1 — 손가락 화면에서만 넓은 히트 허용치를 넘긴다(트랙 A T5).
+      // **PC 는 넘기지 않는다** → 코어가 `DEFAULT_HIT_PROFILE`(마우스 값)을 쓴다 = 동작 불변.
+      ...(tablet ? { hitProfile: TOUCH_HIT_PROFILE } : {}),
     }),
-    [defects, memos, state.floorId, projectId],
+    [defects, memos, state.floorId, projectId, tablet],
   );
 
   const memoScreens = useMemo(
@@ -488,6 +512,36 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     () => defects.find((d) => d.id === state.canvas.selection.defectId) ?? null,
     [defects, state.canvas.selection.defectId],
   );
+
+  // ── T2-1 태블릿 세로 바텀시트 ───────────────────────────────────────────
+  /**
+   * 시트 밖 도면을 만지면 PEEK 로 내려간다 (§5-2). **닫지는 않는다** —
+   * 결함이 선택돼 있는 한 요약 한 줄은 계속 보인다.
+   *
+   * `passive` 로 듣기만 한다. 캔버스 제스처(팬 · 핀치 · 표기)는 그대로 코어로 간다.
+   */
+  useEffect(() => {
+    if (!sheetMode) return;
+    const el = canvasHostRef.current;
+    if (!el) return;
+    const onDown = () => setSheetSnap('PEEK');
+    el.addEventListener('pointerdown', onDown, { passive: true });
+    return () => el.removeEventListener('pointerdown', onDown);
+  }, [sheetMode]);
+
+  /**
+   * 결함을 새로 고르거나 방금 찍었으면 HALF 로 올린다 — 현장 입력의 90% 가 이 단에서 끝난다(§5-2).
+   *
+   * 위 캔버스 탭(PEEK)과 **같은 이벤트**에서 함께 일어난다. 순서상 이쪽이 나중이라,
+   * 선택이 바뀐 탭은 HALF 로, 선택이 안 바뀐 조작(팬 · 핀치)은 PEEK 로 남는다.
+   */
+  const sheetDefectRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = selected?.id ?? null;
+    if (id === sheetDefectRef.current) return;
+    sheetDefectRef.current = id;
+    if (id !== null && sheetMode) setSheetSnap('HALF');
+  }, [selected?.id, sheetMode]);
 
   // ── D18 유사결함 불러오기 ───────────────────────────────────────────────
   const [similarOpen, setSimilarOpen] = useState(false);
@@ -619,7 +673,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const displayName = project ? projectDisplayName(project) : '';
 
   return (
-    <div className="app" data-sidebar={sidebarOpen ? 'open' : 'closed'}>
+    // `data-shell` — T2-1. `pc` 에는 어떤 CSS 규칙도 걸려 있지 않다(styles.css "T2-1" 절)
+    <div className="app" data-sidebar={sidebarOpen ? 'open' : 'closed'} data-shell={shell}>
       <header className="topbar">
         <div className="topbar__left">
           <button
@@ -924,70 +979,79 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           </div>
         </main>
 
-        <Inspector
-          ref={inspectorRef}
-          defect={selected}
-          settings={settings}
-          saving={state.writes.seq > 0}
-          photoSlot={
-            selected ? (
-              <PhotoSection
-                defectId={selected.id}
-                photos={selectedPhotos}
-                urls={photoOps.urls}
-                ensureUrls={photoOps.ensureUrls}
-                // 전회차 표기는 이 화면에서 값을 고칠 수 없다 — 사진 조작도 마찬가지다
-                disabled={isLocked(selected)}
-                // G-8 (T-7) — 예외는 **사진 추가 하나뿐**이다. 전회차(PREV_PENDING)에는 열어 준다.
-                // 상세기획 §Phase 2-D 의 "촬영하는 순간 CURRENT" 전이는 이 문이 있어야 발동한다
-                addDisabled={!canAddPhotos(selected)}
-                busy={photoOps.busy}
-                rejected={photoOps.rejected}
-                onClearRejected={photoOps.clearRejected}
-                onAdd={(files) => void addPhotosTo(selected.id, files)}
-                onSetPrimary={(photoId) => photoOps.setPrimary(selected.id, photoId)}
-                onRotate={photoOps.rotate}
-                onReplace={(photoId, file) => void photoOps.replaceFile(photoId, file)}
-                onRemove={photoOps.remove}
-                onReorder={(ids) => photoOps.reorder(selected.id, ids)}
-                onCaptionChange={photoOps.setCaption}
-                onCropChange={photoOps.setCrop}
-                onAnnotationsChange={photoOps.setAnnotations}
-              />
-            ) : null
-          }
-          onAttrsChange={(attrs) => {
-            if (!selected) return;
-            dispatch({ t: 'SET_DEFECT_ATTRS', defectId: selected.id, attrs });
-            // 구조유형을 바꾸면 그 목록에 없는 부재가 조용히 사라진다(§3-6).
-            // 순수 함수(apply.ts)는 문구를 모른다 — 알리는 것은 호출자 몫이다
-            if (
-              attrs.structureType !== selected.structureType &&
-              selected.memberId !== null &&
-              attrs.memberId === null
-            ) {
-              toast(
-                `이 구조유형에는 '${selected.memberName ?? '선택한 부재'}' 가 없어 선택을 해제했습니다`,
-                { kind: 'warn' },
-              );
+        {/* T2-1 — **같은 `<Inspector>` 다.** 태블릿 세로에서만 바텀시트에 담기고,
+            PC · 태블릿 가로에서는 지금까지처럼 우측 열에 그대로 선다(DOM 변화 0) */}
+        <InspectorPlacement
+          sheet={sheetMode}
+          visible={selected !== null}
+          snap={sheetSnap}
+          onSnapChange={setSheetSnap}
+        >
+          <Inspector
+            ref={inspectorRef}
+            defect={selected}
+            settings={settings}
+            saving={state.writes.seq > 0}
+            photoSlot={
+              selected ? (
+                <PhotoSection
+                  defectId={selected.id}
+                  photos={selectedPhotos}
+                  urls={photoOps.urls}
+                  ensureUrls={photoOps.ensureUrls}
+                  // 전회차 표기는 이 화면에서 값을 고칠 수 없다 — 사진 조작도 마찬가지다
+                  disabled={isLocked(selected)}
+                  // G-8 (T-7) — 예외는 **사진 추가 하나뿐**이다. 전회차(PREV_PENDING)에는 열어 준다.
+                  // 상세기획 §Phase 2-D 의 "촬영하는 순간 CURRENT" 전이는 이 문이 있어야 발동한다
+                  addDisabled={!canAddPhotos(selected)}
+                  busy={photoOps.busy}
+                  rejected={photoOps.rejected}
+                  onClearRejected={photoOps.clearRejected}
+                  onAdd={(files) => void addPhotosTo(selected.id, files)}
+                  onSetPrimary={(photoId) => photoOps.setPrimary(selected.id, photoId)}
+                  onRotate={photoOps.rotate}
+                  onReplace={(photoId, file) => void photoOps.replaceFile(photoId, file)}
+                  onRemove={photoOps.remove}
+                  onReorder={(ids) => photoOps.reorder(selected.id, ids)}
+                  onCaptionChange={photoOps.setCaption}
+                  onCropChange={photoOps.setCrop}
+                  onAnnotationsChange={photoOps.setAnnotations}
+                />
+              ) : null
             }
-          }}
-          onLoadSimilar={() => setSimilarOpen(true)}
-          similarCount={similarItems.length}
-          onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
-          onDelete={() => send({ k: 'DELETE_SELECTION' })}
-          onRevertToPrev={
-            selected
-              ? () =>
-                  dispatch({
-                    t: 'SET_DEFECT_STATUS',
-                    defectId: selected.id,
-                    to: 'PREV_PENDING',
-                    toast: '전회차 미보수로 되돌렸습니다',
-                  })
-              : undefined
-          }
-        />
+            onAttrsChange={(attrs) => {
+              if (!selected) return;
+              dispatch({ t: 'SET_DEFECT_ATTRS', defectId: selected.id, attrs });
+              // 구조유형을 바꾸면 그 목록에 없는 부재가 조용히 사라진다(§3-6).
+              // 순수 함수(apply.ts)는 문구를 모른다 — 알리는 것은 호출자 몫이다
+              if (
+                attrs.structureType !== selected.structureType &&
+                selected.memberId !== null &&
+                attrs.memberId === null
+              ) {
+                toast(
+                  `이 구조유형에는 '${selected.memberName ?? '선택한 부재'}' 가 없어 선택을 해제했습니다`,
+                  { kind: 'warn' },
+                );
+              }
+            }}
+            onLoadSimilar={() => setSimilarOpen(true)}
+            similarCount={similarItems.length}
+            onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
+            onDelete={() => send({ k: 'DELETE_SELECTION' })}
+            onRevertToPrev={
+              selected
+                ? () =>
+                    dispatch({
+                      t: 'SET_DEFECT_STATUS',
+                      defectId: selected.id,
+                      to: 'PREV_PENDING',
+                      toast: '전회차 미보수로 되돌렸습니다',
+                    })
+                : undefined
+            }
+          />
+        </InspectorPlacement>
       </div>
 
       {state.confirm && (
