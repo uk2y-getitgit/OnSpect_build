@@ -21,6 +21,23 @@
 (viewCenterOf/restoreViewEvents) · `apps/web/src/data/idb/lastView.ts` · `apps/web/src/data/useLastView.ts` ·
 `packages/canvas-core/test/lastView.test.ts` · `CanvasRoute.tsx` 안의 `useLastView` import·호출 3줄.
 
+### ⚠️ 실제로 다른 배치가 지금 이 순간 병행 중이었다 (리더가 알아야 할 사실)
+
+"다른 배치가 병행 중일 수 있음"이 추측이 아니라 **사실로 확인됐다.** 커밋 준비 중 공유
+인덱스(`git status`)가 두 번 연속으로 서로 다른 내용을 보였다 — T2-5 쪽도 같은 시점에
+`CanvasRoute.tsx`를 hunk 단위로 골라 커밋하려고 `git add`/`git reset`을 반복하고 있었다.
+
+그 결과 최초 커밋(`443a3c0`)에 **내가 만들지 않은 파일** `_workspace/62_builder_log_Phase5_LastView.md`
+(T2-5 쪽 로그)가 공유 인덱스를 통해 함께 올라갔다. 발견 즉시 `git commit-tree`로 그 파일 하나만
+뺀 새 커밋(`6c06141`)을 만들고 `git reset --soft`로 `main`을 그 커밋으로 옮겼다 — **현재
+작업트리·인덱스(T2-5 쪽이 스테이징해 둔 내용)는 전혀 건드리지 않았다.** `git show --stat HEAD`로
+최종 커밋에 의도한 7개 파일만 있는 것을 재확인했다.
+
+**리더 확인 필요:** T2-5 배치가 같은 시점에 `main`에 직접 커밋을 시도하고 있었다면, 이번 amend
+(`443a3c0`→`6c06141`)로 그쪽 커밋 시도와 순서가 꼬였을 수 있다. T2-5 배치의 최종 결과물이
+정상적으로 커밋됐는지는 그쪽 로그(`62_builder_log_Phase5_LastView.md`, 아직 미확인)와 `git log`를
+따로 확인해 달라.
+
 ## 완료
 
 | 작업 | 파일 | 상태 |
