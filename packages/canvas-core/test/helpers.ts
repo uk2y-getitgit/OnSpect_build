@@ -1,5 +1,6 @@
 import type { Defect, GlobalStyle, Mark, NPoint } from '../src/types.js';
 import { EMPTY_DEFECT_ATTRS } from '../src/defectAttrs.js';
+import { newDefectBase } from '../src/defectBase.js';
 import { DEFAULT_GLOBAL_STYLE } from '../src/style.js';
 
 export const GS: GlobalStyle = DEFAULT_GLOBAL_STYLE;
@@ -30,6 +31,8 @@ export function defect(
     style: null,
     // 속성 초기값은 EMPTY_DEFECT_ATTRS 하나뿐이다. 테스트가 보는 값만 아래에서 덮는다
     ...EMPTY_DEFECT_ATTRS,
+    // 병합 재료(Phase 5 · D23). 헬퍼는 고정값을 쓴다 — 스탬프를 보는 테스트는 직접 덮는다
+    ...newDefectBase(1_700_000_000_000, 'dev-test'),
     memberName: '슬래브',
     defectTypeName: '균열',
     widthMm: 0.2,

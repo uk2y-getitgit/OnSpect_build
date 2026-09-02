@@ -8,7 +8,13 @@
  * `RecordBase` 의 `deviceId`·`updatedAt` 은 **여기서 채운다.** 화면은 신경 쓰지 않는다.
  */
 import type { Defect, Memo } from '@onspect/canvas-core';
-import { normalizeArrowMarks, normalizeDefectAttrs } from '@onspect/canvas-core';
+import {
+  newDefectBase,
+  normalizeArrowMarks,
+  normalizeDefectAttrs,
+  normalizeDefectBase,
+  stampDefect,
+} from '@onspect/canvas-core';
 import type {
   Building,
   CopyStructureResult,
@@ -96,6 +102,14 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
 
   private stamp<T extends { updatedAt: number; deviceId: string }>(rec: T, now = Date.now()): T {
     return { ...rec, updatedAt: now, deviceId: this.deviceId };
+  }
+
+  /**
+   * 결함판 `stamp()`. 결함은 `RecordBase` 가 아니라 `DefectBase`(`updatedAt: number | null`)
+   * 를 갖기 때문에 위 제네릭에 안 들어간다 — 규칙의 정본은 `canvas-core/defectBase.ts` 다(D23).
+   */
+  private stampDefect(d: Defect, now = Date.now()): Defect {
+    return stampDefect(d, now, this.deviceId);
   }
 
   // ── 용역 ────────────────────────────────────────────────────────────────
@@ -225,7 +239,7 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
       projectId,
     );
     // S1 에 저장된 레코드에는 `sketch` 가 없다. 읽는 즉시 채워 화면 코드가 분기하지 않게 한다
-    const defects = rawDefects.map(normalizeDefect);
+    const defects = rawDefects.map((d) => normalizeDefect(d, this.deviceId));
     // 사진은 **결함별로 묶어** 정규화한다 — 대표 정확히 1장(불변식 #8 · K16)
     const photos: Photo[] = [];
     for (const group of groupPhotosByDefect(rawPhotos).values()) photos.push(...group);
@@ -374,7 +388,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
       // 2. 그 층의 결함을 새 도면으로 재연결한다. **좌표는 손대지 않는다**
       const defects = await getAllByIndex<Defect>(xs, 'by_floor', d.floorId);
       for (const x of defects) {
-        if (x.drawingId !== d.id) xs.put({ ...x, drawingId: d.id });
+        // 결함 레코드를 실제로 고치는 쓰기다 → 스탬프를 갱신한다 (Phase 5 · D23)
+        if (x.drawingId !== d.id) xs.put(this.stampDefect({ ...x, drawingId: d.id }, now));
       }
 
       // 3. Blob 3종 + 도면 레코드를 같은 트랜잭션에서 커밋한다
@@ -415,12 +430,20 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     return getAllByIndex<Defect>(tx.objectStore(STORE.defects), 'by_project', projectId);
   }
 
-  /** **레코드 단위 upsert.** 결함 500건을 매번 통째로 직렬화하지 않는다 (§2-9-e) */
+  /**
+   * **레코드 단위 upsert.** 결함 500건을 매번 통째로 직렬화하지 않는다 (§2-9-e)
+   *
+   * ⭐ Phase 5(D23) — 결함 쓰기의 **주 경로**다. 여기서 `stamp()` 로 `updatedAt`·`deviceId` 를
+   * 찍는다. 화면·캔버스 코어는 스탬프를 신경 쓰지 않는다(`Photo`·`ItemSettings` 와 같은 규칙).
+   * 호출자는 **바뀐 결함만** 넘긴다(`CanvasRoute` 의 `upsert` 목록) — 안 바뀐 결함까지 넘기면
+   * 옛 결함의 `updatedAt: null`("미동기화") 표식이 조용히 지워진다.
+   */
   async upsertDefects(items: readonly Defect[]): Promise<void> {
     if (items.length === 0) return;
     const tx = this.db.transaction(STORE.defects, 'readwrite');
     const store = tx.objectStore(STORE.defects);
-    for (const d of items) store.put(d);
+    const now = Date.now();
+    for (const d of items) store.put(this.stampDefect(d, now));
     await txDone(tx);
   }
 
@@ -564,8 +587,8 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     );
     tx.objectStore(STORE.drawings).put(this.stamp(drawing));
     const ds = tx.objectStore(STORE.defects);
-    // 결함에는 RecordBase 가 없다(캔버스 코어 타입) — upsertDefects 와 같이 그대로 넣는다
-    for (const d of defects) ds.put(d);
+    // 결함도 스탬프를 찍는다 (Phase 5 · D23) — 재정규화는 좌표를 실제로 고치는 쓰기다
+    for (const d of defects) ds.put(this.stampDefect(d));
     const ms = tx.objectStore(STORE.memos);
     for (const m of memos) ms.put(this.stamp(m));
     await txDone(tx);
@@ -658,6 +681,9 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
           drawingId: did,
           status: 'PREV_PENDING',
           prevDefectId: src.id,
+          // **새 레코드**다 — 원본의 스탬프를 물려받으면 안 된다 (Phase 5 · D23).
+          // 지금 이 기기에서 만들어졌고, 만든 사람은 로그인 이전이라 알 수 없다(createdBy: null).
+          ...newDefectBase(now, this.deviceId),
         };
         xs.put(next);
         defectCount += 1;
@@ -783,13 +809,17 @@ function uniqueKeys(d: Drawing): string[] {
  * 저장은 어차피 다음 수정 때 새 형식으로 나간다.
  */
 /**
- * 옛 레코드 정규화 — S1·S2a 가 저장한 결함에는 `sketch` 와 `DefectAttrs` 신규 필드가 없다.
- * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (S4 스펙 §3-3 · ASSUMPTIONS E11).
+ * 옛 레코드 정규화 — S1·S2a 가 저장한 결함에는 `sketch` 와 `DefectAttrs` 신규 필드가 없고,
+ * Phase 5 이전에 저장한 결함에는 `DefectBase`(`updatedAt`·`deviceId`·`createdBy`) 가 없다.
+ * **읽는 시점에 채운다. DB 버전을 올리지 않는다** (S4 스펙 §3-3 · ASSUMPTIONS E11 · D23).
+ *
+ * ⛔ `updatedAt` 은 여기서 **`Date.now()` 로 채우지 않는다.** `normalizeDefectBase` 주석 참조.
  */
-export function normalizeDefect(d: Defect): Defect {
+export function normalizeDefect(d: Defect, deviceId: string): Defect {
   const withAttrs = normalizeDefectAttrs(d);
-  const marks = normalizeArrowMarks(withAttrs.marks);
-  return marks === withAttrs.marks ? withAttrs : { ...withAttrs, marks };
+  const withBase = normalizeDefectBase(withAttrs, deviceId);
+  const marks = normalizeArrowMarks(withBase.marks);
+  return marks === withBase.marks ? withBase : { ...withBase, marks };
 }
 
 /**

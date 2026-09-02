@@ -12,7 +12,7 @@
  * 특별 취급하면 샘플에서만 되는 버그가 숨는다.
  */
 import type { Defect, Mark } from '@onspect/canvas-core';
-import { EMPTY_DEFECT_ATTRS, inferSizeMode } from '@onspect/canvas-core';
+import { EMPTY_DEFECT_ATTRS, inferSizeMode, newDefectBase } from '@onspect/canvas-core';
 import type { Drawing, Floor, Project } from '@onspect/project-core';
 import { makeBuilding, makeDrawing, makeFloor, makeProject } from './factory.js';
 import { newBlobKey } from './idb/blobs.js';
@@ -239,6 +239,8 @@ export async function seedSampleProject(
       style: null,
       // 속성 초기값은 EMPTY_DEFECT_ATTRS 한 곳에만 있다 (S4 스펙 §2-6)
       ...EMPTY_DEFECT_ATTRS,
+      // 병합 재료(Phase 5 · D23). 저장 직전 `upsertDefects` 가 다시 스탬프를 찍는다
+      ...newDefectBase(now, deviceId),
       sizeMode: inferSizeMode(s),
       memberName: s.memberName,
       defectTypeName: s.defectTypeName,

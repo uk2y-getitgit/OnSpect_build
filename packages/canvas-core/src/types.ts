@@ -252,7 +252,36 @@ export type DefectAttrs = {
 };
 
 /**
- * 결함. Phase 3 캔버스가 읽는 최소 형태 + 도메인 속성(`DefectAttrs`).
+ * 결함의 **병합·감사 재료** (Phase 5 · D23 · `50_..._TeamSync.md` §2).
+ *
+ * `Project`·`Photo`·`Memo` 가 갖는 `RecordBase` 중 결함에 실제로 필요한 세 가지다.
+ * 이 값이 없으면 LWW 병합의 기준이 없고, "미전송 변경"을 뽑을 수 없고,
+ * "이 결함은 누가 찍었나" 를 영원히 알 수 없다.
+ *
+ * ⚠️ `createdAt` 은 **일부러 넣지 않았다** — D23 이 세 필드만 신설하기로 정했다.
+ *    입력순서는 이미 `seq` 가 갖고 있어 결함에는 생성시각을 쓸 곳이 없다.
+ */
+export type DefectBase = {
+  /**
+   * 마지막 수정 시각(epoch ms). **LWW 병합의 유일한 기준값이다.**
+   *
+   * `null` = **아직 한 번도 동기화된 적 없는 옛 결함.** D23(B안) 대로
+   * *첫 동기화 때 서버가 받은 시각을 부여*한다 — "먼저 올린 쪽이 원본".
+   *
+   * ⛔ **읽기 정규화가 `Date.now()` 로 채우면 절대 안 된다.** 읽기만 해도 최신이 되어
+   *    앱을 나중에 연 기기가 무조건 이긴다(스펙 §2-3 이 "가장 위험하다"고 못 박은 실수).
+   *    `0` 으로 채우는 것도 안 된다 — 옛 결함이 항상 지는 쪽이 되어 사무실 PC 데이터가
+   *    현장 태블릿의 빈 상태에 덮인다.
+   */
+  updatedAt: number | null;
+  /** 마지막으로 이 결함을 쓴 기기. 과거 사실이 아니라 **현재 관측값**이라 정규화로 채워도 안전하다 */
+  deviceId: string;
+  /** 작성자 userId. `null` = "작성자 미상" — 로그인 도입 이전에 만들어진 결함은 영구히 `null` (D23) */
+  createdBy: string | null;
+};
+
+/**
+ * 결함. Phase 3 캔버스가 읽는 최소 형태 + 도메인 속성(`DefectAttrs`) + 병합 재료(`DefectBase`).
  * ⚠️ 출력 결함번호·사진번호 필드는 **없다.** 저장하지 않고 출력 시점에 계산한다(불변식 2).
  * 캔버스가 그리는 숫자는 `displayNumber` 로 **주입받는다** (§2-1-b).
  */
@@ -283,7 +312,8 @@ export type Defect = {
   sketch: SketchPath[];
   /** null = 전역 스타일 상속. 위치 이동은 이 값을 절대 건드리지 않는다 */
   style: StyleOverride | null;
-} & DefectAttrs;
+} & DefectAttrs &
+  DefectBase;
 
 export type DrawingRef = { id: string; imageWidth: number; imageHeight: number };
 

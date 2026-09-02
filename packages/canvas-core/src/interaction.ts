@@ -20,6 +20,7 @@ import {
 } from './constants.js';
 import type { Command } from './commands.js';
 import { EMPTY_DEFECT_ATTRS } from './defectAttrs.js';
+import { newDefectBase } from './defectBase.js';
 import {
   anchorNorm,
   arrowLastLegAngleDeg,
@@ -89,7 +90,10 @@ export type ReduceContext = {
   makeId: () => string;
   /** 레코드 타임스탬프. 코어는 Date.now() 를 직접 부르지 않는다 (경계 규칙 1) */
   now?: () => number;
-  /** 기기 식별자. 메모 RecordBase 를 채운다 */
+  /**
+   * 기기 식별자. 메모의 `RecordBase` 와 **결함의 `DefectBase`** 를 채운다 (Phase 5 · D23).
+   * 없으면 빈 문자열이 들어가고, 저장소가 읽는 시점에 `normalizeDefectBase` 가 현재 기기로 채운다.
+   */
   deviceId?: string;
   /** 새 결함이 속할 층. 없으면 빈 문자열 */
   floorId?: string;
@@ -1774,6 +1778,8 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
     ...EMPTY_DEFECT_ATTRS,
+    // 병합 재료(Phase 5 · D23). 초기값은 **한 곳(newDefectBase)** 에만 있다
+    ...newDefectBase(ctx.now ? ctx.now() : null, ctx.deviceId ?? ''),
     ...(ctx.defaultAttrs ?? {}),
   };
 
@@ -1853,6 +1859,8 @@ function commitCreateShape(
     // D3: 부재·결함유형이 비어 있어도 된다. 미완성 여부는 isIncomplete() 로 파생한다.
     // 속성 초기값은 **한 곳(EMPTY_DEFECT_ATTRS)** 에만 있다 — 필드가 늘어도 여기를 안 고친다
     ...EMPTY_DEFECT_ATTRS,
+    // 병합 재료(Phase 5 · D23). 초기값은 **한 곳(newDefectBase)** 에만 있다
+    ...newDefectBase(ctx.now ? ctx.now() : null, ctx.deviceId ?? ''),
     ...(ctx.defaultAttrs ?? {}),
   };
 
@@ -1950,6 +1958,8 @@ function pendingSketchToNewDefect(state: CanvasState, ctx: ReduceContext): Reduc
     sketch: pending.paths,
     style: null,
     ...EMPTY_DEFECT_ATTRS,
+    // 병합 재료(Phase 5 · D23). 초기값은 **한 곳(newDefectBase)** 에만 있다
+    ...newDefectBase(ctx.now ? ctx.now() : null, ctx.deviceId ?? ''),
     ...(ctx.defaultAttrs ?? {}),
   };
 
