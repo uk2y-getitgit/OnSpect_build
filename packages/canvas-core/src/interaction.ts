@@ -797,19 +797,8 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
       const d = findDefect(ctx, ev.defectId);
       if (!d || isLocked(d)) return ok(state, ctx);
       const to = patchStyle(d.style, { color: ev.color ?? undefined });
-      return ok(
-        state,
-        ctx,
-        [{ k: 'SET_STYLE', defectId: d.id, from: d.style, to }],
-        [
-          {
-            k: 'TOAST',
-            kind: 'info',
-            text: ev.color ? '색을 바꿨습니다' : '색을 상태 기본값으로 되돌렸습니다',
-            undoable: true,
-          },
-        ],
-      );
+      // 색은 그 자리에서 바로 보인다 — 성공 확인 토스트 제거 (U-2 정책, Q62)
+      return ok(state, ctx, [{ k: 'SET_STYLE', defectId: d.id, from: d.style, to }]);
     }
 
     case 'RESET_STYLE': {
@@ -1664,11 +1653,9 @@ function onPointerUp(
           labelTo: moveLabel && drag.labelPreviewNorm ? roundNorm(drag.labelPreviewNorm) : null,
         },
       ],
-      // U-2: 옮긴 결과는 그 자리에 바로 보이므로 알리지 않는다.
-      // 크기 변경은 U-2 "제거" 표에 없어 그대로 둔다(QUESTIONS Q-U2-1)
-      moveLabel
-        ? []
-        : [{ k: 'TOAST', kind: 'info', text: '표기 크기가 변경되었습니다', undoable: true }],
+      // U-2: 옮기거나 크기를 바꾼 결과는 그 자리에 바로 보이므로 알리지 않는다.
+      // (Q62 — 애초 "제거" 표에는 없었으나, 옆의 위치변경 토스트와의 일관성을 위해 함께 뺐다)
+      [],
     );
   }
 
