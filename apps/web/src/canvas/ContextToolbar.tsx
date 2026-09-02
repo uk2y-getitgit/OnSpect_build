@@ -2,11 +2,8 @@
  * 선택 시 뜨는 컨텍스트 플로팅 툴바 — 스펙 T12 + §S2a-5.
  *
  * 선택한 표기 종류에 따라 도구가 달라진다:
- *   점    `[점 ▾]   색상 · 복제 · 추가 · 삭제`
- *   방향  `[방향 ▾] 색상 · 복제 · 추가 · 삭제`
- *   영역  `[영역 ▾] 색상 · 실선 · 채움 · 복제 · 추가 · 삭제`
- *
- * `복제 · 추가`(= 마크 그룹 편집)는 이번 범위 밖이라 여전히 비활성이다.
+ *   점·방향  `색상 · 스타일 초기화 · 번호 초기화 · 삭제`
+ *   영역     `색상 · 실선 · 채움 · 스타일 초기화 · 번호 초기화 · 삭제`
  *
  * ⚠️ 여기서 바꾸는 것은 **스타일**뿐이다. 위치·크기는 `geometry` 이고
  * 절대 `style` 로 새어 들어가지 않는다 (§2-1-c, 함정 #5).
@@ -106,17 +103,6 @@ export function ContextToolbar({
       aria-label={`${defect.seq}번 ${KIND_LABEL[type]} 표기 도구`}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <button
-        type="button"
-        className="ctx-toolbar__btn ctx-toolbar__btn--kind"
-        disabled
-        title="표기 종류 변경 · 준비 중"
-      >
-        <span className="ctx-toolbar__kind">{KIND_LABEL[type]}</span>
-        <span className="ctx-toolbar__caret" aria-hidden="true">▾</span>
-      </button>
-      <span className="ctx-toolbar__sep" aria-hidden="true" />
-
       {/* 색상 */}
       <div className="ctx-toolbar__wrap">
         <button
@@ -219,12 +205,6 @@ export function ContextToolbar({
         </>
       )}
 
-      <button type="button" className="ctx-toolbar__btn" disabled title="복제 · 준비 중">
-        복제
-      </button>
-      <button type="button" className="ctx-toolbar__btn" disabled title="마크 추가 · 준비 중">
-        추가
-      </button>
       <span className="ctx-toolbar__sep" aria-hidden="true" />
 
       {/*
