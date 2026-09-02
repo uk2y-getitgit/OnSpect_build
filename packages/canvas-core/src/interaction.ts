@@ -776,12 +776,10 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
           [{ k: 'TOAST', kind: 'info', text: '빈 메모를 지웠습니다', undoable: true }],
         );
       }
-      return ok(
-        state,
-        ctx,
-        [{ k: 'SET_MEMO_TEXT', memoId: memo.id, from: memo.text, to: text }],
-        [{ k: 'TOAST', kind: 'info', text: '메모가 저장되었습니다', undoable: true }],
-      );
+      // U-2: 저장 결과(바뀐 글)가 도면에 바로 보인다 — 토스트 없음. 커맨드는 그대로 나간다
+      return ok(state, ctx, [
+        { k: 'SET_MEMO_TEXT', memoId: memo.id, from: memo.text, to: text },
+      ]);
     }
 
     case 'SET_AREA_STYLE': {
@@ -791,12 +789,8 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
       if (ev.shape !== undefined) patch.areaShape = ev.shape;
       if (ev.fill !== undefined) patch.areaFill = ev.fill;
       const to = patchStyle(d.style, patch as { areaShape?: AreaShape; areaFill?: AreaFill });
-      return ok(
-        state,
-        ctx,
-        [{ k: 'SET_STYLE', defectId: d.id, from: d.style, to }],
-        [{ k: 'TOAST', kind: 'info', text: '영역 모양을 바꿨습니다', undoable: true }],
-      );
+      // U-2: 모양이 캔버스에 바로 보인다 — 토스트 없음
+      return ok(state, ctx, [{ k: 'SET_STYLE', defectId: d.id, from: d.style, to }]);
     }
 
     case 'SET_MARK_COLOR': {
@@ -821,17 +815,10 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
     case 'RESET_STYLE': {
       const d = findDefect(ctx, ev.defectId);
       if (!d || isLocked(d)) return ok(state, ctx);
-      if (d.style === null) {
-        return ok(state, ctx, [], [
-          { k: 'TOAST', kind: 'info', text: '이미 전체 설정을 따르고 있습니다' },
-        ]);
-      }
-      return ok(
-        state,
-        ctx,
-        [{ k: 'SET_STYLE', defectId: d.id, from: d.style, to: null }],
-        [{ k: 'TOAST', kind: 'info', text: '전체 설정으로 되돌렸습니다', undoable: true }],
-      );
+      // U-2: 이미 기본값이면 바뀔 게 없다 — 조용히 넘어간다
+      if (d.style === null) return ok(state, ctx);
+      // U-2: 되돌아간 색·모양이 캔버스에 바로 보인다 — 토스트 없음
+      return ok(state, ctx, [{ k: 'SET_STYLE', defectId: d.id, from: d.style, to: null }]);
     }
 
     // ── F2 자유그리기 사후연결 — 그리기 완료(항상 새 결함) ───────────────────
@@ -840,9 +827,8 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
 
     case 'CANCEL_PENDING_SKETCH': {
       if (!state.pendingSketch) return ok(state, ctx);
-      return ok({ ...state, pendingSketch: null }, ctx, [], [
-        { k: 'TOAST', kind: 'info', text: '그리기를 취소했습니다' },
-      ]);
+      // U-2: 대기 중이던 획이 화면에서 사라지는 것으로 취소가 보인다 — 토스트 없음
+      return ok({ ...state, pendingSketch: null }, ctx);
     }
 
     case 'SELECT_DEFECT': {
@@ -1637,19 +1623,15 @@ function onPointerUp(
   if (drag.kind === 'MOVE_MEMO') {
     const memo = findMemo(ctx, drag.memoId);
     if (!memo || !drag.moved) return ok(cleared, ctx);
-    return ok(
-      cleared,
-      ctx,
-      [
-        {
-          k: 'MOVE_MEMO',
-          memoId: memo.id,
-          from: roundNorm(memo.pos),
-          to: roundNorm(drag.previewNorm),
-        },
-      ],
-      [{ k: 'TOAST', kind: 'info', text: '메모를 옮겼습니다', undoable: true }],
-    );
+    // U-2: 옮겨진 자리가 바로 보인다 — 토스트 없음. 커맨드(Undo 스택)는 그대로
+    return ok(cleared, ctx, [
+      {
+        k: 'MOVE_MEMO',
+        memoId: memo.id,
+        from: roundNorm(memo.pos),
+        to: roundNorm(drag.previewNorm),
+      },
+    ]);
   }
 
   if (!drag.moved || !drag.defectId) return ok(cleared, ctx);
@@ -1682,33 +1664,26 @@ function onPointerUp(
           labelTo: moveLabel && drag.labelPreviewNorm ? roundNorm(drag.labelPreviewNorm) : null,
         },
       ],
-      [
-        {
-          k: 'TOAST',
-          kind: 'info',
-          text: moveLabel ? '표기 위치가 변경되었습니다' : '표기 크기가 변경되었습니다',
-          undoable: true,
-        },
-      ],
+      // U-2: 옮긴 결과는 그 자리에 바로 보이므로 알리지 않는다.
+      // 크기 변경은 U-2 "제거" 표에 없어 그대로 둔다(QUESTIONS Q-U2-1)
+      moveLabel
+        ? []
+        : [{ k: 'TOAST', kind: 'info', text: '표기 크기가 변경되었습니다', undoable: true }],
     );
   }
 
   if (drag.kind === 'MOVE_SKETCH') {
     if (!drag.pathId || !drag.pathOrigin || !drag.pathPreview) return ok(cleared, ctx);
-    return ok(
-      cleared,
-      ctx,
-      [
-        {
-          k: 'MOVE_SKETCH',
-          defectId: defect.id,
-          pathId: drag.pathId,
-          from: drag.pathOrigin.map(roundNorm),
-          to: drag.pathPreview.map(roundNorm),
-        },
-      ],
-      [{ k: 'TOAST', kind: 'info', text: '그리기를 옮겼습니다', undoable: true }],
-    );
+    // U-2: 옮겨진 획이 바로 보인다 — 토스트 없음
+    return ok(cleared, ctx, [
+      {
+        k: 'MOVE_SKETCH',
+        defectId: defect.id,
+        pathId: drag.pathId,
+        from: drag.pathOrigin.map(roundNorm),
+        to: drag.pathPreview.map(roundNorm),
+      },
+    ]);
   }
 
   if (drag.kind === 'MOVE_LABEL') {
@@ -1721,7 +1696,8 @@ function onPointerUp(
       fromPlaced: defect.label.placed,
       toPlaced: true, // 사용자가 한 번이라도 옮기면 placed = true (B14)
     };
-    return ok(cleared, ctx, [cmd], [{ k: 'TOAST', kind: 'info', text: '번호 위치가 변경되었습니다', undoable: true }]);
+    // U-2: 번호가 새 자리에 바로 그려진다 — 토스트 없음
+    return ok(cleared, ctx, [cmd]);
   }
 
   // MOVE_MARK
@@ -1736,7 +1712,8 @@ function onPointerUp(
     labelFrom: drag.labelOriginNorm ? roundNorm(drag.labelOriginNorm) : null,
     labelTo: drag.labelPreviewNorm ? roundNorm(drag.labelPreviewNorm) : null,
   };
-  return ok(cleared, ctx, [cmd], [{ k: 'TOAST', kind: 'info', text: '표기 위치가 변경되었습니다', undoable: true }]);
+  // U-2: 옮겨진 표기가 바로 보인다 — 토스트 없음
+  return ok(cleared, ctx, [cmd]);
 }
 
 // ── 점 마커 생성 (T11 · D3) ────────────────────────────────────────────────
@@ -1783,14 +1760,12 @@ function createDefectAt(state: CanvasState, screen: SPoint, ctx: ReduceContext):
     ...(ctx.defaultAttrs ?? {}),
   };
 
+  // U-2: 새 표기가 캔버스에 바로 그려진다 — 토스트 없음. REVEAL 은 유지
   return ok(
     { ...state, selection: { defectId, part: 'MARK', markId } },
     ctx,
     [{ k: 'CREATE_DEFECT', defect }],
-    [
-      { k: 'TOAST', kind: 'info', text: '표기가 추가되었습니다', undoable: true },
-      { k: 'REVEAL_DEFECT', defectId },
-    ],
+    [{ k: 'REVEAL_DEFECT', defectId }],
   );
 }
 
@@ -1864,14 +1839,12 @@ function commitCreateShape(
     ...(ctx.defaultAttrs ?? {}),
   };
 
+  // U-2: 새 표기가 캔버스에 바로 그려진다 — 토스트 없음. REVEAL 은 유지
   return ok(
     { ...state, selection: { ...NO_SELECTION, defectId, part: 'MARK', markId } },
     ctx,
     [{ k: 'CREATE_DEFECT', defect }],
-    [
-      { k: 'TOAST', kind: 'info', text: '표기가 추가되었습니다', undoable: true },
-      { k: 'REVEAL_DEFECT', defectId },
-    ],
+    [{ k: 'REVEAL_DEFECT', defectId }],
   );
 }
 
@@ -1971,10 +1944,8 @@ function pendingSketchToNewDefect(state: CanvasState, ctx: ReduceContext): Reduc
     },
     ctx,
     [{ k: 'CREATE_DEFECT', defect }],
-    [
-      { k: 'TOAST', kind: 'info', text: '그리기로 새 결함을 만들었습니다', undoable: true },
-      { k: 'REVEAL_DEFECT', defectId },
-    ],
+    // U-2: 만들어진 결함이 캔버스에 바로 보인다 — 토스트 없음. REVEAL 은 유지
+    [{ k: 'REVEAL_DEFECT', defectId }],
   );
 }
 
@@ -2031,8 +2002,8 @@ function commitCreateMemoInk(
       inkMemoId: memo.id,
     },
     ctx,
+    // U-2: 쓴 글씨가 그 자리에 그대로 보인다 — 토스트 없음
     [{ k: 'CREATE_MEMO', memo }],
-    [{ k: 'TOAST', kind: 'info', text: '메모를 추가했습니다', undoable: true }],
   );
 }
 
@@ -2098,24 +2069,19 @@ function onResetLabel(state: CanvasState, defectId: string, ctx: ReduceContext):
     style.fontSize,
   );
   const to = roundNorm(autoLabelNorm(a, style.balloonRadius, iw, ih, angleOverride, extra));
-  if (!d.label.placed) {
-    return ok(state, ctx, [], [{ k: 'TOAST', kind: 'info', text: '이미 자동 배치 상태입니다' }]);
-  }
-  return ok(
-    state,
-    ctx,
-    [
-      {
-        k: 'RESET_LABEL',
-        defectId,
-        from: roundNorm({ x: d.label.x, y: d.label.y }),
-        to,
-        fromPlaced: d.label.placed,
-        toPlaced: false,
-      },
-    ],
-    [{ k: 'TOAST', kind: 'info', text: '번호 위치를 초기화했습니다', undoable: true }],
-  );
+  // U-2: 이미 자동 배치면 바뀔 게 없다 — 조용히 넘어간다
+  if (!d.label.placed) return ok(state, ctx);
+  // U-2: 번호가 제자리로 돌아가는 게 바로 보인다 — 토스트 없음. 커맨드는 그대로
+  return ok(state, ctx, [
+    {
+      k: 'RESET_LABEL',
+      defectId,
+      from: roundNorm({ x: d.label.x, y: d.label.y }),
+      to,
+      fromPlaced: d.label.placed,
+      toPlaced: false,
+    },
+  ]);
 }
 
 // ── 삭제 (§2-8-e) ──────────────────────────────────────────────────────────
@@ -2214,11 +2180,8 @@ function onKeyDown(
   if (key === 'Escape') {
     // F2 — 대기 중인 자유그리기가 있으면 그것부터 버린다(선택 해제보다 먼저).
     // 방향(화살표)은 이제 드래그 한 번으로 끝나므로(생성 중 Escape 는 drag 분기가 처리) 여기 없다
-    if (s.pendingSketch && !s.drag) {
-      return ok({ ...s, pendingSketch: null }, ctx, [], [
-        { k: 'TOAST', kind: 'info', text: '그리기를 취소했습니다' },
-      ]);
-    }
+    // U-2: 대기 중이던 획이 화면에서 사라지는 것으로 취소가 보인다 — 토스트 없음
+    if (s.pendingSketch && !s.drag) return ok({ ...s, pendingSketch: null }, ctx);
     if (s.drag) {
       // originNorm 으로 복귀 후 취소. 커밋하지 않았으므로 drag 를 버리면 원위치다
       // — 두 번째 포인터 취소(A2/T3)와 **같은 함수**를 탄다. 취소 규칙은 하나여야 한다
