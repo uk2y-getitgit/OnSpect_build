@@ -2,5 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npx --yes npm@11.9.0 install",
-  "framework": null
+  "framework": null,
+  "rewrites": [
+    { "source": "/tablet", "destination": "/index.html" },
+    { "source": "/pc", "destination": "/index.html" }
+  ]
 }

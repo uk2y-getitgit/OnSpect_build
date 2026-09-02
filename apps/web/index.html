@@ -10,6 +10,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OnSpect — 도면 캔버스</title>
 
+    <!--
+      PC/태블릿 강제 전환 (2026-09-02, UI 정리 4건 U-4) — 실기기 없이도 두 UI를 구분해 테스트하려고 둔
+      오버라이드다. 실제 판정(터치 전용 기기 = hover:none and pointer:coarse, styles.css 참고)은
+      그대로 정본이다 — 이 스크립트는 그 결과를 URL/localStorage로 "덮어쓸" 뿐 대체하지 않는다.
+      /tablet · /pc 경로(vercel.json rewrite)나 ?ui=tablet|pc 쿼리로 들어오면 그 값을 저장하고,
+      없으면 저장된 값을, 그마저 없으면 실제 기기 판정을 쓴다. body 렌더 전에 끝나야 깜빡임이 없다.
+    -->
+    <script>
+      (function () {
+        try {
+          var params = new URLSearchParams(location.search);
+          var fromQuery = params.get('ui');
+          var fromPath =
+            location.pathname === '/tablet' ? 'tablet' : location.pathname === '/pc' ? 'pc' : null;
+          var forced = fromQuery === 'tablet' || fromQuery === 'pc' ? fromQuery : fromPath;
+          if (forced) localStorage.setItem('onspect:uiModeOverride', forced);
+          var stored = localStorage.getItem('onspect:uiModeOverride');
+          var mode =
+            stored === 'tablet' || stored === 'pc'
+              ? stored
+              : window.matchMedia('(hover: none) and (pointer: coarse)').matches
+                ? 'tablet'
+                : 'pc';
+          document.documentElement.dataset.uiMode = mode;
+        } catch (e) {
+          /* localStorage 접근 불가(사생활 모드 등) — 조용히 실기기 판정으로만 동작 */
+        }
+      })();
+    </script>
+
     <!-- PWA (P1) — display:standalone · orientation:any (D10 이 가로·세로를 둘 다 정의했다) -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#1b4ba8" />

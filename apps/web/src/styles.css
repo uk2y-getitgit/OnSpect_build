@@ -910,10 +910,6 @@ kbd {
   cursor: not-allowed;
 }
 
-.ctx-toolbar__btn--kind {
-  font-weight: 700;
-}
-
 .ctx-toolbar__caret {
   font-size: 9px;
   opacity: 0.7;
@@ -4220,6 +4216,31 @@ select.input { cursor: pointer; }
   .palette__slot--aim {
     display: block;
   }
+}
+
+/* ── U-4 (2026-09-02) — PC/태블릿 강제 전환 오버라이드 ─────────────────────
+ * `index.html`의 부트스트랩 스크립트가 `/tablet`·`/pc`·`?ui=` 로 들어오면
+ * `<html data-ui-mode>` 를 찍는다. 실기기 판정(위 미디어쿼리)이 여전히 기본값이고,
+ * 이 규칙은 **속성 선택자라 특이도가 더 높아** 있을 때만 그 결과를 덮어쓴다 —
+ * 스크립트가 실패해도(사생활 모드 등) 위 미디어쿼리가 그대로 살아 있어 실기기에서는 안전하다.
+ */
+:root[data-ui-mode='tablet'] .stage__help,
+:root[data-ui-mode='tablet'] .memo-editor__hint {
+  display: none;
+}
+:root[data-ui-mode='tablet'] .photos__capture {
+  display: inline-flex;
+}
+:root[data-ui-mode='tablet'] .palette__slot--aim {
+  display: block;
+}
+:root[data-ui-mode='pc'] .stage__help,
+:root[data-ui-mode='pc'] .memo-editor__hint {
+  display: block;
+}
+:root[data-ui-mode='pc'] .photos__capture,
+:root[data-ui-mode='pc'] .palette__slot--aim {
+  display: none;
 }
 
 /* ── D22 조준 크로스헤어 (Q55 안 A) ───────────────────────────────────────
