@@ -588,7 +588,10 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     tx.objectStore(STORE.drawings).put(this.stamp(drawing));
     const ds = tx.objectStore(STORE.defects);
     // 결함도 스탬프를 찍는다 (Phase 5 · D23) — 재정규화는 좌표를 실제로 고치는 쓰기다
-    for (const d of defects) ds.put(this.stampDefect(d));
+    // ⚠️ now 를 미리 고정한다 — 기본값(Date.now())에 맡기면 같은 배치의 결함들이
+    //    루프를 도는 동안 서로 다른 시각을 받는다(경미, 검수 54)
+    const renormNow = Date.now();
+    for (const d of defects) ds.put(this.stampDefect(d, renormNow));
     const ms = tx.objectStore(STORE.memos);
     for (const m of memos) ms.put(this.stamp(m));
     await txDone(tx);
