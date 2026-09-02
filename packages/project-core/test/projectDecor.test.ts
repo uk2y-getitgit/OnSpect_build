@@ -17,6 +17,7 @@ import {
   type DrawingTitleBlock,
   type Floor,
   type Project,
+  type ProjectLegend,
 } from '../src/index.js';
 
 function project(over: Partial<Project> = {}): Project {
@@ -134,7 +135,6 @@ describe('promoteProjectDecor — 승격', () => {
     const d = drawing('d1', 'f1', { legend: { enabled: true, lgScale: 1 } });
     const r = promoteProjectDecor(project(), [d], [floor('f1', 10)])!;
     expect(r.legend).toMatchObject({
-      showTypes: true,
       statusNew: false,
       statusPending: false,
       statusRepaired: false,
@@ -212,7 +212,7 @@ describe('읽기 정규화 — 마이그레이션 0건의 근거', () => {
       ...DEFAULT_PROJECT_TITLE_BLOCK,
       tbScale: 1.5,
     });
-    // D15 필드가 없는 옛 범례 → showTypes 만 true, 상태 3종은 false
+    // D15 필드가 없는 옛 범례 → 상태 3종은 false
     expect(projectLegendOf({ enabled: true, lgScale: 2 })).toEqual({
       ...DEFAULT_PROJECT_LEGEND,
       lgScale: 2,
@@ -221,7 +221,18 @@ describe('읽기 정규화 — 마이그레이션 0건의 근거', () => {
 
   it('false 를 기본값으로 덮어쓰지 않는다 (`??` 이지 `||` 가 아니다)', () => {
     expect(projectTitleBlockOf({ enabled: false }).enabled).toBe(false);
-    expect(projectLegendOf({ showTypes: false }).showTypes).toBe(false);
+    expect(projectLegendOf({ enabled: false }).enabled).toBe(false);
     expect(projectTitleBlockOf({ tbScale: 0 }).tbScale).toBe(0);
+  });
+
+  /**
+   * ⭐ U-3 — 폐기된 `showTypes` 는 **읽기 시점에 떨어진다.**
+   *    저장 레코드를 건드리지 않으므로 `DB_VERSION` 은 1 그대로다.
+   */
+  it('옛 레코드에 남은 showTypes 는 읽는 순간 사라진다 (마이그레이션 0건)', () => {
+    const old = { enabled: true, lgScale: 1, showTypes: true } as unknown as ProjectLegend;
+    const read = projectLegendOf(old);
+    expect('showTypes' in read).toBe(false);
+    expect(read).toEqual(DEFAULT_PROJECT_LEGEND);
   });
 });

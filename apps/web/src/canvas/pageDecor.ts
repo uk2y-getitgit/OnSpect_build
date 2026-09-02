@@ -7,11 +7,9 @@
  */
 import {
   DEFAULT_TITLE_BLOCK,
-  legendSymbol,
   statusRows,
   type Defect,
   type LegendConfig,
-  type LegendRow,
   type TitleBlockConfig,
 } from '@onspect/canvas-core';
 import {
@@ -58,36 +56,12 @@ export function titleBlockConfigFor(
 }
 
 /**
- * F5-2 범례 행 — **이 도면에 실제로 쓰인 결함유형만** 넣는다(§F5-2 `equipFilter`).
- *
- * D8: 결함유형별 고유 색을 만들지 않는다. 기호열에는 **이름 약어**를 넣는다
- * (번호는 도면 위 어디에도 없어 대조할 곳이 없다 — 약어가 스스로 설명한다).
- * 정렬은 **처음 등장한 순서**(seq 오름차순)라 도면을 훑는 순서와 같아진다.
- */
-export function legendRowsFor(defects: readonly Defect[]): LegendRow[] {
-  const names: string[] = [];
-  const seen = new Set<string>();
-  for (const d of [...defects].sort((a, b) => a.seq - b.seq)) {
-    const name = (d.defectTypeName ?? '').trim();
-    if (name === '') continue; // 미완성 결함(D3)은 범례에 넣지 않는다
-    const key = d.defectTypeId ?? `name:${name}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    names.push(name);
-  }
-  const taken = new Set<string>();
-  return names.map((desc, i) => {
-    const sym = legendSymbol(desc, taken, i);
-    taken.add(sym);
-    return { sym, desc };
-  });
-}
-
-/**
  * 저장된 범례 설정 + 실제 결함 → 렌더 설정. **D16 — 설정은 용역 스코프, 행은 도면별 파생.**
  *
  * `project.legend` 가 `null`(옛 용역)이어도 기본값으로 읽는다 — 도곽과 같은 B2 해소다.
- * 행이 하나도 없으면(결함유형 행 · 상태 행 둘 다) 그리지 않는다.
+ * 행이 하나도 없으면 그리지 않는다.
+ *
+ * ⚠️ **U-3 — 결함유형 행은 더 이상 만들지 않는다.** 남은 것은 상태 행뿐이다.
  */
 export function legendConfigFor(
   drawing: Drawing | null | undefined,
@@ -98,9 +72,8 @@ export function legendConfigFor(
   const lg = override ?? projectLegendOf(project?.legend);
   if (!drawing || !lg.enabled) return null;
   const mine = defects.filter((d) => d.drawingId === drawing.id);
-  const rows = lg.showTypes ? legendRowsFor(mine) : [];
   // D15 — 켜져 있어도 **그 도면에 없는 상태는 빠진다**(`statusRows` 안에서 거른다)
   const status = statusRows(lg, mine);
-  if (rows.length === 0 && status.length === 0) return null;
-  return { enabled: true, lgScale: lg.lgScale, rows, statusRows: status };
+  if (status.length === 0) return null;
+  return { enabled: true, lgScale: lg.lgScale, statusRows: status };
 }

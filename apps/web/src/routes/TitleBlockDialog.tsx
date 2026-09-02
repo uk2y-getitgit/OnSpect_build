@@ -10,7 +10,8 @@
  *    저장 전에도 캔버스가 반응한다. `[취소]` 하면 부모가 오버라이드를 버린다 —
  *    **저장소를 때리지 않는다.**
  *
- * 범례 **행은 저장하지 않는다** — 그 도면에 실제로 쓰인 결함유형에서 매번 파생한다(D8).
+ * ⭐ **U-3 (2026-09-02) — 결함유형 범례를 없앴다.** 남은 범례는 상태 범례 3행뿐이고,
+ *    그 행도 저장하지 않는다 — 그 도면에 실제로 있는 상태에서 매번 파생한다(D15).
  */
 import { useEffect, useRef, useState } from 'react';
 import { normalizeCols, TB_SCALE_NONE } from '@onspect/canvas-core';
@@ -31,7 +32,6 @@ function pct(v: number): string {
 export function TitleBlockDialog({
   drawing,
   project,
-  legendTypes,
   busy,
   onApply,
   onPreview,
@@ -39,8 +39,6 @@ export function TitleBlockDialog({
 }: {
   drawing: Drawing;
   project: Project | null;
-  /** 이 도면에 실제로 쓰인 결함유형 이름 — 범례에 나갈 행 미리보기 */
-  legendTypes: readonly string[];
   busy: boolean;
   /** 용역 설정 2건 + 이 도면의 도면명. 저장은 `Project` 1건 + `Drawing` 1건 */
   onApply: (tb: ProjectTitleBlock, lg: ProjectLegend, drawingName: string | null) => void;
@@ -238,9 +236,8 @@ export function TitleBlockDialog({
           <span>범례 표시</span>
         </label>
         <p className="tbset__note">
-          지면 우측 상단에 <b>기호 | 설명</b> 2열 표로 그립니다. 결함유형 행은 색을 쓰지 않고,
-          상태 행은 <b>도면 위 마커와 같은 색</b>(현회차 빨강 · 전회차 보라 · 보수완료 회색)으로
-          채운 원을 그립니다.
+          지면 우측 상단에 <b>색 | 설명</b> 2열 표로 그립니다. 각 행은{' '}
+          <b>도면 위 마커와 같은 색</b>(현회차 빨강 · 전회차 보라 · 보수완료 회색)으로 채운 원입니다.
         </p>
 
         {/*
@@ -248,15 +245,6 @@ export function TitleBlockDialog({
           범례는 "이 도면의 이 색이 무슨 뜻인가"를 설명하는 표라, 없는 색을 설명하면 거짓말이 된다.
         */}
         <div className="tbset__checks">
-          <label className="tbset__check">
-            <input
-              type="checkbox"
-              checked={lg.showTypes}
-              disabled={!lg.enabled}
-              onChange={(e) => setLeg('showTypes', e.target.checked)}
-            />
-            <span>결함유형</span>
-          </label>
           <label className="tbset__check">
             <input
               type="checkbox"
@@ -308,20 +296,6 @@ export function TitleBlockDialog({
           />
           <output className="dscale__value num">{pct(lg.lgScale)}</output>
         </div>
-
-        <p className="tbset__note">
-          {legendTypes.length === 0 ? (
-            <>
-              이 도면에는 아직 결함유형이 입력된 결함이 없습니다. 범례를 켜도{' '}
-              <b>표시할 행이 생길 때까지</b> 아무것도 그리지 않습니다.
-            </>
-          ) : (
-            <>
-              지금 표시될 행 <b className="num">{legendTypes.length}</b>개:{' '}
-              {legendTypes.join(' · ')}
-            </>
-          )}
-        </p>
       </div>
     </Modal>
   );

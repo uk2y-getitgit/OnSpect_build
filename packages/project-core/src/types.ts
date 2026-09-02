@@ -314,8 +314,6 @@ export type ProjectLegend = {
   /** 범례 블록 전체 마스터 스위치 */
   enabled: boolean;
   lgScale: number;
-  /** D8 결함유형 행 표시. **기본 true** — 기존 동작 보존 */
-  showTypes: boolean;
   /** D15 상태 범례 3행. **기본 전부 false** — 기존 출력물이 한 글자도 안 바뀌게 */
   statusNew: boolean;
   statusPending: boolean;
@@ -325,7 +323,6 @@ export type ProjectLegend = {
 export const DEFAULT_PROJECT_LEGEND: ProjectLegend = {
   enabled: true,
   lgScale: 1,
-  showTypes: true,
   statusNew: false,
   statusPending: false,
   statusRepaired: false,
@@ -334,13 +331,15 @@ export const DEFAULT_PROJECT_LEGEND: ProjectLegend = {
 /**
  * 저장된 값(옛 레코드는 `undefined`·필드 누락)을 **읽기 시점에 정규화**한다.
  * `isInkMemo` 와 같은 수법 — 저장 레코드를 일괄로 고치지 않는다(마이그레이션 0건).
+ *
+ * ⭐ **U-3 — 폐기된 `showTypes` 는 여기서 조용히 떨어진다.** 옛 레코드에 그 키가 남아 있어도
+ *    읽는 순간 사라지므로 `DB_VERSION` 을 올릴 이유가 없다(필드 삭제 = 읽기 시점 무시).
  */
 export function projectLegendOf(lg: Partial<ProjectLegend> | null | undefined): ProjectLegend {
   if (!lg) return DEFAULT_PROJECT_LEGEND;
   return {
     enabled: lg.enabled ?? DEFAULT_PROJECT_LEGEND.enabled,
     lgScale: lg.lgScale ?? DEFAULT_PROJECT_LEGEND.lgScale,
-    showTypes: lg.showTypes ?? DEFAULT_PROJECT_LEGEND.showTypes,
     statusNew: lg.statusNew ?? DEFAULT_PROJECT_LEGEND.statusNew,
     statusPending: lg.statusPending ?? DEFAULT_PROJECT_LEGEND.statusPending,
     statusRepaired: lg.statusRepaired ?? DEFAULT_PROJECT_LEGEND.statusRepaired,

@@ -410,20 +410,13 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     [currentDrawing, project, tbPreview],
   );
 
-  // F5-2 범례 — 행은 저장하지 않고 **이 도면에 실제로 쓰인 결함유형**에서 파생한다.
+  // F5-2 범례 — 행은 저장하지 않고 **이 도면에 실제로 있는 상태**에서 파생한다(D15).
   // 배경 레이어는 뷰포트가 바뀔 때만 다시 그리므로, 행 구성이 실제로 바뀔 때만
   // 새 객체가 나오도록 서명(키)으로 memo 를 건다 — 결함을 옮길 때마다 재렌더하지 않게.
-  // ⭐ 서명에 **상태**도 넣는다 — D15 상태 범례는 "그 도면에 그 상태가 있는가"로 행이 정해지므로,
-  //    결함유형만 보면 마지막 `보수완료` 결함을 지워도 범례 행이 남는다
+  // ⭐ U-3 로 결함유형 행이 사라져 서명은 **상태 집합** 하나로 좁아졌다.
   const legendSig = useMemo(() => {
     const mine = defects.filter((d) => d.drawingId === currentDrawing?.id);
-    const types = mine
-      .map((d) => d.defectTypeId ?? d.defectTypeName ?? '')
-      .filter((x) => x !== '')
-      .sort()
-      .join('|');
-    const statuses = [...new Set(mine.map((d) => d.status))].sort().join('|');
-    return `${types}#${statuses}`;
+    return [...new Set(mine.map((d) => d.status))].sort().join('|');
   }, [defects, currentDrawing?.id]);
   const legend = useMemo(
     () => legendConfigFor(currentDrawing, defects, project, lgPreview),
@@ -438,19 +431,6 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     if (s === 1) return DEFAULT_GLOBAL_STYLE;
     return { ...DEFAULT_GLOBAL_STYLE, balloonRadius: DEFAULT_GLOBAL_STYLE.balloonRadius * s };
   }, [currentDrawing?.labelScale]);
-
-  // TitleBlockDialog 미리보기용 — 이 도면에 실제로 등장한 결함유형 이름 (중복 없이, seq 순)
-  const legendTypeNames = useMemo(() => {
-    const out: string[] = [];
-    const seen = new Set<string>();
-    for (const d of [...defects].sort((a, b) => a.seq - b.seq)) {
-      const name = (d.defectTypeName ?? '').trim();
-      if (name === '' || seen.has(name)) continue;
-      seen.add(name);
-      out.push(name);
-    }
-    return out;
-  }, [defects]);
 
   /** F5-1·F5-2 — 도곽·범례 설정 저장. ProjectSetup 의 같은 이름 함수와 동일한 로직 */
   /**
@@ -1057,7 +1037,6 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         <TitleBlockDialog
           drawing={currentDrawing}
           project={project}
-          legendTypes={legendTypeNames}
           busy={titleBusy}
           onApply={(tb, lg, name) => applyTitleBlock(currentDrawing, tb, lg, name)}
           onPreview={(tb, lg) => {

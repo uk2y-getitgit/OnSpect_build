@@ -1223,7 +1223,6 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
         <TitleBlockDialog
           drawing={titling}
           project={project}
-          legendTypes={legendTypesOf(defects, titling.id)}
           busy={titleBusy}
           onApply={(tb, lg, name) => applyTitleBlock(titling, tb, lg, name)}
           onClose={() => {
@@ -1451,16 +1450,3 @@ function OrderableList({
   );
 }
 
-/** F5-2 — 이 도면에 실제로 쓰인 결함유형 이름 (범례 미리보기용) */
-function legendTypesOf(defects: readonly Defect[], drawingId: string): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const d of [...defects].sort((a, b) => a.seq - b.seq)) {
-    if (d.drawingId !== drawingId) continue;
-    const name = (d.defectTypeName ?? '').trim();
-    if (name === '' || seen.has(name)) continue;
-    seen.add(name);
-    out.push(name);
-  }
-  return out;
-}
