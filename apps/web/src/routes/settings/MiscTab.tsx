@@ -5,6 +5,7 @@
  * 이미 만들어진 용역은 자기 스냅샷을 그대로 유지한다 — 작년 보고서를 다시 뽑으면 옛 이름이 나와야 한다.
  */
 import { STRUCTURE_TYPE_TABS, type Project, type StructureType } from '@onspect/project-core';
+import type { PersistenceState } from '../../data/idb/db';
 
 export function MiscTab({
   project,
@@ -12,6 +13,7 @@ export function MiscTab({
   onReloadSeed,
   onPromote,
   promotedAt,
+  persistence,
 }: {
   project: Project;
   onDefaultStructureType: (v: StructureType | null) => void;
@@ -19,11 +21,14 @@ export function MiscTab({
   onPromote: () => void;
   /** 이 용역 설정이 뜬 원본 ORG 의 시각. null 이면 알 수 없음 */
   promotedAt: number | null;
+  /** 저장소 영속 요청 결과 (P3 · D11). 앱 시작 시 1회 요청한 값 */
+  persistence: PersistenceState;
 }) {
   const current = project.defaultStructureType;
 
   return (
     <div className="set-misc">
+      <PersistenceCard state={persistence} />
       <section className="set-card">
         <h3 className="set-card__title">구조유형 기본값</h3>
         <p className="set-card__desc">
@@ -85,5 +90,51 @@ export function MiscTab({
         </button>
       </section>
     </div>
+  );
+}
+
+// ── 저장소 영속 (P3 · D11) ────────────────────────────────────────────────
+/**
+ * 앱 시작 시 1회 요청한 `navigator.storage.persist()` 의 결과를 그대로 보여준다.
+ *
+ * **거절돼도 앱은 정상 동작한다.** 다만 브라우저가 용량 압박 때 이 앱의 데이터를
+ * 말없이 지울 수 있다는 뜻이라, 현장에 나가기 전에 알고는 있어야 한다.
+ * 여기에 [다시 요청] 버튼을 두지 않는 이유: 브라우저가 이미 판정한 것을 다시 물어도
+ * 같은 답이 온다 — 누르면 아무 일도 없는 버튼이 된다.
+ */
+function PersistenceCard({ state }: { state: PersistenceState }) {
+  const view: Record<PersistenceState, { badge: string; tone: string; desc: string }> = {
+    UNKNOWN: {
+      badge: '확인 중…',
+      tone: 'unknown',
+      desc: '앱을 시작할 때 브라우저에 영속 저장을 요청합니다.',
+    },
+    GRANTED: {
+      badge: '허용됨',
+      tone: 'ok',
+      desc: '브라우저가 용량이 부족해도 이 앱의 데이터를 임의로 지우지 않습니다.',
+    },
+    DENIED: {
+      badge: '거절됨',
+      tone: 'warn',
+      desc:
+        '브라우저가 영속 저장을 허락하지 않았습니다. 앱은 그대로 동작하지만, 기기 용량이 크게 부족해지면 ' +
+        '이 앱의 데이터가 지워질 수 있습니다. 홈 화면에 설치하면 허용될 가능성이 높아집니다.',
+    },
+    UNSUPPORTED: {
+      badge: '지원 안 함',
+      tone: 'warn',
+      desc: '이 브라우저는 영속 저장을 지원하지 않습니다. 중요한 작업은 자주 백업해 주세요.',
+    },
+  };
+  const v = view[state];
+
+  return (
+    <section className="set-card">
+      <h3 className="set-card__title">
+        저장소 영속 <span className={`set-badge set-badge--${v.tone}`}>{v.badge}</span>
+      </h3>
+      <p className="set-card__desc">{v.desc}</p>
+    </section>
   );
 }

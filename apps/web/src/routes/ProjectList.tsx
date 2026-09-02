@@ -15,11 +15,19 @@ import {
   type ProjectSummary,
 } from '@onspect/project-core';
 import { useAppData } from '../data/appData';
+import { estimateStorage } from '../data/idb/db';
 import { seedSampleProject, SAMPLE_SUMMARY } from '../data/sampleProject';
 import { navigate } from '../router';
 import { BusyButton, EmptyState } from '../ui/Form';
 import { MoreMenu } from '../ui/Menu';
 import { useToast } from '../ui/ToastHost';
+
+/**
+ * 여유가 이만큼도 안 남으면 경고색으로 바꾼다 (P5).
+ * 사진 인입이 실제로 막히는 선은 8MB(`photoIngest.STORAGE_HEADROOM`)지만,
+ * **막히고 나서 알려주면 늦다.** 사진 한 묶음(≈50장 × 렌더+썸네일+원본)이 들어갈 여유를 기준으로 잡았다.
+ */
+const LOW_STORAGE_BYTES = 500 * 1024 * 1024;
 
 export function ProjectList() {
   const { storage, guard, reloadKey, reload } = useAppData();
@@ -28,6 +36,8 @@ export function ProjectList() {
   const [query, setQuery] = useState('');
   const [seeding, setSeeding] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  /** 기기 저장 여유 (P5). `null` = 브라우저가 알려주지 않음 — 그럴 땐 아무것도 표시하지 않는다 */
+  const [space, setSpace] = useState<{ usage: number; quota: number } | null>(null);
 
   // 상대시간이 `방금` 에 멈춰 있으면 화면이 죽은 것처럼 보인다
   useEffect(() => {
@@ -45,6 +55,17 @@ export function ProjectList() {
       alive = false;
     };
   }, [storage, reloadKey]);
+
+  // 저장 여유 (P5) — 목록을 다시 읽을 때마다 같이 갱신한다(삭제 직후 숫자가 안 맞으면 이상하다)
+  useEffect(() => {
+    let alive = true;
+    void estimateStorage().then((e) => {
+      if (alive) setSpace(e);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [reloadKey, summaries]);
 
   const filtered = useMemo(() => {
     if (!summaries) return null;
@@ -240,6 +261,35 @@ export function ProjectList() {
       <p className="page__note">
         데이터는 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 함께 사라집니다.
       </p>
+
+      <StorageNote space={space} />
     </div>
+  );
+}
+
+/**
+ * 기기 저장 여유 (P5) — 현장에 나가기 **전에** 보여야 의미가 있다.
+ * 사진 수백 장이 들어가는 앱이라 "다 찍고 나서 용량 부족"이 최악이다.
+ */
+function StorageNote({ space }: { space: { usage: number; quota: number } | null }) {
+  // 브라우저가 추정치를 안 주면(사생활 보호 모드 등) 침묵한다. 0GB 라고 거짓말하지 않는다
+  if (!space || space.quota <= 0) return null;
+  const free = Math.max(0, space.quota - space.usage);
+  const low = free < LOW_STORAGE_BYTES;
+
+  return (
+    <p className="page__storage" data-low={low ? '1' : undefined} role="status">
+      기기 여유 <b className="num">{formatBytes(free)}</b>
+      <span className="muted">
+        {' '}
+        · 이 앱이 쓰는 중 <span className="num">{formatBytes(space.usage)}</span>
+      </span>
+      {low && (
+        <b className="page__storageWarn">
+          {' '}
+          — 저장 공간이 얼마 남지 않았습니다. 다 쓴 용역을 지우고 현장에 나가세요.
+        </b>
+      )}
+    </p>
   );
 }

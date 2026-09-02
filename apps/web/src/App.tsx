@@ -6,6 +6,7 @@
  */
 import { AppDataProvider, useAppData } from './data/appData';
 import { deleteDatabase } from './data/idb/db';
+import { useServiceWorker } from './pwa/useServiceWorker';
 import { useRoute } from './router';
 import { PrintRoute } from './export/printView/PrintRoute';
 import { CanvasRoute } from './routes/CanvasRoute';
@@ -33,6 +34,8 @@ function Shell() {
   const route = useRoute();
   const { storage, saveError, clearSaveError } = useAppData();
   const [resetting, setResetting] = useState(false);
+  // 서비스워커 등록(P2)과 새 버전 감지(P4). 등록 실패는 앱을 막지 않는다
+  const { updateAvailable, applying, applyUpdate } = useServiceWorker();
 
   // 인쇄 뷰는 **앱 셸 밖**이다 (§4-9) — 배너·초기화 버튼이 인쇄물에 섞이면 안 된다
   if (route.name === 'EXPORT_PRINT') {
@@ -50,6 +53,28 @@ function Shell() {
           <span className="banner__hint">앱은 계속 쓸 수 있지만 이 변경은 저장되지 않았습니다.</span>
           <button type="button" className="btn btn--small" onClick={clearSaveError}>
             닫기
+          </button>
+        </div>
+      )}
+      {/*
+        새 버전 배너 (P4 · 가정 V3) — **저절로 새로고침하지 않는다.**
+        현장에서 입력 중에 화면이 갈아엎히면 값이 날아간다. 누르는 것은 사용자다.
+      */}
+      {updateAvailable && (
+        <div className="banner banner--update" role="status">
+          <span className="banner__text">새 버전이 있습니다</span>
+          <span className="banner__hint">
+            지금 작업 중이라면 나중에 눌러도 됩니다. 누르기 전까지는 현재 버전 그대로 씁니다.
+          </span>
+          <span className="banner__spacer" />
+          <button
+            type="button"
+            className="btn btn--small btn--primary"
+            disabled={applying}
+            onClick={applyUpdate}
+            title="새 버전을 적용하고 화면을 새로 불러옵니다"
+          >
+            {applying ? '적용 중…' : '지금 새로고침'}
           </button>
         </div>
       )}

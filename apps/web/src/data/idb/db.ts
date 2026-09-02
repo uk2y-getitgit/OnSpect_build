@@ -238,22 +238,35 @@ export async function estimateStorage(): Promise<{ usage: number; quota: number 
   }
 }
 
-let persistRequested = false;
+/**
+ * 저장소 영속 상태 (D11).
+ * `UNKNOWN` 은 "아직 물어보지 않았다" — 거절(`DENIED`)과 구분해야 화면이 거짓말을 안 한다.
+ */
+export type PersistenceState = 'UNKNOWN' | 'GRANTED' | 'DENIED' | 'UNSUPPORTED';
+
+/** 결과를 **약속째로** 기억한다. 요청이 아직 진행 중인데 두 번째 호출이 `true` 를 받아가면 안 된다 */
+let persistPromise: Promise<PersistenceState> | null = null;
 
 /**
- * 영속성 요청 (§2-9-d) — 첫 도면 업로드 시 1회.
+ * 영속성 요청 (§2-9-d · D11) — **앱 시작 시 1회** (`appData.tsx`).
  * 브라우저가 용량 압박 때 데이터를 자동 축출하는 것을 막는다. **거절되어도 앱은 그대로 동작한다.**
+ *
+ * ⚠️ 원래 호출처가 `DrawingUpload`(첫 도면 업로드) 하나였다. 도면을 올리지 않고 pull 만 하는
+ *    태블릿에서는 이 코드가 **한 번도 안 돌아** 축출 방어가 비어 있었다 (P3, 스펙 §5).
+ *    `DrawingUpload` 의 호출은 그대로 두었다 — 여러 번 불려도 안전하다(약속 1개를 공유).
  */
-export async function requestPersistence(): Promise<boolean> {
-  if (persistRequested) return true;
-  persistRequested = true;
-  if (typeof navigator === 'undefined' || !navigator.storage?.persist) return false;
-  try {
-    if (await navigator.storage.persisted?.()) return true;
-    return await navigator.storage.persist();
-  } catch {
-    return false;
-  }
+export function requestPersistence(): Promise<PersistenceState> {
+  if (persistPromise) return persistPromise;
+  persistPromise = (async (): Promise<PersistenceState> => {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persist) return 'UNSUPPORTED';
+    try {
+      if (await navigator.storage.persisted?.()) return 'GRANTED';
+      return (await navigator.storage.persist()) ? 'GRANTED' : 'DENIED';
+    } catch {
+      return 'UNSUPPORTED';
+    }
+  })();
+  return persistPromise;
 }
 
 /** 설정 메뉴의 `[로컬 데이터 초기화]` (2단 확인은 UI 가 한다) */

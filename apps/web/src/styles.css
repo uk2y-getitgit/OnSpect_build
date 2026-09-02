@@ -1504,8 +1504,16 @@ kbd {
   color: #8a6114;
 }
 
+/* 새 버전 안내 (P4) — 오류가 아니다. 파랑(UI accent)으로 둔다 */
+.banner--update {
+  background: var(--accent-weak);
+  border-bottom-color: #c3d8f7;
+  color: var(--accent-ink);
+}
+
 .banner__text { font-weight: 700; }
 .banner__hint { opacity: 0.85; }
+.banner__spacer { flex: 1; }
 
 .shell__reset {
   position: fixed;
@@ -1607,6 +1615,23 @@ kbd {
   padding-top: 10px;
   color: var(--text-dim);
   font-size: 12px;
+}
+
+/* 기기 저장 여유 (P5) — `page__note` 바로 아래 한 줄.
+   `margin-top: auto` 를 **주지 않는다**: 두 줄이 auto 여백을 나눠 가져 사이가 벌어진다 */
+.page__storage {
+  margin: 3px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  word-break: keep-all;
+}
+
+.page__storage[data-low='1'] {
+  color: var(--warn);
+}
+
+.page__storageWarn {
+  color: var(--error);
 }
 
 /* ── 검색 ─────────────────────────────────────────────────────────────── */
@@ -2784,6 +2809,32 @@ select.input { cursor: pointer; }
 
 .set-card__title { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
 
+/* 상태 뱃지 (P3 저장소 영속) — 제목 옆 한 조각 */
+.set-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.set-badge--ok {
+  border-color: #b7ddcc;
+  background: #e8f6f0;
+  color: var(--ok);
+}
+
+.set-badge--warn {
+  border-color: #f0dcb4;
+  background: #fdf3e0;
+  color: #8a6114;
+}
+
 .set-card__desc {
   margin: 0 0 10px;
   color: var(--text-muted);
@@ -3265,6 +3316,13 @@ select.input { cursor: pointer; }
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+/* 촬영(P6) 이 붙어 버튼이 둘이 될 수 있다 — 묶어서 오른쪽에 붙인다 */
+.photos__headActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .photos__title {
@@ -4131,6 +4189,13 @@ select.input { cursor: pointer; }
  *    안전영역 계산(`CanvasView.tsx` — 크기 0 인 요소는 건너뛴다)에 들어간다.
  *    `display:none` 이면 자동으로 계산에서 빠져 하단 여백까지 함께 돌려받는다.
  */
+/* 촬영 버튼은 **기본이 숨김**이다 (P6). 아래 터치 미디어쿼리에서만 켠다.
+ * ⚠️ 순서가 중요하다 — 이 규칙이 미디어쿼리보다 **뒤에** 오면 특이도가 같아 언제나 숨겨진다.
+ * PC 에서 `capture` 는 무시돼 그냥 파일 선택창이 뜬다 = `+ 사진 추가` 와 똑같은 버튼이 둘이 된다. */
+.photos__capture {
+  display: none;
+}
+
 @media (hover: none) and (pointer: coarse) {
   /* 휠·Space·Alt·Shift·Ctrl+Z 안내 */
   .stage__help {
@@ -4139,5 +4204,9 @@ select.input { cursor: pointer; }
   /* Ctrl+Enter·Esc 안내 — 사용자가 직접 지목하진 않았으나 같은 종류다 (ASSUMPTIONS U29) */
   .memo-editor__hint {
     display: none;
+  }
+  /* 촬영 버튼 (P6) — 카메라가 있는 기기에서만 뜬다 */
+  .photos__capture {
+    display: inline-flex;
   }
 }

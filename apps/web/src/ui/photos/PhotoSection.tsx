@@ -5,8 +5,13 @@
  * 사진은 Blob·objectURL 을 다뤄야 하므로 그 순수 폼 경계 안에 들어갈 수 없다.
  * 그래서 **`ui/photos/` 에 자리를 분리했다** — RN 재사용 경계를 깨지 않는다.
  *
- * PC 웹이므로 **촬영은 없다**(D1). `<input type=file multiple>` 폴더·파일 선택뿐이고,
+ * PC 웹에서는 `<input type=file multiple>` 폴더·파일 선택뿐이고,
  * 롱프레스 대신 **우클릭**을 쓴다(기획서 §2-C 가 명시적으로 허용).
+ *
+ * **촬영(P6)** — 터치 기기에서만 `[촬영]` 이 하나 더 붙는다
+ * (`accept="image/*" capture="environment"` = 후면 카메라).
+ * 파일은 `onAdd` 로 그대로 흘려보낸다 — **기존 `photoIngest` 파이프라인을 그대로 쓰고,
+ * 촬영 전용 경로를 새로 만들지 않는다.** 두 경로가 생기면 EXIF·리사이즈·용량검사가 갈라진다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -85,6 +90,7 @@ export function PhotoSection(props: PhotoSectionProps) {
   } = props;
 
   const addInputRef = useRef<HTMLInputElement | null>(null);
+  const captureInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const replaceTargetRef = useRef<string | null>(null);
 
@@ -158,22 +164,45 @@ export function PhotoSection(props: PhotoSectionProps) {
         <h3 className="photos__title">
           사진 <span className="photos__count num">{photos.length}장</span>
         </h3>
-        <button
-          type="button"
-          className="btn btn--small"
-          onClick={() => addInputRef.current?.click()}
-          disabled={addDisabled || busy}
-          title={
-            addDisabled
-              ? '보수완료 표기에는 사진을 추가할 수 없습니다'
-              : disabled
-                ? // G-8 — 전회차 결함의 유일한 열린 문. 무엇이 일어나는지 미리 말해 준다
-                  `이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
-                : `파일을 골라 추가합니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
-          }
-        >
-          {busy ? '처리 중…' : '+ 사진 추가'}
-        </button>
+        {/* 버튼을 묶는다 — `photos__head` 가 space-between 이라 묶지 않으면 촬영 버튼이 가운데로 뜬다 */}
+        <div className="photos__headActions">
+          {/*
+            촬영 (P6) — **터치 기기에서만 보인다**(CSS `(hover:none) and (pointer:coarse)`).
+            PC 에서 `capture` 는 브라우저가 무시해 그냥 파일 선택창이 뜬다 → 같은 버튼이 두 개로 보인다.
+            판정은 표준 미디어쿼리로만 한다 (styles.css 의 터치 규칙과 같은 수법, UA 스니핑 금지)
+          */}
+          <button
+            type="button"
+            className="btn btn--small photos__capture"
+            onClick={() => captureInputRef.current?.click()}
+            disabled={addDisabled || busy}
+            title={
+              addDisabled
+                ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+                : disabled
+                  ? '이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다'
+                  : '카메라로 지금 찍어 이 결함에 붙입니다'
+            }
+          >
+            {busy ? '처리 중…' : '촬영'}
+          </button>
+          <button
+            type="button"
+            className="btn btn--small"
+            onClick={() => addInputRef.current?.click()}
+            disabled={addDisabled || busy}
+            title={
+              addDisabled
+                ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+                : disabled
+                  ? // G-8 — 전회차 결함의 유일한 열린 문. 무엇이 일어나는지 미리 말해 준다
+                    `이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
+                  : `파일을 골라 추가합니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
+            }
+          >
+            {busy ? '처리 중…' : '+ 사진 추가'}
+          </button>
+        </div>
       </header>
 
       <input
@@ -181,6 +210,21 @@ export function PhotoSection(props: PhotoSectionProps) {
         type="file"
         accept={PHOTO_ACCEPT_ATTR}
         multiple
+        hidden
+        onChange={pickFiles}
+      />
+      {/*
+        촬영 입력 (P6). `multiple` 을 주지 않는다 — 카메라는 한 장씩 돌아온다.
+        `accept` 는 여기서만 `image/*` 다: 카메라 앱을 확실히 띄우기 위해서다.
+        (`image/jpeg,...` 로 좁히면 기기에 따라 촬영 대신 파일 선택창이 뜬다.)
+        형식이 안 맞는 결과물(HEIC 등)은 `photoIngest` 가 지금처럼 인라인 경고로 거절한다 —
+        **검사를 우회하는 것이 아니라 카메라를 여는 문만 넓힌 것이다.**
+      */}
+      <input
+        ref={captureInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         hidden
         onChange={pickFiles}
       />

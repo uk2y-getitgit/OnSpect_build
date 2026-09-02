@@ -78,7 +78,7 @@ export function Settings({
   projectId: string;
   fromFloorId: string | null;
 }) {
-  const { storage, guard } = useAppData();
+  const { storage, persistence, guard } = useAppData();
   const toast = useToast();
 
   const [project, setProject] = useState<Project | null>(null);
@@ -317,6 +317,7 @@ export function Settings({
           {tab === 'MISC' && (
             <MiscTab
               project={project}
+              persistence={persistence}
               promotedAt={settings.snapshotFrom}
               onDefaultStructureType={changeDefaultStructureType}
               onReloadSeed={reloadSeed}

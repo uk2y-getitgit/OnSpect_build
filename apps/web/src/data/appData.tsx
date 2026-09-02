@@ -17,7 +17,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { describeError, openDb } from './idb/db.js';
+import { describeError, openDb, requestPersistence, type PersistenceState } from './idb/db.js';
 import { IdbProjectRepo } from './idb/repo.js';
 
 export type StorageState =
@@ -27,6 +27,11 @@ export type StorageState =
 
 type AppDataValue = {
   storage: StorageState;
+  /**
+   * 저장소 영속 허용 여부 (D11 · P3). 앱 시작 시 1회 요청한 결과.
+   * **거절돼도 앱은 그대로 동작한다** — 브라우저가 용량 압박 때 지울 수 있다는 뜻일 뿐이다
+   */
+  persistence: PersistenceState;
   /** 저장 실패 지속 배너 문구. null 이면 배너 없음 */
   saveError: string | null;
   clearSaveError: () => void;
@@ -43,14 +48,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [storage, setStorage] = useState<StorageState>({ phase: 'LOADING' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [persistence, setPersistence] = useState<PersistenceState>('UNKNOWN');
   const alive = useRef(true);
 
   useEffect(() => {
     alive.current = true;
     openDb().then((r) => {
       if (!alive.current) return;
-      if (r.ok) setStorage({ phase: 'READY', repo: new IdbProjectRepo(r.db, r.deviceId), deviceId: r.deviceId });
-      else setStorage({ phase: 'UNAVAILABLE', message: r.message });
+      if (r.ok) {
+        setStorage({ phase: 'READY', repo: new IdbProjectRepo(r.db, r.deviceId), deviceId: r.deviceId });
+        /**
+         * 축출 방어 (D11 · P3) — **앱 시작 시 1회.**
+         * 도면을 올리지 않고 pull 만 하는 태블릿에서도 반드시 돌아야 한다.
+         * DB 를 연 **뒤**에 요청한다 — 저장된 데이터가 있는 오리진일수록 브라우저가 잘 허락한다.
+         * 결과를 기다리지 않는다. 거절돼도 앱은 그대로 동작한다
+         */
+        void requestPersistence().then((p) => {
+          if (alive.current) setPersistence(p);
+        });
+      } else setStorage({ phase: 'UNAVAILABLE', message: r.message });
     });
     return () => {
       alive.current = false;
@@ -71,13 +87,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppDataValue>(
     () => ({
       storage,
+      persistence,
       saveError,
       clearSaveError: () => setSaveError(null),
       guard,
       reloadKey,
       reload: () => setReloadKey((v) => v + 1),
     }),
-    [storage, saveError, guard, reloadKey],
+    [storage, persistence, saveError, guard, reloadKey],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

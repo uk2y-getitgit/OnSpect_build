@@ -2,8 +2,26 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      viewport-fit=cover 는 넣지 않는다 — styles.css 에 `env(safe-area-inset-*)` 처리가
+      아직 한 곳도 없어서, 지금 켜면 노치 기기에서 UI 가 노치 아래로 들어간다.
+      태블릿 셸(T2-1) 에서 안전영역 CSS 와 함께 켠다.
+    -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OnSpect — 도면 캔버스</title>
+
+    <!-- PWA (P1) — display:standalone · orientation:any (D10 이 가로·세로를 둘 다 정의했다) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1b4ba8" />
+    <!--
+      iOS/iPadOS 는 매니페스트의 icons 를 홈 화면 아이콘으로 쓰지 않는다.
+      `apple-touch-icon` 이 없으면 화면 스크린샷이 아이콘이 된다 — 반드시 남긴다.
+    -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="OnSpect" />
   </head>
   <body>
     <div id="root"></div>
