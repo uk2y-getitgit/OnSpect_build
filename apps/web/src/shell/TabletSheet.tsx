@@ -18,11 +18,15 @@
  *     이 컴포넌트는 캔버스를 모른다
  *
  * `SET_SAFE_INSETS` 배선(T2-6)은 이 파일이 아니라 호출자(`CanvasRoute`→`CanvasView`)에 있다 —
- * 이 컴포넌트는 여전히 "자리"만 알고 캔버스를 모른다. `viewportHeight()`(아래)를 그쪽이
- * 그대로 가져다 써서 실제 CSS 높이(`SHEET_SNAP_RATIO[snap] * vh`)와 어긋나지 않게 한다.
+ * 이 컴포넌트는 여전히 "자리"만 알고 캔버스를 모른다. 단, 안전영역 px 는 이 컴포넌트가
+ * `onHeightChange` 로 **실측한 값**(`getBoundingClientRect`)을 그대로 보고한다 — 호출자가
+ * `SHEET_SNAP_RATIO * vh` 공식을 따로 계산하지 않는다. 공식을 두 벌로 유지하면 `vh` 를
+ * 구하는 기준(`visualViewport` vs `innerHeight`)이 온스크린 키보드가 열릴 때 CSS 의 실제
+ * 기준과 갈라질 수 있기 때문이다(2026-09-03 code-reviewer 지적). 진실의 원천은 DOM 하나뿐.
  */
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type FocusEvent as ReactFocusEvent,
@@ -53,8 +57,12 @@ const SNAP_LABEL: Record<SheetSnap, string> = {
 const DRAG_SLOP_PX = 6;
 
 /**
- * `export` — T2-6 이 안전영역(하단 인셋) 픽셀을 계산할 때 **같은 값**을 써야
- * `.sheet` 의 실제 CSS 높이(`SHEET_SNAP_RATIO[snap] * vh`)와 어긋나지 않는다.
+ * `export` — 드래그 중 손잡이 위치를 3단(PEEK/HALF/FULL) 픽셀 범위로 clamp 하거나
+ * (`onPointerMove`) 놓은 지점에서 가장 가까운 단을 고를 때(`nearestSnap`)만 쓴다.
+ * **안전영역(T2-6) 계산에는 더 이상 쓰지 않는다** — 그쪽은 `.sheet` 의 실제 렌더 높이를
+ * `getBoundingClientRect` 로 직접 읽는다(`onHeightChange`, 아래). 이유: 이 함수가 우선하는
+ * `visualViewport` 와 CSS `height:N%` 가 기준으로 삼는 레이아웃 뷰포트(`innerHeight`)가
+ * 온스크린 키보드가 열리는 동안 갈라질 수 있기 때문이다.
  * 주소창이 접히는 브라우저에서는 `visualViewport` 가 실제로 보이는 높이다.
  */
 export function viewportHeight(): number {
@@ -83,6 +91,12 @@ function isTextField(el: EventTarget | null): boolean {
 export type TabletSheetProps = {
   snap: SheetSnap;
   onSnapChange: (next: SheetSnap) => void;
+  /**
+   * 시트의 실제 렌더 높이(px)가 바뀔 때마다 알려준다 — T2-6 안전영역이 이 값을 그대로
+   * 쓴다. 마운트 시 즉시 한 번, 이후 크기가 바뀔 때마다(스냅 전환·드래그·리사이즈)
+   * 다시 부른다. 언마운트되면(시트가 사라지면) `0` 으로 한 번 더 부른다.
+   */
+  onHeightChange?: (px: number) => void;
   /** `<Inspector>` 하나가 들어온다 */
   children: ReactNode;
 };
@@ -100,24 +114,43 @@ export function InspectorPlacement({
   visible,
   snap,
   onSnapChange,
+  onHeightChange,
   children,
 }: TabletSheetProps & { sheet: boolean; visible: boolean }) {
   if (!sheet) return <>{children}</>;
   if (!visible) return null;
   return (
-    <TabletSheet snap={snap} onSnapChange={onSnapChange}>
+    <TabletSheet snap={snap} onSnapChange={onSnapChange} onHeightChange={onHeightChange}>
       {children}
     </TabletSheet>
   );
 }
 
-export function TabletSheet({ snap, onSnapChange, children }: TabletSheetProps) {
+export function TabletSheet({ snap, onSnapChange, onHeightChange, children }: TabletSheetProps) {
   /** 드래그 중에만 픽셀 높이를 쓴다. 놓으면 다시 비율(`null`)로 돌아간다 */
   const [dragH, setDragH] = useState<number | null>(null);
   const dragRef = useRef<{ startY: number; startH: number; moved: boolean } | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   /** 키보드가 뜨기 전 단 — 닫히면 여기로 돌아간다 (§5-2) */
   const restoreRef = useRef<SheetSnap | null>(null);
+
+  /**
+   * T2-6 — 실제 렌더 높이를 그대로 보고한다. CSS `height:N%`(정적) · 드래그 중 인라인
+   * `style.height`(픽셀) · 스냅 전환 트랜지션, 무엇으로 높이가 바뀌었든 `getBoundingClientRect`
+   * 는 그 결과값 하나만 읽으므로 계산식이 갈라질 여지가 없다.
+   */
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!el || !onHeightChange) return undefined;
+    const report = () => onHeightChange(Math.round(el.getBoundingClientRect().height));
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      onHeightChange(0);
+    };
+  }, [onHeightChange]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
     const el = sheetRef.current;

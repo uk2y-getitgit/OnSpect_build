@@ -70,7 +70,7 @@ import {
 } from '../store';
 import { navigate, replace } from '../router';
 import { TOUCH_HIT_PROFILE, useUiMode } from '../shell/useUiMode';
-import { InspectorPlacement, SHEET_SNAP_RATIO, viewportHeight, type SheetSnap } from '../shell/TabletSheet';
+import { InspectorPlacement, type SheetSnap } from '../shell/TabletSheet';
 import { FloorChips } from '../shell/FloorChips';
 import { Minimap } from '../shell/Minimap';
 import { Sidebar } from '../ui/Sidebar';
@@ -129,22 +129,15 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('PEEK');
 
   /**
-   * T2-6 — 바텀시트가 실제로 잡아먹는 하단 px. `.sheet` 의 CSS 높이(`styles.css`
-   * `.sheet[data-snap=…] { height: N% }`)와 **같은 공식**(`SHEET_SNAP_RATIO * vh`)으로
-   * 계산해야 어긋나지 않는다 — `TabletSheet.tsx` 의 `viewportHeight()` 를 그대로 가져다 쓴다.
-   * 시트가 안 떠 있으면(결함 미선택 · PC · 태블릿 가로) 0 — 안전영역이 줄지 않는다.
+   * T2-6 — 바텀시트가 실제로 잡아먹는 하단 px. `TabletSheet` 가 자신의 렌더 높이를
+   * `getBoundingClientRect` 로 실측해 `onHeightChange` 로 보고한 값을 그대로 받는다
+   * (아래 `InspectorPlacement` 호출부). CSS 높이 공식(`SHEET_SNAP_RATIO * vh`)을 여기서
+   * 다시 계산하지 않는다 — `vh` 를 구하는 기준이 온스크린 키보드가 열릴 때 CSS 의 실제
+   * 기준과 갈라질 수 있어서다(2026-09-03 code-reviewer 지적, 66번 문서). 시트가 안 떠
+   * 있으면(결함 미선택 · PC · 태블릿 가로) `TabletSheet` 가 마운트되지 않거나 언마운트되며
+   * 0 을 보고한다.
    */
-  const [vh, setVh] = useState(() => viewportHeight());
-  useEffect(() => {
-    if (!sheetMode) return;
-    const onResize = () => setVh(viewportHeight());
-    window.addEventListener('resize', onResize);
-    window.visualViewport?.addEventListener('resize', onResize);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.visualViewport?.removeEventListener('resize', onResize);
-    };
-  }, [sheetMode]);
+  const [sheetBottomPx, setSheetBottomPx] = useState(0);
 
   const [state, dispatch] = useReducer(
     appReducer,
@@ -570,16 +563,6 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     sheetDefectRef.current = id;
     if (id !== null && sheetMode) setSheetSnap('HALF');
   }, [selected?.id, sheetMode]);
-
-  /**
-   * T2-6 — 시트가 실제로 뜬 동안만(§5-2 "선택 없이 시트가 열려 있지 않는다") 하단을 예약한다.
-   * `InspectorPlacement` 의 `visible` 판정(`selected !== null`)과 **같은 조건**이어야
-   * 시트가 안 보이는데 안전영역만 줄어드는 어긋남이 생기지 않는다.
-   */
-  const sheetBottomPx = useMemo(() => {
-    if (!sheetMode || selected === null) return 0;
-    return Math.round(SHEET_SNAP_RATIO[sheetSnap] * vh);
-  }, [sheetMode, selected, sheetSnap, vh]);
 
   // ── D18 유사결함 불러오기 ───────────────────────────────────────────────
   const [similarOpen, setSimilarOpen] = useState(false);
@@ -1048,6 +1031,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           visible={selected !== null}
           snap={sheetSnap}
           onSnapChange={setSheetSnap}
+          onHeightChange={setSheetBottomPx}
         >
           <Inspector
             ref={inspectorRef}
