@@ -15,12 +15,16 @@ import {
   canRedo,
   changedAttrKeys,
   canUndo,
-  defectTargetOf,
+  defectTargetsOf,
   describeCommand,
   EMPTY_HISTORY,
   initialCanvasState,
+  alignLabelsToGrid,
   canSetStatus,
+  effectiveLabelNorm,
   isLocked,
+  labelGridStepImgPx,
+  resolveStyle,
   memoTargetsOf,
   pushHistory,
   redo as redoStack,
@@ -166,6 +170,8 @@ export type Action =
    * 다른 전이(REPAIRED 관련)는 여기서 받지 않는다 — 리듀서가 조용히 무시한다.
    */
   | { t: 'SET_DEFECT_STATUS'; defectId: string; to: DefectStatus; toast?: string }
+  /** P-2 (D28) — 지금 열린 도면의 번호 풍선을 격자에 맞춰 정렬한다 */
+  | { t: 'ALIGN_LABELS' }
   /** T2-1 — 태블릿 모드 진입/이탈. `null` 이면 마우스 기본값으로 돌아간다 */
   | { t: 'SET_HIT_PROFILE'; profile: HitProfile | null }
   /**
@@ -268,6 +274,9 @@ function reduceApp(state: AppState, action: Action): AppState {
 
     case 'SET_DEFECT_STATUS':
       return setDefectStatus(state, action.defectId, action.to, action.toast);
+
+    case 'ALIGN_LABELS':
+      return alignLabels(state);
 
     case 'EDIT_MEMO':
       return { ...state, editingMemoId: action.memoId };
@@ -402,7 +411,8 @@ function recordCommandWrites(state: AppState, c: Command | null): AppState {
   if (!c) return state;
   // ⚠️ 지우개(D14)는 커맨드 **하나가 여러 메모**를 건드린다 — 드래그 1회가 커맨드 1건이라
   //    첫 메모만 올리면 나머지가 저장되지 않는다
-  return memoTargetsOf(c).reduce(recordMemoWrite, recordWrite(state, defectTargetOf(c)));
+  const withDefects = defectTargetsOf(c).reduce(recordWrite, state);
+  return memoTargetsOf(c).reduce(recordMemoWrite, withDefects);
 }
 
 /** 선택 대상이 사라졌으면 선택을 해제한다 (undo 로 생성이 취소된 경우) */
@@ -577,6 +587,66 @@ function setDefectStatus(
   });
   // 토스트는 **조기 반환 뒤**다 — 이미 그 상태였는데 "전환했습니다" 라고 하면 거짓말이다
   return toastText ? withToast(committed, 'info', toastText, true) : committed;
+}
+
+/**
+ * P-2 (D28 · Q71) — 지금 열린 도면의 번호 풍선을 격자에 맞춰 정렬한다.
+ *
+ * · 격자 간격 = `balloonRadius × 2.5`(이미지 px). 도면별 번호 크기(`labelScale`)가
+ *   이미 `balloonRadius` 에 반영돼 있어 **도면마다 자동으로 맞고 새 저장 필드가 안 생긴다**
+ * · 대상 = 지금 열린 도면 전체. **잠긴 결함(전회차·보수완료)은 제외** — 기존 잠금 규칙과 일관
+ * · 결함점(마크)은 안 움직인다. 움직이는 것은 풍선뿐이고 지시선이 따라 늘어난다
+ * · 커맨드 **하나** 로 올린다 → Ctrl+Z 한 번에 정렬 전체가 되돌아간다
+ *
+ * ⚠️ 시작 위치는 `label.x/y` 가 아니라 **화면에 그려진 위치**(`effectiveLabelNorm`)다.
+ *    한 번도 안 옮긴 풍선(`placed=false`)은 저장값이 자동 배치 위치와 다르다 —
+ *    저장값에서 스냅하면 눈에 보이는 것과 다른 곳으로 튄다(C-2 와 같은 함정).
+ */
+function alignLabels(state: AppState): AppState {
+  const dw = state.canvas.drawing;
+  // 도면 이미지 크기는 이미 `DrawingRef` 에 있다 — 어댑터가 따로 넣어 줄 필요가 없다
+  if (!dw || !(dw.imageWidth > 0) || !(dw.imageHeight > 0)) return state;
+  const iw = dw.imageWidth;
+  const ih = dw.imageHeight;
+  const drawingId = dw.id;
+  const onDrawing = defectsOfDrawing(state.defects, drawingId);
+  const targets = onDrawing.filter((d) => !isLocked(d));
+  if (targets.length === 0) {
+    return withToast(state, 'info', '정렬할 번호가 없습니다', false);
+  }
+
+  const global = globalStyleForLabelScale(state.labelScale);
+  // 화면 렌더와 **같은 소스**로 번호를 넘긴다 — 넓어진 풍선만큼 자동 배치가 더 밀린다
+  const numbers = displayNumbersOf(onDrawing);
+  const before = targets.map((d) => {
+    const p = effectiveLabelNorm(d, resolveStyle(d, global), iw, ih, numbers[d.id] ?? '');
+    return { defectId: d.id, x: p.x, y: p.y };
+  });
+
+  const stepImgPx = labelGridStepImgPx(global.balloonRadius);
+  const after = alignLabelsToGrid(before, stepImgPx / iw, stepImgPx / ih);
+
+  const items = before.map((b, i) => {
+    const a = after[i]!;
+    const d = targets[i]!;
+    return {
+      defectId: b.defectId,
+      from: { x: b.x, y: b.y },
+      to: { x: a.x, y: a.y },
+      fromPlaced: d.label.placed,
+      // 정렬된 순간부터는 사용자가 정한 위치다 — 다시 자동 배치로 돌아가면 안 된다
+      toPlaced: true,
+    };
+  });
+  const moved = items.filter(
+    (i) => i.from.x !== i.to.x || i.from.y !== i.to.y || i.fromPlaced !== i.toPlaced,
+  );
+  if (moved.length === 0) {
+    return withToast(state, 'info', '이미 정렬돼 있습니다', false);
+  }
+
+  const committed = applyAndPush(state, { k: 'ALIGN_LABELS', items });
+  return withToast(committed, 'info', `번호 ${moved.length}개를 정렬했습니다`, true);
 }
 
 function applyAndPush(state: AppState, c: Command): AppState {

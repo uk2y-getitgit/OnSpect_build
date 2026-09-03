@@ -27,6 +27,22 @@ export type Doc = { defects: readonly Defect[]; memos: readonly Memo[] };
 export type Command =
   | { k: 'CREATE_DEFECT'; defect: Defect }
   | { k: 'DELETE_DEFECT'; defect: Defect }
+  /**
+   * P-2 (D28) — 번호 풍선 **격자 정렬**. 여러 결함을 한 커맨드로 옮긴다.
+   *
+   * ⚠️ `MOVE_LABEL` 을 N개 쌓지 않는다 — 그러면 Ctrl+Z 를 결함 수만큼 눌러야 한다.
+   * 선례는 지우개(`DELETE_MEMO_PATH`)의 배치 payload 다. **Undo 1스텝 = 정렬 전체**.
+   */
+  | {
+      k: 'ALIGN_LABELS';
+      items: readonly {
+        defectId: string;
+        from: NPoint;
+        to: NPoint;
+        fromPlaced: boolean;
+        toPlaced: boolean;
+      }[];
+    }
   | {
       k: 'MOVE_LABEL';
       defectId: string;
@@ -173,6 +189,8 @@ export function describeCommand(c: Command): string {
       return '표기 추가';
     case 'RESET_LABEL':
       return '번호 위치 초기화';
+    case 'ALIGN_LABELS':
+      return '번호 정렬';
     case 'SET_MARK_GEOMETRY':
       return '표기 변경';
     case 'ADD_SKETCH':
@@ -222,6 +240,15 @@ export function applyCommand(defects: readonly Defect[], c: Command): Defect[] {
 
     case 'DELETE_DEFECT':
       return defects.filter((d) => d.id !== c.defect.id);
+
+    case 'ALIGN_LABELS': {
+      const byId = new Map(c.items.map((i) => [i.defectId, i]));
+      return defects.map((d) => {
+        const it = byId.get(d.id);
+        // ⚠️ style 은 절대 건드리지 않는다. 위치는 geometry 다 (§2-1-c, 함정 #5)
+        return it ? { ...d, label: { ...d.label, x: it.to.x, y: it.to.y, placed: it.toPlaced } } : d;
+      });
+    }
 
     case 'MOVE_LABEL':
     case 'RESET_LABEL':
@@ -414,7 +441,19 @@ export function memoTargetsOf(c: Command): string[] {
   }
 }
 
-/** 이 커맨드가 건드리는 결함 id. 메모 커맨드면 null */
+/**
+ * 이 커맨드가 건드리는 결함 id **전부**. 저장 대기열 분류에 쓴다.
+ *
+ * ⚠️ 격자 정렬(`ALIGN_LABELS`)은 **한 커맨드가 여러 결함을 건드린다** —
+ * 지우개(`DELETE_MEMO_PATH`)와 같은 사정이다. 첫 번째만 저장하면 나머지가 디스크에 안 남는다.
+ */
+export function defectTargetsOf(c: Command): string[] {
+  if (c.k === 'ALIGN_LABELS') return c.items.map((i) => i.defectId);
+  const one = defectTargetOf(c);
+  return one === null ? [] : [one];
+}
+
+/** 이 커맨드가 건드리는 결함 id. 메모 커맨드면 null. 여러 개면 `defectTargetsOf` 를 써라 */
 export function defectTargetOf(c: Command): string | null {
   switch (c.k) {
     case 'CREATE_DEFECT':
@@ -426,6 +465,8 @@ export function defectTargetOf(c: Command): string | null {
     case 'SET_MEMO_TEXT':
     case 'DELETE_MEMO_PATH':
     case 'RESTORE_MEMO_PATH':
+    // 여러 결함을 건드린다 — `defectTargetsOf` 로만 읽는다
+    case 'ALIGN_LABELS':
       return null;
     default:
       return c.defectId;
@@ -438,6 +479,17 @@ export function invertCommand(c: Command): Command {
       return { k: 'DELETE_DEFECT', defect: c.defect };
     case 'DELETE_DEFECT':
       return { k: 'CREATE_DEFECT', defect: c.defect };
+    case 'ALIGN_LABELS':
+      return {
+        k: 'ALIGN_LABELS',
+        items: c.items.map((i) => ({
+          defectId: i.defectId,
+          from: i.to,
+          to: i.from,
+          fromPlaced: i.toPlaced,
+          toPlaced: i.fromPlaced,
+        })),
+      };
     case 'MOVE_LABEL':
       return {
         k: 'MOVE_LABEL',

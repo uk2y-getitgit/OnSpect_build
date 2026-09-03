@@ -25,6 +25,7 @@ export * from './shapes.js';
 export * from './arrowRoute.js';
 export * from './memoGeom.js';
 export * from './defectGeom.js';
+export * from './labelGrid.js';
 export * from './hitTest.js';
 export * from './snapAlign.js';
 export * from './snapAngle.js';

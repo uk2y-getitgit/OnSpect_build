@@ -1127,6 +1127,17 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           >
             도면 크기
           </button>
+          {/* P-2 (D28) — 번호 풍선을 격자에 맞춰 줄 세운다. 결함점은 안 움직이고
+              잠긴 결함(전회차·보수완료)의 번호는 제외된다. Ctrl+Z 한 번에 전부 되돌아간다 */}
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title="번호 풍선을 균일한 격자에 맞춰 정렬합니다 (결함 위치는 그대로, Ctrl+Z 로 한 번에 되돌리기)"
+            disabled={!currentDrawing}
+            onClick={() => dispatch({ t: 'ALIGN_LABELS' })}
+          >
+            번호 정렬
+          </button>
         </div>
       </header>
 
