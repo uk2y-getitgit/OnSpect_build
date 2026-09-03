@@ -19,12 +19,12 @@ import {
   describeCommand,
   EMPTY_HISTORY,
   initialCanvasState,
-  alignLabelsOrthogonal,
+  alignLabelsToAnchors,
+  anchorNorm,
   canSetStatus,
   effectiveLabelNorm,
   isLocked,
-  labelAlignGapImgPx,
-  labelAlignToleranceImgPx,
+  labelAlignOptionsFor,
   resolveStyle,
   memoTargetsOf,
   pushHistory,
@@ -175,8 +175,22 @@ export type Action =
    * 다른 전이(REPAIRED 관련)는 여기서 받지 않는다 — 리듀서가 조용히 무시한다.
    */
   | { t: 'SET_DEFECT_STATUS'; defectId: string; to: DefectStatus; toast?: string }
-  /** P-2 (D28) — 지금 열린 도면의 번호 풍선을 격자에 맞춰 정렬한다 */
+  /** P-2 (D28) — 지금 열린 도면의 번호 풍선을 지시점과 직교로 정렬한다 */
   | { t: 'ALIGN_LABELS' }
+  /**
+   * P-1 (2026-09-03) — 한 도면의 결함·메모 좌표를 통째로 갈아끼운다.
+   * 도면 크기 조절이 좌표를 함께 옮길 때 쓴다.
+   *
+   * ⚠️ **Undo 스택에 안 올라간다.** `[A4로 맞추기]` 와 같은 성격이라 —
+   * 되돌리기는 다이얼로그의 [취소] 가 스냅샷으로 한다.
+   */
+  | {
+      t: 'SET_DRAWING_GEOMETRY';
+      defects: Defect[];
+      memos: Memo[];
+      /** `false` 면 **미리보기** — 저장 대기열에 넣지 않는다 */
+      persist: boolean;
+    }
   /** T2-1 — 태블릿 모드 진입/이탈. `null` 이면 마우스 기본값으로 돌아간다 */
   | { t: 'SET_HIT_PROFILE'; profile: HitProfile | null }
   /**
@@ -282,6 +296,9 @@ function reduceApp(state: AppState, action: Action): AppState {
 
     case 'ALIGN_LABELS':
       return alignLabels(state);
+
+    case 'SET_DRAWING_GEOMETRY':
+      return setDrawingGeometry(state, action.defects, action.memos, action.persist);
 
     case 'EDIT_MEMO':
       return { ...state, editingMemoId: action.memoId };
@@ -597,10 +614,11 @@ function setDefectStatus(
 /**
  * P-2 (D28 · Q71) — 지금 열린 도면의 번호 풍선을 격자에 맞춰 정렬한다.
  *
- * · **직교 정렬** — 서로 가까운 것끼리 같은 세로줄·가로줄로 모은다. 허용오차는 풍선 **지름**
- *   (`balloonRadius × 2`, 이미지 px). 도면별 번호 크기(`labelScale`)가 이미 `balloonRadius` 에
- *   반영돼 있어 **도면마다 자동으로 맞고 새 저장 필드가 안 생긴다**
- *   (2026-09-03 — 절대 격자는 칸이 풍선 하나 크기라 거의 안 움직였다. 사용자 신고로 재작성)
+ * · **1순위 — 지시선을 수평/수직으로.** 번호를 지시점의 위·아래·왼쪽·오른쪽에 놓는다
+ * · **2순위 — 남는 축을 이웃과 맞춘다.** 세로 지시선이면 가로줄이, 가로 지시선이면 세로줄이 선다
+ * · 기준값은 풍선 **지름**(`balloonRadius × 2`, 이미지 px). 도면별 번호 크기(`labelScale`)가
+ *   이미 `balloonRadius` 에 반영돼 있어 **도면마다 자동으로 맞고 새 저장 필드가 안 생긴다**
+ *   (2026-09-03 2차 재작성 — 자유 직교 정렬은 번호끼리만 줄이 서고 지시선은 비스듬했다)
  * · 대상 = 지금 열린 도면 전체. **잠긴 결함(전회차·보수완료)은 제외** — 기존 잠금 규칙과 일관
  * · 결함점(마크)은 안 움직인다. 움직이는 것은 풍선뿐이고 지시선이 따라 늘어난다
  * · 커맨드 **하나** 로 올린다 → Ctrl+Z 한 번에 정렬 전체가 되돌아간다
@@ -625,21 +643,27 @@ function alignLabels(state: AppState): AppState {
   const global = globalStyleForLabelScale(state.labelScale);
   // 화면 렌더와 **같은 소스**로 번호를 넘긴다 — 넓어진 풍선만큼 자동 배치가 더 밀린다
   const numbers = displayNumbersOf(onDrawing);
+  // 정규화 → **이미지 px**. 가로·세로 중 어느 쪽이 가까운지 정규화 좌표로 재면
+  // 종횡비 때문에 틀린다 — 가로로 긴 도면은 같은 정규화 거리라도 실제로는 가로가 더 멀다
   const before = targets.map((d) => {
     const p = effectiveLabelNorm(d, resolveStyle(d, global), iw, ih, numbers[d.id] ?? '');
-    return { defectId: d.id, x: p.x, y: p.y };
+    const a = anchorNorm(d);
+    return {
+      defectId: d.id,
+      label: { x: p.x * iw, y: p.y * ih },
+      anchor: a ? { x: a.x * iw, y: a.y * ih } : null,
+    };
   });
 
-  const tolPx = labelAlignToleranceImgPx(global.balloonRadius);
-  const gapPx = labelAlignGapImgPx(global.balloonRadius);
-  const after = alignLabelsOrthogonal(before, tolPx / iw, tolPx / ih, gapPx / ih);
+  const aligned = alignLabelsToAnchors(before, labelAlignOptionsFor(global.balloonRadius));
+  const after = aligned.map((a) => ({ defectId: a.defectId, x: a.x / iw, y: a.y / ih }));
 
   const items = before.map((b, i) => {
     const a = after[i]!;
     const d = targets[i]!;
     return {
       defectId: b.defectId,
-      from: { x: b.x, y: b.y },
+      from: { x: b.label.x / iw, y: b.label.y / ih },
       to: { x: a.x, y: a.y },
       fromPlaced: d.label.placed,
       // 정렬된 순간부터는 사용자가 정한 위치다 — 다시 자동 배치로 돌아가면 안 된다
@@ -654,7 +678,35 @@ function alignLabels(state: AppState): AppState {
   }
 
   const committed = applyAndPush(state, { k: 'ALIGN_LABELS', items });
-  return withToast(committed, 'info', `번호 ${moved.length}개를 줄 맞춰 정렬했습니다`, true);
+  return withToast(committed, 'info', `번호 ${moved.length}개를 지시점과 직교로 정렬했습니다`, true);
+}
+
+/**
+ * P-1 — 도면 크기 조절이 옮긴 좌표를 상태에 반영한다.
+ *
+ * `LOAD` 를 쓰지 않는 이유: `LOAD` 는 히스토리와 저장 대기열을 **초기화한다.**
+ * 미리보기 중에 그러면 그때까지의 되돌리기 기록이 통째로 날아간다.
+ *
+ * 히스토리에는 올리지 않는다 — 되돌리기는 다이얼로그 [취소] 가 스냅샷으로 처리한다.
+ */
+function setDrawingGeometry(
+  state: AppState,
+  defects: Defect[],
+  memos: Memo[],
+  persist: boolean,
+): AppState {
+  if (defects.length === 0 && memos.length === 0) return state;
+  const dById = new Map(defects.map((d) => [d.id, d]));
+  const mById = new Map(memos.map((m) => [m.id, m]));
+  let next: AppState = {
+    ...state,
+    defects: state.defects.map((d) => dById.get(d.id) ?? d),
+    memos: state.memos.map((m) => mById.get(m.id) ?? m),
+  };
+  // 미리보기는 디스크에 안 쓴다 — 슬라이더를 움직일 때마다 저장하면 대기열이 터진다
+  if (!persist) return next;
+  next = defects.reduce((acc, d) => recordWrite(acc, d.id), next);
+  return memos.reduce((acc, m) => recordMemoWrite(acc, m.id), next);
 }
 
 function applyAndPush(state: AppState, c: Command): AppState {

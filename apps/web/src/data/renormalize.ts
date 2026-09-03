@@ -9,7 +9,13 @@
  * (1) 건수 확인 다이얼로그 (2) 되돌리기 스냅샷 (3) 이미 A4 면 아무것도 하지 않기
  * 를 반드시 지킨다.
  */
-import { transformDefect, transformMemo, type Defect, type Memo } from '@onspect/canvas-core';
+import {
+  transformDefect,
+  transformMemo,
+  type Defect,
+  type Memo,
+  type NormTransform,
+} from '@onspect/canvas-core';
 import { a4Transform, type ImgLayout } from '@onspect/project-core';
 
 export type RenormalizeCounts = { defects: number; marks: number; sketches: number; memos: number };
@@ -31,16 +37,33 @@ export function countRenormalizeTargets(
 
 export type RenormalizeResult = { defects: Defect[]; memos: Memo[] };
 
-/** 그 도면에 속한 결함·메모만 골라 한꺼번에 변환한다 */
+/**
+ * 그 도면에 속한 결함·메모만 골라 **주어진 변환**으로 한꺼번에 옮긴다.
+ *
+ * 쓰는 곳이 둘이다:
+ *  · `[A4로 맞추기]` — 옛 좌표 → A4 지면 좌표 (`renormalizeAll`)
+ *  · **도면 크기 조절** — 옛 배치 → 새 배치 (`data/drawingScale.layoutTransform`, 2026-09-03)
+ *
+ * 계산을 두 벌로 만들지 않으려고 진입점을 하나로 모았다.
+ */
+export function transformAll(
+  drawingId: string,
+  t: NormTransform,
+  defects: readonly Defect[],
+  memos: readonly Memo[],
+): RenormalizeResult {
+  return {
+    defects: defects.filter((d) => d.drawingId === drawingId).map((d) => transformDefect(d, t)),
+    memos: memos.filter((m) => m.drawingId === drawingId).map((m) => transformMemo(m, t)),
+  };
+}
+
+/** 그 도면에 속한 결함·메모만 골라 한꺼번에 A4 지면 좌표로 옮긴다 */
 export function renormalizeAll(
   drawingId: string,
   layout: ImgLayout,
   defects: readonly Defect[],
   memos: readonly Memo[],
 ): RenormalizeResult {
-  const t = a4Transform(layout);
-  return {
-    defects: defects.filter((d) => d.drawingId === drawingId).map((d) => transformDefect(d, t)),
-    memos: memos.filter((m) => m.drawingId === drawingId).map((m) => transformMemo(m, t)),
-  };
+  return transformAll(drawingId, a4Transform(layout), defects, memos);
 }

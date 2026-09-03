@@ -49,6 +49,7 @@ import { releaseComposite } from '../canvas/drawingComposite';
 import {
   countRenormalizeTargets,
   renormalizeAll,
+  transformAll,
   type RenormalizeCounts,
 } from '../data/renormalize';
 import {
@@ -357,16 +358,34 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
       }
       setScaleBusy(true);
       const updated = r.drawing;
-      setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
-      releaseComposite(dw.id); // 캔버스가 새 배율로 다시 합성하도록
+      // 2026-09-03 — 배율이 바뀌면 **결함·메모 좌표도 함께 옮긴다**(사용자 지시).
+      // 캔버스 상단바 진입점과 같은 계산·같은 저장 경로를 탄다 — 갈라지면 어디서 열었느냐에 따라
+      // 좌표가 달라진다. 저장은 `writeRenormalize`(도면+결함+메모 한 트랜잭션)를 재사용한다
+      const moved = transformAll(dw.id, r.transform, defects, memos);
       void (async () => {
-        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        if (storage.phase === 'READY') {
+          const repo = storage.repo;
+          const ok = await guard(async () => {
+            await repo.writeRenormalize(updated, moved.defects, moved.memos);
+            return true;
+          });
+          if (!ok) {
+            setScaleBusy(false);
+            return;
+          }
+        }
         setScaleBusy(false);
+        releaseComposite(dw.id); // 캔버스가 새 배율로 다시 합성하도록
+        setDrawings((cur) => cur.map((x) => (x.id === dw.id ? updated : x)));
+        const dmap = new Map(moved.defects.map((d) => [d.id, d]));
+        const mmap = new Map(moved.memos.map((m) => [m.id, m]));
+        setDefects((cur) => cur.map((d) => dmap.get(d.id) ?? d));
+        setMemos((cur) => cur.map((m) => mmap.get(m.id) ?? m));
         setScaling(null);
         toast(drawingScaleAppliedMessage(r.scale));
       })();
     },
-    [storage, guard, toast],
+    [storage, guard, toast, defects, memos],
   );
 
   /**

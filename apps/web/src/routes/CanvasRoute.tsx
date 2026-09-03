@@ -48,6 +48,7 @@ import {
   type Project,
   type ProjectLegend,
   type ProjectTitleBlock,
+  clampScale,
 } from '@onspect/project-core';
 import { AimControls, AimCrosshair } from '../canvas/AimOverlay';
 import { aimCenterOf, aimTapEvents } from '../canvas/aimSynth';
@@ -72,6 +73,8 @@ import {
   drawingScaleAppliedMessage,
   SCALE_NEEDS_A4_MESSAGE,
 } from '../data/drawingScale';
+import { transformAll } from '../data/renormalize';
+import type { Defect, Memo } from '@onspect/canvas-core';
 import { useAppData } from '../data/appData';
 import { useLastView } from '../data/useLastView';
 import { usePhotos } from '../data/usePhotos';
@@ -715,32 +718,130 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   );
 
   /**
-   * P-1 · F5-3 — 도면 이미지 배율 적용. 계산은 `data/drawingScale.ts` 한 벌뿐이고
-   * `ProjectSetup` 의 [크기] 진입점과 **완전히 같은 결과**를 낸다.
-   * ⚠️ 결함·메모 좌표는 건드리지 않는다. `renormalizeAll` 을 부르지 않는다.
+   * P-1 · F5-3 — 도면 이미지 배율.
+   *
+   * ## 2026-09-03 — 세 가지가 바뀌었다 (사용자 실사용 지시)
+   * 1. **실시간 미리보기** — 슬라이더를 움직이는 대로 캔버스가 바로 바뀐다. 저장은 안 한다
+   * 2. **결함·메모 좌표가 도면을 따라간다** — 예전에는 그림만 움직여 표기가 떨어져 나갔다
+   * 3. **모든 도면 일괄 적용** — 전체를 120% 로 맞춘 뒤 한 층만 105% 로 다시 조절할 수 있다
+   *
+   * 미리보기·적용이 **같은 계산**(`computeScale`)을 쓴다. 갈라지면 손을 뗀 순간 그림이 튄다.
+   * 그리고 언제나 **다이얼로그를 연 시점의 스냅샷에서** 계산한다 — 직전 미리보기에 누적하면
+   * 슬라이더를 왕복할 때마다 배율이 곱해져 어긋난다.
    */
+  const scaleSnapshot = useRef<{
+    drawings: Drawing[];
+    defects: Defect[];
+    memos: Memo[];
+  } | null>(null);
+  /** 미리보기로 합성 캐시를 버린 도면들 — 취소할 때 이것만 되돌리면 된다 */
+  const scaleTouched = useRef<Set<string>>(new Set());
+
+  const computeScale = useCallback(
+    (raw: number, all: boolean) => {
+      const snap = scaleSnapshot.current;
+      if (!snap || !currentDrawing) return null;
+      const targets = all ? snap.drawings : snap.drawings.filter((d) => d.id === currentDrawing.id);
+      const nextDrawings: Drawing[] = [];
+      const nextDefects: Defect[] = [];
+      const nextMemos: Memo[] = [];
+      for (const dw of targets) {
+        const r = applyDrawingScale(dw, raw);
+        // `imgLayout` 이 없는 옛 도면은 조용히 건너뛴다. 여기서 자동 정규화하면
+        // 그 도면의 결함 좌표가 사용자 동의 없이 전부 옮겨진다
+        if (!r.ok) continue;
+        nextDrawings.push(r.drawing);
+        const moved = transformAll(dw.id, r.transform, snap.defects, snap.memos);
+        nextDefects.push(...moved.defects);
+        nextMemos.push(...moved.memos);
+      }
+      return { nextDrawings, nextDefects, nextMemos, skipped: targets.length - nextDrawings.length };
+    },
+    [currentDrawing],
+  );
+
+  const paintScale = useCallback(
+    (res: { nextDrawings: Drawing[]; nextDefects: Defect[]; nextMemos: Memo[] }, persist: boolean) => {
+      const byId = new Map(res.nextDrawings.map((d) => [d.id, d]));
+      setDrawings((prev) => prev.map((d) => byId.get(d.id) ?? d));
+      for (const d of res.nextDrawings) {
+        releaseComposite(d.id); // 새 배율로 다시 합성하도록 런타임 캐시만 버린다
+        scaleTouched.current.add(d.id);
+      }
+      dispatch({
+        t: 'SET_DRAWING_GEOMETRY',
+        defects: res.nextDefects,
+        memos: res.nextMemos,
+        persist,
+      });
+    },
+    [],
+  );
+
+  const openScaling = useCallback(() => {
+    scaleSnapshot.current = { drawings, defects: state.defects, memos: state.memos };
+    scaleTouched.current = new Set();
+    setScaling(true);
+  }, [drawings, state.defects, state.memos]);
+
+  /** 취소 — 스냅샷으로 되돌린다. 저장한 적이 없으므로 디스크는 건드릴 것이 없다 */
+  const closeScaling = useCallback(() => {
+    const snap = scaleSnapshot.current;
+    if (snap && scaleTouched.current.size > 0) {
+      const byId = new Map(snap.drawings.map((d) => [d.id, d]));
+      setDrawings((prev) => prev.map((d) => byId.get(d.id) ?? d));
+      for (const id of scaleTouched.current) releaseComposite(id);
+      const ids = scaleTouched.current;
+      dispatch({
+        t: 'SET_DRAWING_GEOMETRY',
+        defects: snap.defects.filter((d) => ids.has(d.drawingId)),
+        memos: snap.memos.filter((m) => ids.has(m.drawingId)),
+        persist: false,
+      });
+    }
+    scaleSnapshot.current = null;
+    scaleTouched.current = new Set();
+    setScaling(false);
+  }, []);
+
+  const previewScale = useCallback(
+    (raw: number, all: boolean) => {
+      const res = computeScale(raw, all);
+      if (res) paintScale(res, false);
+    },
+    [computeScale, paintScale],
+  );
+
   const applyScale = useCallback(
-    (raw: number) => {
-      if (!currentDrawing) return;
-      const r = applyDrawingScale(currentDrawing, raw);
-      if (!r.ok) {
-        // 옛 도면은 여기서 자동 정규화하지 않는다 — 그러면 기존 결함 좌표가 전부 옮겨진다
+    (raw: number, all: boolean) => {
+      const res = computeScale(raw, all);
+      if (!res || res.nextDrawings.length === 0) {
         toast(SCALE_NEEDS_A4_MESSAGE, { kind: 'warn' });
-        setScaling(false);
+        closeScaling();
         return;
       }
       setScaleBusy(true);
-      const updated = r.drawing;
-      setDrawings((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-      releaseComposite(updated.id); // 새 배율로 다시 합성하도록 런타임 캐시만 버린다
+      paintScale(res, true);
+      const saved = res.nextDrawings;
+      const skipped = res.skipped;
       void (async () => {
-        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        if (storage.phase === 'READY') {
+          for (const d of saved) await guard(() => storage.repo.putDrawing(d));
+        }
         setScaleBusy(false);
+        scaleSnapshot.current = null;
+        scaleTouched.current = new Set();
         setScaling(false);
-        toast(drawingScaleAppliedMessage(r.scale));
+        toast(
+          skipped > 0
+            ? `${drawingScaleAppliedMessage(clampScale(raw))} — ${skipped}장은 A4 정규화 전이라 건너뛰었습니다`
+            : saved.length > 1
+              ? `도면 ${saved.length}장의 크기를 ${Math.round(clampScale(raw) * 100)}%로 바꿨습니다`
+              : drawingScaleAppliedMessage(clampScale(raw)),
+        );
       })();
     },
-    [currentDrawing, storage, guard, toast],
+    [computeScale, paintScale, closeScaling, storage, guard, toast],
   );
 
   /** F6 — 번호 풍선 크기 조절. `imgScale`(F5-3)과 달리 결함 좌표를 전혀 건드리지 않는다 */
@@ -1123,7 +1224,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             className="btn btn--ghost"
             title="A4 지면 안에서 도면 그림이 차지하는 크기를 바꿉니다 (결함 표기 위치는 그대로)"
             disabled={!currentDrawing}
-            onClick={() => setScaling(true)}
+            onClick={openScaling}
           >
             도면 크기
           </button>
@@ -1467,9 +1568,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           drawing={currentDrawing}
           defectCount={defects.length}
           busy={scaleBusy}
+          otherDrawingCount={drawings.filter((d) => d.id !== currentDrawing.id).length}
+          onPreview={previewScale}
           onApply={applyScale}
           onClose={() => {
-            if (!scaleBusy) setScaling(false);
+            if (!scaleBusy) closeScaling();
           }}
         />
       )}
