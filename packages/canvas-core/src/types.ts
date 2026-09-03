@@ -407,7 +407,14 @@ export type DragKind =
   | 'MOVE_SKETCH'
   | 'MOVE_MEMO'
   /** D14 지우개 — 지나간 자리의 필기 획을 계속 지운다. 문서 이동이 없다 */
-  | 'ERASE';
+  | 'ERASE'
+  /**
+   * C-4 (D32) — 영역선택. 선택 도구로 **빈 곳부터** 끌면 사각형이 그려지고,
+   * 놓을 때 그 안에 든 결함이 한꺼번에 선택된다. 문서를 건드리지 않는다.
+   *
+   * 팬은 잃지 않는다 — 중클릭 · Space+좌클릭이 그대로 팬이다.
+   */
+  | 'MARQUEE';
 
 export type DragState = {
   kind: DragKind;
@@ -516,6 +523,17 @@ export type CanvasState = {
   viewports: Record<string, Viewport>;
   tool: Tool;
   selection: Selection;
+  /**
+   * C-4 (D32) — 영역선택으로 함께 잡힌 결함 id 들. **단일 `selection` 과 별개다.**
+   *
+   * `Selection` 을 배열로 바꾸지 않은 이유: 히트 판정 · 렌더 하이라이트 · 편집 툴바 ·
+   * Inspector · 좌측 리스트 · Undo 가 전부 이 구조를 단수 전제로 읽는다. 여기를 넓히면
+   * 그 여섯 곳을 동시에 고쳐야 하고, 하나만 놓쳐도 조용히 어긋난다.
+   * 다중은 **삭제 · 이동에만** 쓰이므로 별도 목록으로 두는 편이 훨씬 싸고 안전하다.
+   *
+   * 비어 있으면 다중선택이 없는 상태다. 잠긴 결함도 **선택은 된다** — 삭제·이동에서만 빠진다.
+   */
+  multi: readonly string[];
   hover: HoverTarget | null;
   drag: DragState | null;
   /** 드래그 중에만 채워지는 파생값. undo·저장 어디에도 들어가지 않는다 */
@@ -585,6 +603,8 @@ export type InputEvent =
   | { k: 'RESET_LABEL'; defectId: string }
   | { k: 'DELETE_SELECTION' }
   | { k: 'CONFIRM_DELETE_DEFECT'; defectId: string }
+  /** C-4 — 영역선택 일괄 삭제를 사용자가 확인했다 */
+  | { k: 'CONFIRM_DELETE_DEFECTS'; defectIds: readonly string[] }
   // ── S2a ──────────────────────────────────────────────────────────────────
   | { k: 'SELECT_MEMO'; memoId: string | null; reveal: boolean }
   /** 메모 텍스트 확정. 빈 문자열이면 메모를 지운다 */
@@ -606,6 +626,11 @@ export type Effect =
   | { k: 'FOCUS_PANEL'; defectId: string }
   | { k: 'CONTEXT_MENU'; screen: SPoint; defectId: string }
   | { k: 'CONFIRM_DELETE_DEFECT'; defectId: string; reason: 'LAST_MARK' | 'EXPLICIT' }
+  /**
+   * C-4 — 영역선택 일괄 삭제 확인 요청. `defectIds` 는 **이미 잠긴 것을 걸러낸** 목록이다.
+   * `lockedCount` 는 "N건은 잠겨 있어 빠집니다" 안내에 쓴다
+   */
+  | { k: 'CONFIRM_DELETE_DEFECTS'; defectIds: readonly string[]; lockedCount: number }
   | { k: 'TOAST'; kind: 'info' | 'warn'; text: string; undoable?: boolean }
   | { k: 'REVEAL_DEFECT'; defectId: string }
   | { k: 'UNDO' }

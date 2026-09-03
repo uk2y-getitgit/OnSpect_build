@@ -49,7 +49,11 @@ import type { ToastItem } from './ui/Overlays';
 
 export type Toast = ToastItem;
 
-export type ConfirmState = { defectId: string; reason: 'LAST_MARK' | 'EXPLICIT' } | null;
+export type ConfirmState =
+  | { defectId: string; reason: 'LAST_MARK' | 'EXPLICIT' }
+  /** C-4 — 영역선택 일괄 삭제. `defectIds` 는 이미 잠긴 것을 걸러낸 목록이다 */
+  | { defectIds: readonly string[]; lockedCount: number }
+  | null;
 export type MenuState = { x: number; y: number; defectId: string } | null;
 
 /** 아직 저장되지 않은 변경 (§2-9-e 레코드 단위 upsert) */
@@ -667,6 +671,9 @@ function runEffect(state: AppState, e: Effect): AppState {
       return withToast(state, e.kind, e.text, e.undoable ?? false);
     case 'CONFIRM_DELETE_DEFECT':
       return { ...state, confirm: { defectId: e.defectId, reason: e.reason } };
+
+    case 'CONFIRM_DELETE_DEFECTS':
+      return { ...state, confirm: { defectIds: e.defectIds, lockedCount: e.lockedCount } };
     case 'CONTEXT_MENU':
       return { ...state, menu: { x: e.screen.x, y: e.screen.y, defectId: e.defectId } };
     case 'FOCUS_PANEL':

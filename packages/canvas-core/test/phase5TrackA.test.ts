@@ -289,8 +289,10 @@ describe('A2 · 두 번째 포인터 = 진행 중 드래그 취소 (T3)', () => 
 
   it('팬 드래그 중 두 번째 포인터가 닿아도 화면이 시작 위치로 튀지 않는다', () => {
     const { state, ctx } = boot([]);
+    // C-4 (D32) 이후 선택 도구 + 빈 곳 좌클릭 드래그는 **영역선택**이다.
+    // 팬은 중클릭 · Space+좌클릭으로 옮겨 갔다 — 이 테스트가 지키려는 것은 팬이므로 중클릭을 쓴다
     const panned = run(state, ctx, [
-      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 500, y: 350 }, button: 0, keys: K },
+      { k: 'POINTER_DOWN', pointerId: 1, screen: { x: 500, y: 350 }, button: 1, keys: K },
       { k: 'POINTER_MOVE', pointerId: 1, screen: { x: 560, y: 380 }, keys: K },
     ]).state;
     expect(panned.viewport.tx).toBeCloseTo(state.viewport.tx + 60, 10);

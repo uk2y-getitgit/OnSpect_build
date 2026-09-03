@@ -28,6 +28,13 @@ export type Command =
   | { k: 'CREATE_DEFECT'; defect: Defect }
   | { k: 'DELETE_DEFECT'; defect: Defect }
   /**
+   * C-4 (D32) — 영역선택 **일괄 삭제**. `DELETE_DEFECT` 를 N개 쌓지 않는다.
+   * 20개를 지우고 Ctrl+Z 를 20번 눌러야 하면 되돌리기가 아니라 벌이다.
+   */
+  | { k: 'DELETE_DEFECTS'; defects: readonly Defect[] }
+  /** `DELETE_DEFECTS` 의 역커맨드. Undo 스택에 직접 쌓이지 않는다 */
+  | { k: 'CREATE_DEFECTS'; defects: readonly Defect[] }
+  /**
    * P-2 (D28) — 번호 풍선 **격자 정렬**. 여러 결함을 한 커맨드로 옮긴다.
    *
    * ⚠️ `MOVE_LABEL` 을 N개 쌓지 않는다 — 그러면 Ctrl+Z 를 결함 수만큼 눌러야 한다.
@@ -179,6 +186,10 @@ export function describeCommand(c: Command): string {
       return '표기 추가';
     case 'DELETE_DEFECT':
       return '결함 삭제';
+    case 'DELETE_DEFECTS':
+      return `결함 ${c.defects.length}건 삭제`;
+    case 'CREATE_DEFECTS':
+      return `결함 ${c.defects.length}건 복원`;
     case 'MOVE_LABEL':
       return '번호 이동';
     case 'MOVE_MARK':
@@ -240,6 +251,14 @@ export function applyCommand(defects: readonly Defect[], c: Command): Defect[] {
 
     case 'DELETE_DEFECT':
       return defects.filter((d) => d.id !== c.defect.id);
+
+    case 'DELETE_DEFECTS': {
+      const gone = new Set(c.defects.map((d) => d.id));
+      return defects.filter((d) => !gone.has(d.id));
+    }
+
+    case 'CREATE_DEFECTS':
+      return sorted([...defects, ...c.defects]);
 
     case 'ALIGN_LABELS': {
       const byId = new Map(c.items.map((i) => [i.defectId, i]));
@@ -449,6 +468,8 @@ export function memoTargetsOf(c: Command): string[] {
  */
 export function defectTargetsOf(c: Command): string[] {
   if (c.k === 'ALIGN_LABELS') return c.items.map((i) => i.defectId);
+  // C-4 — 일괄 삭제·복원도 한 커맨드가 여러 결함을 건드린다
+  if (c.k === 'DELETE_DEFECTS' || c.k === 'CREATE_DEFECTS') return c.defects.map((d) => d.id);
   const one = defectTargetOf(c);
   return one === null ? [] : [one];
 }
@@ -467,6 +488,8 @@ export function defectTargetOf(c: Command): string | null {
     case 'RESTORE_MEMO_PATH':
     // 여러 결함을 건드린다 — `defectTargetsOf` 로만 읽는다
     case 'ALIGN_LABELS':
+    case 'DELETE_DEFECTS':
+    case 'CREATE_DEFECTS':
       return null;
     default:
       return c.defectId;
@@ -479,6 +502,10 @@ export function invertCommand(c: Command): Command {
       return { k: 'DELETE_DEFECT', defect: c.defect };
     case 'DELETE_DEFECT':
       return { k: 'CREATE_DEFECT', defect: c.defect };
+    case 'DELETE_DEFECTS':
+      return { k: 'CREATE_DEFECTS', defects: c.defects };
+    case 'CREATE_DEFECTS':
+      return { k: 'DELETE_DEFECTS', defects: c.defects };
     case 'ALIGN_LABELS':
       return {
         k: 'ALIGN_LABELS',

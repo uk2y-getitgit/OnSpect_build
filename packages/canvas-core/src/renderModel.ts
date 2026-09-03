@@ -191,6 +191,10 @@ export type RenderInput = {
   legend?: LegendConfig | null;
   /** T-1 필기 세션. 생략하면 점선 상자는 D14 규칙(선택·hover) 그대로다 */
   inkSession?: InkSession | null;
+  /** C-4 — 영역선택으로 함께 잡힌 결함 id 들. 출력(`locationMap`)은 안 넘긴다 */
+  multi?: readonly string[];
+  /** C-4 — 지금 끌고 있는 영역선택 사각형(스크린 px). `marqueeRectOf` 가 만든다 */
+  marquee?: SRect | null;
 };
 
 /** 아직 커밋되지 않은 생성 미리보기. 문서에 없으므로 DefectScreen 이 아니다 */
@@ -271,6 +275,8 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
   const balloons: DrawOp[] = [];
   const texts: DrawOp[] = [];
   const highlights: DrawOp[] = [];
+  // C-4 — 배열을 매 결함마다 훑지 않는다. 결함 수 × 선택 수가 되면 큰 도면에서 느려진다
+  const multiIds = new Set(input.multi ?? []);
 
   const angleSnapActive = guides.some((g) => g.k === 'ANGLE');
 
@@ -428,6 +434,19 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
       );
       highlights.push(balloonOp(br + 2, { stroke: SELECTION_COLOR, width: 1.5 }));
     }
+    // C-4 — 영역선택으로 함께 잡힌 결함. 단일 선택 글로우와 구분되게 **점선 상자**만 두른다
+    if (!isSel && multiIds.has(s.defectId)) {
+      const half = br + SELECTION_BOX_PAD_PX;
+      highlights.push({
+        k: 'rect',
+        at: { x: s.label.x - half, y: s.label.y - half },
+        w: half * 2,
+        h: half * 2,
+        stroke: SELECTION_COLOR,
+        width: 1.5,
+        dash: [4, 3],
+      });
+    }
     if (balloonHovered && !isSel) {
       balloons.push(balloonOp(br + 3, { fill: HOVER_HALO_COLOR }));
     }
@@ -463,6 +482,19 @@ export function buildOverlay(input: RenderInput, screens: readonly DefectScreen[
   const ghostOps: DrawOp[] = input.ghost ? ghostToOps(input.ghost) : [];
   // 8-b. 사후연결 대기 중인 그리기 (F2) — 점선으로 "아직 안 붙었다"를 알린다
   for (const g of input.pending ?? []) ghostOps.push(...ghostToOps(g, PENDING_DASH));
+
+  // 8-c. C-4 영역선택 사각형 — 끄는 동안만. 가이드선과 같은 시안 계열이다
+  if (input.marquee) {
+    ghostOps.push({
+      k: 'rect',
+      at: { x: input.marquee.x, y: input.marquee.y },
+      w: input.marquee.w,
+      h: input.marquee.h,
+      stroke: SELECTION_COLOR,
+      width: 1,
+      dash: [5, 4],
+    });
+  }
 
   // 9. 스냅 가이드선 — 항상 최상단
   const guideOps: DrawOp[] = [];

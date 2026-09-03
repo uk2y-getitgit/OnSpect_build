@@ -1383,7 +1383,26 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         </InspectorPlacement>
       </div>
 
-      {state.confirm && (
+      {/* C-4 — 영역선택 일괄 삭제. 잠긴 결함은 이미 코어가 걸러냈고 그 수만 알려 준다 */}
+      {state.confirm && 'defectIds' in state.confirm && (
+        <ConfirmDialog
+          title={`결함 ${state.confirm.defectIds.length}건을 삭제할까요?`}
+          body={
+            state.confirm.lockedCount > 0
+              ? `결함 ${state.confirm.defectIds.length}건이 삭제됩니다. 선택한 것 중 ${state.confirm.lockedCount}건은 잠겨 있어 그대로 남습니다. 되돌리기로 한 번에 되살릴 수 있습니다.`
+              : `결함 ${state.confirm.defectIds.length}건이 삭제됩니다. 되돌리기로 한 번에 되살릴 수 있습니다.`
+          }
+          confirmLabel="삭제"
+          onConfirm={() => {
+            const ids = 'defectIds' in state.confirm! ? state.confirm.defectIds : [];
+            dispatch({ t: 'CLOSE_CONFIRM' });
+            send({ k: 'CONFIRM_DELETE_DEFECTS', defectIds: ids });
+          }}
+          onCancel={() => dispatch({ t: 'CLOSE_CONFIRM' })}
+        />
+      )}
+
+      {state.confirm && 'defectId' in state.confirm && (
         <ConfirmDialog
           title="이 결함을 삭제할까요?"
           body={
@@ -1393,9 +1412,9 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           }
           confirmLabel="삭제"
           onConfirm={() => {
-            const id = state.confirm!.defectId;
+            const c = state.confirm!;
             dispatch({ t: 'CLOSE_CONFIRM' });
-            send({ k: 'CONFIRM_DELETE_DEFECT', defectId: id });
+            if ('defectId' in c) send({ k: 'CONFIRM_DELETE_DEFECT', defectId: c.defectId });
           }}
           onCancel={() => dispatch({ t: 'CLOSE_CONFIRM' })}
         />

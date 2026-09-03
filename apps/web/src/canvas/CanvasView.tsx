@@ -22,7 +22,7 @@ import {
   type RenderInput,
   type TitleBlockConfig,
 } from '@onspect/canvas-core';
-import { DEFAULT_GLOBAL_STYLE } from '@onspect/canvas-core';
+import { DEFAULT_GLOBAL_STYLE, marqueeRectOf } from '@onspect/canvas-core';
 import { loadDrawing, cachedDrawing, type LoadedDrawing } from './imageLoader';
 import { prepare, renderOps } from './renderCanvas2d';
 import {
@@ -255,6 +255,9 @@ export function CanvasView({
       pending,
       titleBlock,
       legend,
+      // C-4 — 영역선택. 둘 다 순수 파생값이라 저장·Undo 어디에도 안 들어간다
+      multi: state.multi,
+      marquee: marqueeRectOf(state),
     };
   }, [
     drawing,

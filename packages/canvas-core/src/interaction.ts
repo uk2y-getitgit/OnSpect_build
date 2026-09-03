@@ -34,7 +34,7 @@ import {
 } from './defectGeom.js';
 import type { DefectScreen, PreviewOverride } from './defectGeom.js';
 import { advanceArrowDrag } from './arrowRoute.js';
-import { clamp, dist, lockAxis, roundNorm, toNorm, toScreen } from './geometry.js';
+import { clamp, dist, lockAxis, rectsIntersect, roundNorm, toNorm, toScreen } from './geometry.js';
 import { inkAnchor, isInkMemo, memoScreens, type MemoScreen } from './memoGeom.js';
 import {
   clampGeometryInside,
@@ -44,6 +44,7 @@ import {
   translateGeometry,
   translatePathInside,
   handleCursor,
+  type SRect,
 } from './shapes.js';
 import { hitTest, nearestMemoPath } from './hitTest.js';
 import { buildScreens, type GhostShape, type InkSession } from './renderModel.js';
@@ -142,6 +143,7 @@ export function initialCanvasState(canvas: Size = { w: 0, h: 0 }): CanvasState {
     viewports: {},
     tool: 'SELECT',
     selection: { ...NO_SELECTION },
+    multi: [],
     hover: null,
     drag: null,
     guides: [],
@@ -869,6 +871,26 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
       );
     }
 
+    case 'CONFIRM_DELETE_DEFECTS': {
+      const list = ev.defectIds
+        .map((id) => findDefect(ctx, id))
+        .filter((d): d is Defect => d !== null && !isLocked(d));
+      if (list.length === 0) return ok({ ...state, multi: [] }, ctx);
+      return ok(
+        { ...state, selection: { ...NO_SELECTION }, multi: [], hover: null },
+        ctx,
+        [{ k: 'DELETE_DEFECTS', defects: list }],
+        [
+          {
+            k: 'TOAST',
+            kind: 'info',
+            text: `결함 ${list.length}건이 삭제되었습니다`,
+            undoable: true,
+          },
+        ],
+      );
+    }
+
     case 'KEY_DOWN':
       return onKeyDown(state, ev.key, ev.keys, ctx);
 
@@ -904,7 +926,7 @@ function onPointerDown(
     return ok(cancelDrag({ ...state, keys: ev.keys }), ctx);
   }
 
-  const next0 = { ...state, keys: ev.keys };
+  let next0 = { ...state, keys: ev.keys };
 
   const startPan = (pointToolCandidate: boolean): ReduceResult =>
     ok(
@@ -945,6 +967,14 @@ function onPointerDown(
   const memos = memoScreensOf(next0, ctx);
   const hit = hitTest(ev.screen, screens, next0.selection, memos, hitProfileOf(ctx));
 
+  /*
+   * C-4 — 새로 누르면 영역선택은 풀린다. **단, 이미 잡혀 있는 결함을 누른 것이면 유지한다** —
+   * 그래야 여러 개를 잡아 놓고 그중 하나를 끌어 함께 옮길 수 있다.
+   */
+  if (!(hit?.defectId && next0.multi.includes(hit.defectId))) {
+    next0 = { ...next0, multi: [] };
+  }
+
   /**
    * 생성 도구가 켜져 있으면 **기존 표기를 잡기 전에** 생성을 시작한다.
    * 도구를 켜 놓고 도형 위에서 시작하는 것은 "저 위에 새로 그린다" 는 뜻이지
@@ -971,7 +1001,38 @@ function onPointerDown(
   }
 
   // 빈 도면 → 팬 드래그. UP 에서 이동이 없었으면 선택 해제(또는 점 도구면 생성)
-  if (!hit) return startPan(next0.tool === 'POINT');
+  if (!hit) {
+    /*
+     * C-4 (D32) — **선택 도구로 빈 곳부터 끌면 영역선택.**
+     *
+     * 팬을 잃지 않는다 — 중클릭과 Space+좌클릭이 위에서 이미 팬으로 빠졌다.
+     * 더블클릭은 안 쓴다: 브라우저는 드래그로 이어진 두 번째 클릭에 `dblclick` 을
+     * 보내지 않고, 빈 곳 더블클릭은 이미 화면 맞춤(fit)이 쓰고 있다.
+     */
+    if (next0.tool === 'SELECT' && next0.drawing) {
+      const start = toNorm(
+        ev.screen,
+        next0.viewport,
+        next0.drawing.imageWidth,
+        next0.drawing.imageHeight,
+      );
+      return ok(
+        {
+          ...next0,
+          selection: { ...NO_SELECTION },
+          multi: [],
+          drag: newDrag('MARQUEE', ev.pointerId, ev.screen, next0.viewport, {
+            createStart: start,
+            previewNorm: start,
+          }),
+          guides: [],
+          hover: null,
+        },
+        ctx,
+      );
+    }
+    return startPan(next0.tool === 'POINT');
+  }
 
   // ── 메모 (결함이 아니다) ──────────────────────────────────────────────
   if (hit.part === 'MEMO' && hit.memoId) {
@@ -1291,6 +1352,18 @@ function onPointerMove(
   const iw = state.drawing.imageWidth;
   const ih = state.drawing.imageHeight;
 
+  // ── C-4 영역선택 — 사각형만 키운다. 문서도 선택도 아직 안 바꾼다 ─────────
+  if (drag.kind === 'MARQUEE') {
+    return ok(
+      {
+        ...state,
+        keys: ev.keys,
+        drag: { ...drag, moved, previewNorm: toNorm(ev.screen, drag.startViewport, iw, ih) },
+      },
+      ctx,
+    );
+  }
+
   if (drag.kind === 'PAN') {
     const vp: Viewport = {
       zoom: drag.startViewport.zoom,
@@ -1561,6 +1634,65 @@ function softClampLabel(n: NPoint): NPoint {
   };
 }
 
+/**
+ * C-4 — 사각형에 **걸친** 결함 id 들. 겹치기만 해도 잡는다(완전 포함 아님) —
+ * 현장에서 대충 두르는 제스처라 완전 포함을 요구하면 거의 안 잡힌다.
+ *
+ * 잠긴 결함(전회차 · 보수완료)도 **선택은 된다.** 삭제 · 이동에서만 빠지고,
+ * 그 사실은 그때 안내한다 — 선택 단계에서 조용히 빼면 "왜 안 잡히지" 가 된다.
+ *
+ * 판정 대상은 번호 풍선과 마크 중심이다. 자유그리기 획은 결함 표기가 아니라 제외한다.
+ */
+function defectsInRect(screens: readonly DefectScreen[], rect: SRect): string[] {
+  const out: string[] = [];
+  for (const s of screens) {
+    const br = s.balloonR + s.labelHalfExtra;
+    const hitLabel = rectsIntersect(
+      s.label.x - br,
+      s.label.y - br,
+      br * 2,
+      br * 2,
+      rect.x,
+      rect.y,
+      rect.w,
+      rect.h,
+    );
+    const hitMark =
+      !hitLabel &&
+      s.marks.some((m) =>
+        m.rect
+          ? rectsIntersect(m.rect.x, m.rect.y, m.rect.w, m.rect.h, rect.x, rect.y, rect.w, rect.h)
+          : rectsIntersect(
+              m.center.x - s.markR,
+              m.center.y - s.markR,
+              s.markR * 2,
+              s.markR * 2,
+              rect.x,
+              rect.y,
+              rect.w,
+              rect.h,
+            ),
+      );
+    if (hitLabel || hitMark) out.push(s.defectId);
+  }
+  return out;
+}
+
+/**
+ * C-4 — 지금 그려지고 있는 영역선택 사각형(스크린 px). 없으면 `null`.
+ *
+ * 순수 파생값이다 — 저장·Undo 어디에도 안 들어간다. 렌더러가 이걸 받아 점선 상자를 그린다.
+ */
+export function marqueeRectOf(state: CanvasState): SRect | null {
+  const d = state.drag;
+  if (!d || d.kind !== 'MARQUEE' || !d.moved || !d.createStart || !state.drawing) return null;
+  const iw = state.drawing.imageWidth;
+  const ih = state.drawing.imageHeight;
+  const a = toScreen(d.createStart, d.startViewport, iw, ih);
+  const b = toScreen(d.previewNorm, d.startViewport, iw, ih);
+  return normalizeRect(a.x, a.y, b.x, b.y);
+}
+
 // ── POINTER_UP ─────────────────────────────────────────────────────────────
 function onPointerUp(
   state: CanvasState,
@@ -1571,6 +1703,35 @@ function onPointerUp(
   if (!drag || drag.pointerId !== ev.pointerId) return ok({ ...state, keys: ev.keys }, ctx);
 
   const cleared: CanvasState = { ...state, keys: ev.keys, drag: null, guides: [] };
+
+  // ── C-4 영역선택 확정 — 사각형에 걸친 결함을 한꺼번에 잡는다 ───────────
+  if (drag.kind === 'MARQUEE') {
+    // 끌지 않은 클릭이면 그냥 선택 해제다. 빈 곳을 눌렀을 때의 기존 동작과 같다
+    if (!drag.moved || !state.drawing || !drag.createStart) {
+      return ok({ ...cleared, selection: { ...NO_SELECTION }, multi: [] }, ctx);
+    }
+    const iw = state.drawing.imageWidth;
+    const ih = state.drawing.imageHeight;
+    const a = toScreen(drag.createStart, drag.startViewport, iw, ih);
+    const b = toScreen(drag.previewNorm, drag.startViewport, iw, ih);
+    const rect = normalizeRect(a.x, a.y, b.x, b.y);
+    const ids = defectsInRect(screensOf(state, ctx), rect);
+    if (ids.length === 0) {
+      return ok({ ...cleared, selection: { ...NO_SELECTION }, multi: [] }, ctx);
+    }
+    return ok(
+      { ...cleared, selection: { ...NO_SELECTION }, multi: ids },
+      ctx,
+      [],
+      [
+        {
+          k: 'TOAST',
+          kind: 'info',
+          text: `${ids.length}개를 선택했습니다 — Delete 로 삭제하거나 끌어서 옮기세요`,
+        },
+      ],
+    );
+  }
 
   if (drag.kind === 'PAN') {
     if (drag.moved) return ok(cleared, ctx);
@@ -2074,6 +2235,36 @@ function onResetLabel(state: CanvasState, defectId: string, ctx: ReduceContext):
 // ── 삭제 (§2-8-e) ──────────────────────────────────────────────────────────
 function onDelete(state: CanvasState, ctx: ReduceContext): ReduceResult {
   const sel = state.selection;
+
+  /*
+   * C-4 (D32) — 영역선택이 있으면 그쪽이 우선이다.
+   *
+   * 잠긴 결함(전회차 · 보수완료)은 **조용히 빠진다.** 선택은 됐지만 지워지지 않는다는
+   * 사실을 확인 창에서 숫자로 말해 준다 — 아무 말 없이 빼면 "왜 몇 개는 안 지워지지" 가 된다.
+   */
+  if (state.multi.length > 0) {
+    const targets = state.multi
+      .map((id) => findDefect(ctx, id))
+      .filter((d): d is Defect => d !== null);
+    const deletable = targets.filter((d) => !isLocked(d));
+    const lockedCount = targets.length - deletable.length;
+    if (deletable.length === 0) {
+      return ok({ ...state, multi: [] }, ctx, [], [
+        {
+          k: 'TOAST',
+          kind: 'warn',
+          text: '선택한 표기가 모두 잠겨 있어 삭제할 수 없습니다',
+        },
+      ]);
+    }
+    return ok(state, ctx, [], [
+      {
+        k: 'CONFIRM_DELETE_DEFECTS',
+        defectIds: deletable.map((d) => d.id),
+        lockedCount,
+      },
+    ]);
+  }
 
   // 메모는 결함이 아니다. 확인 팝업 없이 지우고 되돌리기 토스트를 준다 (ui-quality §4)
   if (sel.part === 'MEMO' && sel.memoId) {
