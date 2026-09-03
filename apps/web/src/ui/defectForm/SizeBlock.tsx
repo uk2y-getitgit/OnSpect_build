@@ -4,23 +4,27 @@
  * 세 번째 모드를 만들지 않는다. 손상결함표 열이 `폭·길이·면적·개소` 4개로 고정돼 있어
  * 실을 자리가 없다. "넓이×높이" 는 AREA 안의 **가로×세로 보조 계산기**로 흡수한다.
  *
+ * **C-3 (D31)** — AREA 모드의 *면적 직접입력* 은 없앴다. 가로×세로가 기본 입력이고
+ * 면적 칸은 계산 결과를 보여주는 **읽기전용**이다. 다만 예전에 직접 입력해 둔
+ * `areaM2`(가로·세로가 `null`)는 손상결함표에 그대로 인쇄되는 값이라 **지우지 않고**
+ * 읽기전용으로 그대로 보여준다. 출처 판정은 `project-core` 의 `areaSource` 가 한다.
+ *
  * 모드를 전환해도 반대편 값을 지우지 않는다(F15). 이 컴포넌트는 값을 지우지 않고
  * `sizeMode` 만 바꾸는 요청(`onModeChange`)과, 필드 값 자체를 바꾸는 요청(`onFieldsChange`)을
  * 분리해서 올린다 — 연동 규칙(모드 전환 시 무엇을 지우는가)은 `apply.ts`/이 컴포넌트가 정하고
  * 결함유형이 바뀔 때의 연동은 `project-core/items/apply.ts` 가 정한다(§3-6).
  */
-import { useState } from 'react';
 import {
-  AREA_PRESETS,
-  AREA_STEP,
-  areaFromMm,
+  areaSource,
   COUNT_PRESETS,
   COUNT_STEP,
+  displayAreaM2,
   effectiveAreaM2,
   LENGTH_PRESETS,
   LENGTH_STEP,
   RECT_SIDE_PRESETS,
   RECT_SIDE_STEP,
+  resolveAreaM2OnRectEdit,
   SIZE_MODE_LABEL,
   WIDTH_OVER_INITIAL,
   WIDTH_PRESETS,
@@ -52,14 +56,19 @@ export function SizeBlock({
   onFieldsChange: (patch: Partial<SizeFields>) => void;
   disabled?: boolean;
 }) {
-  // 이미 가로·세로가 저장돼 있으면(재편집) 펼친 채로 보여준다 — 접으면 값이 안 보여 잃은 줄 안다
-  const [rectOpen, setRectOpen] = useState(value.areaWMm !== null || value.areaHMm !== null);
-
-  const setRectSide = (patch: { areaWMm?: number; areaHMm?: number }) => {
-    const w = patch.areaWMm ?? value.areaWMm ?? 0;
-    const h = patch.areaHMm ?? value.areaHMm ?? 0;
-    onFieldsChange({ ...patch, areaM2: w > 0 && h > 0 ? areaFromMm(w, h) : value.areaM2 });
+  const setRectSide = (patch: { areaWMm?: number | null; areaHMm?: number | null }) => {
+    const w = 'areaWMm' in patch ? (patch.areaWMm ?? null) : value.areaWMm;
+    const h = 'areaHMm' in patch ? (patch.areaHMm ?? null) : value.areaHMm;
+    onFieldsChange({ ...patch, areaM2: resolveAreaM2OnRectEdit(value.areaM2, w, h) });
   };
+
+  // 면적 칸 아래 문구는 값의 **출처**에 따라 다르다 — 옛 직접입력값은 그렇게 밝혀야
+  // "왜 이건 못 고치지" 가 안 생긴다
+  const areaHint = {
+    RECT: '가로 × 세로로 자동 계산됩니다',
+    LEGACY_DIRECT: '예전에 직접 입력된 값입니다. 가로 · 세로를 모두 채우면 대체됩니다',
+    EMPTY: '가로 · 세로를 모두 입력하면 계산됩니다',
+  }[areaSource(value)];
 
   return (
     <div className="idf-field idf-size">
@@ -125,15 +134,34 @@ export function SizeBlock({
         </div>
       ) : (
         <div className="idf-size__body">
+          {/* C-3 — 가로 × 세로가 기본 입력이다. 직접입력 칸과 접기 토글은 없앴다 */}
+          <NumberField
+            label="가로"
+            unit="mm"
+            value={value.areaWMm}
+            presets={RECT_SIDE_PRESETS}
+            step={RECT_SIDE_STEP}
+            disabled={disabled}
+            onChange={(v) => setRectSide({ areaWMm: v })}
+          />
+          <NumberField
+            label="세로"
+            unit="mm"
+            value={value.areaHMm}
+            presets={RECT_SIDE_PRESETS}
+            step={RECT_SIDE_STEP}
+            disabled={disabled}
+            onChange={(v) => setRectSide({ areaHMm: v })}
+          />
           <NumberField
             label="면적"
             unit="㎡"
-            value={value.areaM2}
-            presets={AREA_PRESETS}
-            step={AREA_STEP}
-            disabled={disabled}
-            // 직접 입력하면 가로×세로 보조값과의 연결을 끊는다(§3-5-b "AREA(직접)")
-            onChange={(v) => onFieldsChange({ areaM2: v, areaWMm: null, areaHMm: null })}
+            value={displayAreaM2(value)}
+            presets={[]}
+            step={0}
+            readOnly
+            readOnlyHint={areaHint}
+            onChange={() => {}}
           />
           <NumberField
             label="개소"
@@ -145,44 +173,6 @@ export function SizeBlock({
             disabled={disabled}
             onChange={(v) => onFieldsChange({ countEa: v })}
           />
-
-          <button
-            type="button"
-            className="btn btn--small btn--ghost idf-rect-toggle"
-            disabled={disabled}
-            aria-expanded={rectOpen}
-            onClick={() => setRectOpen((v) => !v)}
-          >
-            가로 × 세로로 계산 {rectOpen ? '▴' : '▾'}
-          </button>
-
-          {rectOpen && (
-            <div className="idf-rect">
-              <NumberField
-                label="가로"
-                unit="mm"
-                value={value.areaWMm}
-                presets={RECT_SIDE_PRESETS}
-                step={RECT_SIDE_STEP}
-                disabled={disabled}
-                onChange={(v) => setRectSide({ areaWMm: v })}
-              />
-              <NumberField
-                label="세로"
-                unit="mm"
-                value={value.areaHMm}
-                presets={RECT_SIDE_PRESETS}
-                step={RECT_SIDE_STEP}
-                disabled={disabled}
-                onChange={(v) => setRectSide({ areaHMm: v })}
-              />
-              <p className="idf-rect__hint">
-                {value.areaWMm && value.areaHMm
-                  ? `→ 면적 ${areaFromMm(value.areaWMm, value.areaHMm)} ㎡ 로 계산되어 위 칸에 들어갑니다`
-                  : '가로·세로를 모두 입력하면 면적이 자동으로 계산됩니다'}
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>

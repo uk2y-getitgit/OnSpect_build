@@ -18,6 +18,7 @@ import {
   type DefectAttrs,
 } from '@onspect/canvas-core';
 import type { ItemSettings } from '@onspect/project-core';
+import { useUiMode } from '../shell/useUiMode';
 import { DefectInfoForm } from './defectForm/DefectInfoForm';
 
 const STATUS_LABEL: Record<Defect['status'], string> = {
@@ -77,6 +78,9 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
   },
   ref,
 ) {
+  // ⚠️ 아래 `if (!defect)` 조기 반환보다 **먼저** 불러야 한다 (훅 규칙)
+  const { tablet } = useUiMode();
+
   if (!defect) {
     return (
       <aside className="inspector" aria-label="결함 정보">
@@ -142,6 +146,10 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
             onChange={onAttrsChange}
             onLoadSimilar={onLoadSimilar}
             similarCount={similarCount}
+            // D29 — 현장(태블릿)에서는 조사구분·구조체여부·발생원인·보수보강방안·
+            // 위치보조·메모를 감춘다. **화면만** 감추고 값은 그대로 둔다.
+            // 폼은 DOM 훅을 못 부르므로(RN 재사용 경계) 여기서 알려준다
+            profile={tablet ? 'field' : 'full'}
           />
         ) : (
           <>

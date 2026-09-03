@@ -10,6 +10,13 @@
  *
  * `DefectAttrs` 는 타입으로만 쓴다(`import type`) — canvas-core 의 렌더·store·repo 는
  * 전혀 참조하지 않는다.
+ *
+ * **T-1·T-4·T-6 (D29)** — 태블릿(현장)에서는 필드 일부를 감춘다. 감추는 것은 **화면뿐이고
+ * 값은 손대지 않는다** — 전회차에서 넘어온 값도, PC 에서 채운 값도 그대로 살아 있고
+ * PC 에서 열면 다시 보인다. 그래서 `profile` 은 렌더 분기일 뿐 `onChange` 를 부르지 않는다.
+ *
+ * 판정은 이 컴포넌트가 하지 않는다 — `useUiMode` 같은 DOM 훅을 여기서 부르면
+ * RN 재사용 경계가 깨진다. 호출자가 `profile` 로 알려준다.
  */
 import { useId, useMemo } from 'react';
 import type { DefectAttrs } from '@onspect/canvas-core';
@@ -48,6 +55,13 @@ export type DefectInfoFormProps = {
   onLoadSimilar?: () => void;
   /** D18 — 불러올 수 있는 다른 결함의 수. 0 이면 버튼을 눌러도 볼 게 없어 `disabled` */
   similarCount?: number;
+  /**
+   * 표시 프로파일 (D29).
+   * - `full` — 전체 필드 (PC. 기본값)
+   * - `field` — 현장(태블릿) 단순화. 조사구분 · 구조체여부 · 발생원인 · 보수보강방안 ·
+   *   위치보조 · 메모를 **화면에서만** 감춘다
+   */
+  profile?: 'full' | 'field';
 };
 
 export function DefectInfoForm({
@@ -57,7 +71,10 @@ export function DefectInfoForm({
   disabled = false,
   onLoadSimilar,
   similarCount = 0,
+  profile = 'full',
 }: DefectInfoFormProps) {
+  // 현장 프로파일에서 감출 것. 값은 그대로 두고 렌더만 건너뛴다
+  const full = profile === 'full';
   // 폼이 한 화면에 두 벌 있어도(미리보기 + 우측 패널) label-for 가 어긋나지 않게 한다
   const uid = useId();
   const members = useMemo(
@@ -109,7 +126,12 @@ export function DefectInfoForm({
       )}
 
       {/* 조사구분 — "이 결함이 어떤 조사에서 나왔는가" 라는 틀이다.
-          연동 규칙이 없다 — 다른 필드를 건드리지 않는다 (PhotoPolish §2-7) */}
+          연동 규칙이 없다 — 다른 필드를 건드리지 않는다 (PhotoPolish §2-7)
+
+          T-1: 현장에서는 감춘다. 새 결함의 기본값이 이미 `EXTERIOR`(외관조사)이므로
+          (`canvas-core/defectAttrs.ts` `EMPTY_DEFECT_ATTRS`) 감추기만 해도 외관조사로 저장된다.
+          PC 에서 상세조사로 지정해 둔 결함의 값은 건드리지 않는다 */}
+      {full && (
       <SegmentField
         label="조사구분"
         value={value.surveyKind}
@@ -122,6 +144,7 @@ export function DefectInfoForm({
         disabled={disabled}
         onChange={(v) => onChange({ ...value, surveyKind: v })}
       />
+      )}
 
       {/* 구조유형 */}
       <div className="idf-field">
@@ -155,7 +178,9 @@ export function DefectInfoForm({
         onSelect={(id) => onChange(setMember(value, settings, id))}
       />
 
-      {/* 구조체 여부 — null 이면 부재 기본값을 그대로 보여준다(수동 지정 전) */}
+      {/* 구조체 여부 — null 이면 부재 기본값을 그대로 보여준다(수동 지정 전).
+          T-4: 현장에서는 감춘다(값 유지) */}
+      {full && (
       <SegmentField
         label="구조체 여부"
         hint={value.structural === null ? '부재 기본값' : '직접 지정'}
@@ -169,6 +194,7 @@ export function DefectInfoForm({
         disabled={disabled || !value.memberId}
         onChange={(v) => onChange({ ...value, structural: v })}
       />
+      )}
 
       {/* 결함유형 */}
       <ChoiceGrid
@@ -217,6 +243,10 @@ export function DefectInfoForm({
         onChange={(v) => onChange({ ...value, leak: v === 'O' })}
       />
 
+      {/* T-6: 발생원인 · 보수보강방안 · 위치보조 · 메모 — 현장에서는 감춘다(값 유지).
+          손상결함표의 발생원인 · 보수방안 열은 PC 에서 채운다(D29) */}
+      {full && (
+        <>
       {/* 발생원인 */}
       <ChoiceGrid
         label="발생 원인"
@@ -281,6 +311,9 @@ export function DefectInfoForm({
           onChange={(e) => onChange({ ...value, memo: e.target.value === '' ? null : e.target.value })}
         />
       </div>
+        </>
+      )}
+
     </div>
   );
 }

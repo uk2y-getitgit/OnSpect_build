@@ -60,3 +60,59 @@ export function outputSize(a: SizeInput): {
   const lengthMm = a.lengthMm ?? 0;
   return { widthMm, lengthMm, areaM2: areaFromMm(widthMm, lengthMm), countEa };
 }
+
+/* ------------------------------------------------------------------ *
+ * C-3 (D31) — 면적 직접입력 폐지 후, 값의 **출처**를 판정한다.
+ *
+ * 면적 칸은 이제 읽기전용이다. 그런데 이미 저장된 결함 중에는 `areaM2` 만 있고
+ * `areaWMm`·`areaHMm` 가 `null` 인 것이 있다 — 예전 "AREA(직접)" 입력분이다.
+ * 이 값은 손상결함표에 그대로 인쇄되므로 **지우지 않는다.** 화면에도 그대로 보여준다.
+ * ------------------------------------------------------------------ */
+
+/** 면적의 출처 판정에 필요한 필드만. `DefectAttrs` 를 그대로 넘겨도 구조적 타이핑으로 맞는다 */
+export type RectAreaInput = {
+  areaM2: number | null;
+  areaWMm: number | null;
+  areaHMm: number | null;
+};
+
+/**
+ * - `RECT` — 가로·세로가 둘 다 있다. 면적은 여기서 파생된다
+ * - `LEGACY_DIRECT` — 가로·세로 없이 면적만 있다. 예전 직접입력분(D31)
+ * - `EMPTY` — 아직 아무 값도 없다
+ */
+export type AreaSource = 'RECT' | 'LEGACY_DIRECT' | 'EMPTY';
+
+export function areaSource(a: RectAreaInput): AreaSource {
+  if (a.areaWMm !== null && a.areaHMm !== null && a.areaWMm > 0 && a.areaHMm > 0) return 'RECT';
+  if (a.areaM2 !== null) return 'LEGACY_DIRECT';
+  return 'EMPTY';
+}
+
+/**
+ * 면적 칸에 **보여줄** 값.
+ * 가로·세로가 있으면 거기서 계산하고(저장된 `areaM2` 와 어긋나도 계산이 이긴다),
+ * 없으면 저장된 직접입력값을 그대로 보여준다.
+ */
+export function displayAreaM2(a: RectAreaInput): number | null {
+  if (areaSource(a) === 'RECT') return areaFromMm(a.areaWMm as number, a.areaHMm as number);
+  return a.areaM2;
+}
+
+/**
+ * 가로·세로를 고쳤을 때 **저장할** `areaM2`.
+ *
+ * 둘 다 있을 때만 덮어쓴다(D31 "가로·세로를 새로 입력하면 그때 덮어쓴다").
+ * 하나라도 비어 있으면 이전 값을 **그대로 둔다** — 옛 직접입력값이 조작 중에
+ * 사라지지 않게 하기 위해서다(F15 "모드를 전환해도 반대편 값을 지우지 않는다" 와 같은 원칙).
+ */
+export function resolveAreaM2OnRectEdit(
+  prevAreaM2: number | null,
+  areaWMm: number | null,
+  areaHMm: number | null,
+): number | null {
+  if (areaWMm !== null && areaHMm !== null && areaWMm > 0 && areaHMm > 0) {
+    return areaFromMm(areaWMm, areaHMm);
+  }
+  return prevAreaM2;
+}
