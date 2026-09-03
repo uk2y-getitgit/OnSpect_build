@@ -24,7 +24,19 @@ export type MemberOption = {
   name: string;
   structural: Structural;
   favorite: boolean;
+  /** T-3 — 태블릿 부재 선택지에 띄울지. `undefined` 는 켜짐이다 (D34) */
+  tabletVisible?: boolean;
 };
+
+/**
+ * T-3 (D34) — 태블릿에 띄울 부재인가.
+ *
+ * **`undefined` 를 켜짐으로 읽는 것이 이 함수의 전부다.** 옛 용역 스냅샷에는 필드가 없어서
+ * `=== true` 로 쓰면 이미 쓰던 용역의 부재 칸이 통째로 빈다.
+ */
+export function isTabletVisible(m: { tabletVisible?: boolean }): boolean {
+  return m.tabletVisible !== false;
+}
 export type DefectTypeOption = {
   id: string;
   name: string;
@@ -63,7 +75,13 @@ export function membersOf(s: ItemSettings, st: StructureType): MemberOption[] {
   for (const l of links) {
     const m = memberById(s, l.memberId);
     if (!m) continue;
-    out.push({ id: m.id, name: m.name, structural: m.structural, favorite: l.favorite });
+    out.push({
+      id: m.id,
+      name: m.name,
+      structural: m.structural,
+      favorite: l.favorite,
+      tabletVisible: m.tabletVisible,
+    });
   }
   return out;
 }

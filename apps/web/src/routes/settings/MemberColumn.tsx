@@ -7,11 +7,13 @@
 import { useState } from 'react';
 import {
   addMember,
+  isTabletVisible,
   membersOf,
   countOf,
   renameMaster,
   reorderMembers,
   setMemberStructural,
+  setMemberTabletVisible,
   STRUCTURAL_LABEL,
   toggleMemberFavorite,
   unlinkMember,
@@ -115,6 +117,14 @@ export function MemberColumn({
                 >
                   {STRUCTURAL_LABEL[m.structural]}
                 </span>
+                {!isTabletVisible(m) && (
+                  <span
+                    className="set-tag"
+                    title="태블릿(현장) 결함정보 폼의 부재 선택지에 뜨지 않습니다. PC 에서는 그대로 보입니다"
+                  >
+                    태블릿 숨김
+                  </span>
+                )}
                 <span className="set-row__arrow" aria-hidden="true">
                   ▸
                 </span>
@@ -132,6 +142,18 @@ export function MemberColumn({
                             api.settings,
                             m.id,
                             m.structural === 'STRUCTURAL' ? 'NON_STRUCTURAL' : 'STRUCTURAL',
+                            api.now(),
+                          ),
+                        ),
+                    },
+                    {
+                      label: isTabletVisible(m) ? '태블릿에서 숨기기' : '태블릿에 노출',
+                      onSelect: () =>
+                        api.apply(
+                          setMemberTabletVisible(
+                            api.settings,
+                            m.id,
+                            !isTabletVisible(m),
                             api.now(),
                           ),
                         ),

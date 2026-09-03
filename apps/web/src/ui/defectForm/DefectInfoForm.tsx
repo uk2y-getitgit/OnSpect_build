@@ -23,6 +23,7 @@ import type { DefectAttrs } from '@onspect/canvas-core';
 import {
   causesOf,
   defectTypesOf,
+  isTabletVisible,
   membersOf,
   repairsOf,
   setDefectType,
@@ -77,9 +78,18 @@ export function DefectInfoForm({
   const full = profile === 'full';
   // 폼이 한 화면에 두 벌 있어도(미리보기 + 우측 패널) label-for 가 어긋나지 않게 한다
   const uid = useId();
-  const members = useMemo(
+  // T-3 (D34) — 현장에서는 `태블릿 노출` 이 켜진 부재만 고를 수 있다.
+  // 이름을 코드에 박지 않는다(D30) — 플래그만 본다. 플래그가 없는 옛 용역은 전부 켜진 것으로 읽혀
+  // 예전과 똑같이 보인다. ⚠️ 지금 선택돼 있는 부재는 꺼져 있어도 목록에 남긴다 —
+  // 안 그러면 PC 에서 고른 부재가 태블릿에서 열자마자 사라진 것처럼 보인다
+  const allMembers = useMemo(
     () => (value.structureType ? membersOf(settings, value.structureType) : []),
     [settings, value.structureType],
+  );
+  const members = useMemo(
+    () =>
+      full ? allMembers : allMembers.filter((m) => isTabletVisible(m) || m.id === value.memberId),
+    [allMembers, full, value.memberId],
   );
   const defectTypes = useMemo(
     () => (value.memberId ? defectTypesOf(settings, value.memberId) : []),

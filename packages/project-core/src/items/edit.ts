@@ -390,6 +390,30 @@ export function renameMaster(
 }
 
 /** 구조체 / 비구조체 — 부재 마스터의 속성이다 (결함마다 다시 지정할 수 있다) */
+/**
+ * T-3 (D30 · D34) — 이 부재를 태블릿(현장) 부재 선택지에 띄울지.
+ *
+ * 이름을 코드에 박지 않고 **플래그로만** 판정한다. 켤 때는 `true` 를 명시적으로 쓴다 —
+ * 필드를 지워서 `undefined`(= 켜짐)로 만들면 "사용자가 켠 것" 과 "옛 스냅샷이라 필드가 없는 것" 을
+ * 구별할 수 없다.
+ */
+export function setMemberTabletVisible(
+  s: ItemSettings,
+  memberId: string,
+  tabletVisible: boolean,
+  now: number,
+): ItemSettings {
+  return touch(
+    {
+      ...s,
+      members: s.members.map((m) =>
+        m.id === memberId ? { ...m, tabletVisible, updatedAt: now } : m,
+      ),
+    },
+    now,
+  );
+}
+
 export function setMemberStructural(
   s: ItemSettings,
   memberId: string,

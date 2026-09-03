@@ -27,24 +27,33 @@ import type {
 } from './types.js';
 
 // ── §2-7-a 부재 17종 ───────────────────────────────────────────────────────
-export const SEED_MEMBERS: readonly { name: string; structural: Structural }[] = [
+/**
+ * T-3 (D34) — `tabletVisible: false` 를 **명시한 것만 태블릿에서 꺼진다.**
+ * 실무 7종(기둥 · 보 · 벽 2종 · 슬래브 2종 · 천장 마감재)만 켠 채로 새 용역이 시작된다.
+ * 옛 용역 스냅샷에는 이 필드가 아예 없고, 없으면 켜짐이다 — 예전과 똑같이 17종이 다 뜬다.
+ */
+export const SEED_MEMBERS: readonly {
+  name: string;
+  structural: Structural;
+  tabletVisible?: boolean;
+}[] = [
   { name: '벽(구조체)', structural: 'STRUCTURAL' },
   { name: '벽(비구조체)', structural: 'NON_STRUCTURAL' },
   { name: '기둥', structural: 'STRUCTURAL' },
   { name: '보', structural: 'STRUCTURAL' },
   { name: '바닥 슬래브', structural: 'STRUCTURAL' },
   { name: '천장 슬래브', structural: 'STRUCTURAL' },
-  { name: '파라펫', structural: 'NON_STRUCTURAL' },
-  { name: '계단 슬래브', structural: 'STRUCTURAL' },
-  { name: '계단참 슬래브', structural: 'STRUCTURAL' },
-  { name: '치장벽돌', structural: 'NON_STRUCTURAL' },
-  { name: '계단 난간', structural: 'NON_STRUCTURAL' },
+  { name: '파라펫', structural: 'NON_STRUCTURAL', tabletVisible: false },
+  { name: '계단 슬래브', structural: 'STRUCTURAL', tabletVisible: false },
+  { name: '계단참 슬래브', structural: 'STRUCTURAL', tabletVisible: false },
+  { name: '치장벽돌', structural: 'NON_STRUCTURAL', tabletVisible: false },
+  { name: '계단 난간', structural: 'NON_STRUCTURAL', tabletVisible: false },
   { name: '천장 마감재', structural: 'NON_STRUCTURAL' },
-  { name: '드라이비트', structural: 'NON_STRUCTURAL' },
-  { name: '외부벽체', structural: 'NON_STRUCTURAL' },
-  { name: '담장', structural: 'NON_STRUCTURAL' },
-  { name: '캐노피', structural: 'NON_STRUCTURAL' },
-  { name: '경계석', structural: 'NON_STRUCTURAL' },
+  { name: '드라이비트', structural: 'NON_STRUCTURAL', tabletVisible: false },
+  { name: '외부벽체', structural: 'NON_STRUCTURAL', tabletVisible: false },
+  { name: '담장', structural: 'NON_STRUCTURAL', tabletVisible: false },
+  { name: '캐노피', structural: 'NON_STRUCTURAL', tabletVisible: false },
+  { name: '경계석', structural: 'NON_STRUCTURAL', tabletVisible: false },
 ];
 
 // ── §2-7-b 결함유형 13종 ───────────────────────────────────────────────────
@@ -115,6 +124,8 @@ export function createSeedSettings(args: SeedArgs): ItemSettings {
     id: seedMemberId(i),
     name: m.name,
     structural: m.structural,
+    // T-3 (D34) — 끄는 것만 명시한다. 안 실으면 `undefined` = 켜짐
+    ...(m.tabletVisible === false ? { tabletVisible: false } : {}),
     ...stamp,
   }));
   const defectTypes: DefectTypeMaster[] = SEED_DEFECT_TYPES.map((d, i) => ({

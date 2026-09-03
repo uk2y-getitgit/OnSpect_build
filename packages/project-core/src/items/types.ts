@@ -24,7 +24,17 @@ export type MasterBase = {
   updatedAt: number;
 };
 
-export type MemberMaster = MasterBase & { structural: Structural };
+/**
+ * `tabletVisible` — T-3 (D30 · D34). 태블릿(현장) 결함정보 폼의 부재 선택지에 띄울지.
+ *
+ * **`undefined` 는 "켜짐" 이다.** 이미 저장된 용역 스냅샷에는 이 필드가 없다 —
+ * 없으면 꺼짐으로 읽으면 이미 쓰던 용역의 부재 칸이 통째로 비어 현장에서 입력을 못 한다.
+ * 판정은 반드시 `isTabletVisible()` 로 한다(`m.tabletVisible === true` 로 쓰지 마라).
+ *
+ * 이름을 코드에 박지 않는다(D30) — 새 용역의 초기값만 `seed.ts` 가 정하고,
+ * 그 뒤로는 PC 항목설정에서 사용자가 켜고 끈다.
+ */
+export type MemberMaster = MasterBase & { structural: Structural; tabletVisible?: boolean };
 export type DefectTypeMaster = MasterBase & { defaultSizeMode: SizeMode };
 /** `code` 는 손상결함표 `발생원인 추정` 열에 그대로 인쇄된다. 문서 안에서 유일 (§2-5-f) */
 export type CauseMaster = MasterBase & { code: number };
