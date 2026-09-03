@@ -83,6 +83,45 @@
   --t-panel: 180ms ease;
 }
 
+/* ── 어두운 테마 (2026-09-03 사용자 요청 — 태블릿 전용) ───────────────────────
+ * `index.html` 부트스트랩이 localStorage(`onspect:theme`)를 읽어 body 렌더 전에
+ * `<html data-theme>` 를 찍는다(U-4의 data-ui-mode와 같은 패턴). 토글은 `useTheme.ts` +
+ * 태블릿 셸(`App.tsx`)에서만 노출한다 — **PC는 지금까지 그대로 밝은 테마 하나뿐이다.**
+ *
+ * ⚠️ `--defect-*`(결함 상태색)는 여기서 절대 재정의하지 않는다 — 위 §"도면 위 예약색" 주석대로
+ * `canvas-core`의 `STATUS_COLOR`와 값이 같아야 하고, 목록 배지는 자체 배경 + 고정 흰 글자라
+ * 테마와 무관하게 항상 또렷하다. 도면 이미지 자체(스캔·사진)도 여기서 손대지 않는다 —
+ * 캔버스 무대(`--bg`)만 어두워지고, 그 위에 얹히는 실제 문서는 원래 색 그대로다.
+ */
+:root[data-theme='dark'] {
+  --paper: #15171c;
+  --bg: #121317;
+  --surface: #1b1e24;
+  --surface-2: #23262d;
+  --surface-3: #2b2f37;
+
+  --text: #e8eaef;
+  --text-muted: #a7acb6;
+  --text-dim: #6b707a;
+
+  --border: #363b44;
+  --border-2: #2a2e35;
+
+  --accent: #5b8def;
+  --accent-weak: #1d2c47;
+  --accent-ink: #9dc0ff;
+
+  --guide: #2fd8ea;
+  --selection: #5b8def;
+
+  --ok: #4fbf8b;
+  --warn: #f0b94a;
+  --error: #f0645a;
+
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -935,6 +974,31 @@ kbd {
 
 .palette__subbtn:disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.65; }
 
+/* 필기메모 색상 선택 줄(2026-09-03) — `.palette__sub` 재사용, 안은 색 스와치 */
+.palette__sub--color { gap: 4px; padding: 3px; }
+
+.palette__swatch {
+  flex: 1;
+  height: 22px;
+  border: 1px solid rgba(31, 39, 52, 0.22);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: transform var(--t-hover), box-shadow var(--t-hover);
+}
+
+@media (hover: hover) {
+  .palette__swatch:hover:not(:disabled) { transform: scale(1.08); }
+}
+
+.palette__swatch:active:not(:disabled) { transform: scale(0.94); }
+
+.palette__swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.palette__swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.palette__swatch:disabled { cursor: not-allowed; opacity: 0.5; }
+
 /* ── 컨텍스트 플로팅 툴바 ────────────────────────────────────────────── */
 .ctx-toolbar {
   position: absolute;
@@ -1600,11 +1664,19 @@ kbd {
 .banner__hint { opacity: 0.85; }
 .banner__spacer { flex: 1; }
 
-.shell__reset {
+/* 화면 우하단 고정 — 초기화(항상) + 테마 전환(태블릿에서만, 2026-09-03) */
+.shell__corner {
   position: fixed;
   right: 14px;
   bottom: 12px;
   z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shell__reset,
+.shell__theme {
   border: 0;
   background: transparent;
   color: var(--text-dim);
@@ -1619,9 +1691,11 @@ kbd {
 
 @media (hover: hover) {
   .shell__reset:hover { color: var(--error); background: var(--surface); }
+  .shell__theme:hover { color: var(--accent-ink); background: var(--surface); }
 }
 
-.shell__reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shell__reset:focus-visible,
+.shell__theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── 페이지 셸 (P1 · P3) ──────────────────────────────────────────────── */
 /*

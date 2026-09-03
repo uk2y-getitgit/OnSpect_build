@@ -269,6 +269,18 @@ export const MEMO_INK = '#8a6a12';
 /** 필기 획 굵기 — 이미지 px */
 export const MEMO_INK_WIDTH = 3;
 export const MEMO_INK_ALPHA = 0.95;
+
+/**
+ * 필기메모 색상 프리셋(2026-09-03 사용자 요청 — "대표 빨강·파랑·초록·검정").
+ * 결함 상태색(§STATUS_COLOR)과 겹치지 않는 값을 골랐다 — 메모는 결함이 아니다(F2).
+ * 값은 이미 이 앱 팔레트에 있는 것을 그대로 썼다(`--error`·`--accent`·`ContextToolbar` 초록·먹색).
+ */
+export const MEMO_INK_PRESETS: readonly { value: string; label: string }[] = [
+  { value: '#d0342c', label: '빨강' },
+  { value: '#2d6cdf', label: '파랑' },
+  { value: '#1a7f37', label: '초록' },
+  { value: '#1f2734', label: '검정' },
+];
 /** 획 둘레 점선 상자의 여백 — 이미지 px */
 export const MEMO_BOX_PAD = 6;
 export const MEMO_BOX_DASH: readonly number[] = [6, 4];

@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-03 (`feat/ui-behavior-0903` code-reviewer 검수 조건부통과 → `main` 병합 완료)
+마지막 갱신: 2026-09-03 (`/pc`·`/tablet` 404 수정 + 태블릿 다크테마 + 필기메모 색상 선택)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -37,8 +37,29 @@ npm install
 npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(같은 Wi-Fi): http://<이 PC의 LAN IP>:5173/
 ```
 
-테스트 **823개**(canvas-core 470 · project-core 353) · 타입 검사 · 프로덕션 빌드 전부 통과.
+테스트 **830개**(canvas-core 477 · project-core 353) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
+
+### 2026-09-03 — `/pc`·`/tablet` 404 수정 + 태블릿 다크테마 + 필기메모 색상 (리더 직접)
+
+**① 배포 후 `/pc`·`/tablet` 404 버그 수정.** 원인: Vercel 프로젝트의 Root Directory가
+`apps/web`인데, rewrites(라우팅 규칙)는 Root Directory **안**의 `vercel.json`에서만 읽힌다 —
+저장소 루트 `vercel.json`은 그대로 두고 `apps/web/vercel.json`을 새로 만들어 같은 rewrites
+2줄을 배치(`afc3511`). 배포 후 두 경로 다시 200 확인.
+
+**② 사용자 요청 2건.**
+
+| 요청 | 구현 | 비차단 가정 |
+|---|---|---|
+| 태블릿 밝은/어두운 테마 선택 | `<html data-theme>` 부트스트랩(U-4와 같은 패턴) + `useTheme.ts` + 프로젝트 목록 화면 우하단 토글(태블릿에서만 노출). 다크 팔레트는 CSS 토큰(`--bg`·`--surface`·`--text`·`--border`·`--accent`·`--ok/warn/error`) 기반 | U55~U58 |
+| 필기메모 색상 선택(대표 4색: 빨강·파랑·초록·검정) | `MEMO` 도구 클릭 시 팔레트 아래 색 스와치 4개가 펼쳐진다(`ToolPalette.tsx`, 영역모양 선택줄과 같은 패턴). 다음 획부터 적용 — 이미 그린 메모는 안 바뀐다. `Memo.style.color`(기존 필드) 재사용, `DB_VERSION` 그대로 | U59·U60 |
+
+⚠️ 다크테마는 **1차 반영**이다 — `styles.css`에 하드코딩된 파스텔 배경(호버·배지 등 33곳)은
+안 건드렸다. 결함 상태색(`--defect-*`)은 `canvas-core`의 `STATUS_COLOR`와 값이 같아야 해서
+의도적으로 그대로 뒀다(목록 배지는 자체 배경 + 고정 흰 글자라 테마와 무관하게 또렷하다).
+
+**검증:** 타입 0오류 · 테스트 830개(신규 `memoInkColor.test.ts` 7개 포함) · 빌드 통과.
+가정 전문: `_workspace/ASSUMPTIONS.md` U55~U60.
 
 ### 2026-09-03 — 실사용 피드백 2라운드 (같은 브랜치)
 

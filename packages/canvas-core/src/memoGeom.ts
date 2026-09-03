@@ -13,6 +13,7 @@ import {
   MEMO_BORDER,
   MEMO_CHARS_PER_LINE,
   MEMO_FONT,
+  MEMO_INK,
   MEMO_LINE_FACTOR,
   MEMO_MAX_LINES,
   MEMO_MIN_H_PX,
@@ -43,9 +44,14 @@ export type ResolvedMemoStyle = {
   fontScale: number;
 };
 
-export function resolveMemoStyle(s: MemoStyle | null | undefined): ResolvedMemoStyle {
+/**
+ * `defaultColor` 는 호출자가 메모 종류에 맞게 골라 넘긴다 — 필기 메모는 `MEMO_INK`(중립 앰버),
+ * 옛 텍스트 메모는 `MEMO_TEXT`. 여기서 `isInkMemo` 를 직접 판정하지 않는 이유:
+ * 이 함수는 `MemoStyle` 만 받고, 종류 판정에 필요한 `paths` 는 `Memo` 전체에만 있다.
+ */
+export function resolveMemoStyle(s: MemoStyle | null | undefined, defaultColor: string): ResolvedMemoStyle {
   return {
-    color: s?.color ?? MEMO_TEXT,
+    color: s?.color ?? defaultColor,
     background: s?.background ?? MEMO_BG,
     border: s?.border ?? MEMO_BORDER,
     fontScale: s?.fontScale ?? 1,
@@ -122,7 +128,8 @@ export type MemoScreen = {
  * 다만 너무 작아지면 집을 수 없으므로 스크린 최소 크기를 보장한다.
  */
 export function memoScreen(memo: Memo, vp: Viewport, iw: number, ih: number): MemoScreen {
-  const style = resolveMemoStyle(memo.style);
+  // 필기 메모는 앰버 기본값, 옛 텍스트 메모는 그 전용 색 — §resolveMemoStyle
+  const style = resolveMemoStyle(memo.style, isInkMemo(memo) ? MEMO_INK : MEMO_TEXT);
 
   // F2 — 필기 메모: 상자는 획에서 파생한다. 글자 근사·줄바꿈이 필요 없다
   if (isInkMemo(memo)) {

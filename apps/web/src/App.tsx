@@ -19,6 +19,8 @@ import { Settings } from './routes/Settings';
 import { ToastHost } from './ui/ToastHost';
 import { useState } from 'react';
 import { ConfirmDialog } from './ui/Overlays';
+import { useUiMode } from './shell/useUiMode';
+import { useTheme } from './shell/useTheme';
 
 export default function App() {
   return (
@@ -34,6 +36,9 @@ function Shell() {
   const route = useRoute();
   const { storage, saveError, clearSaveError } = useAppData();
   const [resetting, setResetting] = useState(false);
+  // 밝은/어두운 테마(2026-09-03) — 태블릿에서만 고를 수 있다. PC 는 밝은 테마 고정
+  const { tablet } = useUiMode();
+  const { theme, setTheme } = useTheme();
   // 서비스워커 등록(P2)과 새 버전 감지(P4). 등록 실패는 앱을 막지 않는다
   const { updateAvailable, applying, applyUpdate } = useServiceWorker();
 
@@ -108,14 +113,26 @@ function Shell() {
       </div>
 
       {route.name === 'LIST' && (
-        <button
-          type="button"
-          className="shell__reset"
-          title="이 브라우저에 저장된 OnSpect 데이터를 전부 지웁니다"
-          onClick={() => setResetting(true)}
-        >
-          로컬 데이터 초기화
-        </button>
+        <div className="shell__corner">
+          {tablet && (
+            <button
+              type="button"
+              className="shell__theme"
+              title="이 기기에서만 적용됩니다"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              {theme === 'dark' ? '밝은 테마로' : '어두운 테마로'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="shell__reset"
+            title="이 브라우저에 저장된 OnSpect 데이터를 전부 지웁니다"
+            onClick={() => setResetting(true)}
+          >
+            로컬 데이터 초기화
+          </button>
+        </div>
       )}
 
       {resetting && (

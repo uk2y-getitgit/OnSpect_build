@@ -578,6 +578,12 @@ export type CanvasState = {
    * 파생값이다. 문서(Memo)에도 undo 에도 들어가지 않는다.
    */
   inkMemoId: string | null;
+  /**
+   * 필기메모 색상 선택(2026-09-03 사용자 요청) — **다음 획**에 쓸 색.
+   * 세션(도구) 상태일 뿐 문서에도 undo 에도 들어가지 않는다. 기본값은 `MEMO_INK`(중립 앰버).
+   * 커밋된 메모 자체의 색은 `Memo.style.color` 에 저장된다(§commitCreateMemoInk).
+   */
+  memoInkColor: string;
 };
 
 // ── 입력 이벤트 (경계 규칙 6) ──────────────────────────────────────────────
@@ -595,6 +601,7 @@ export type InputEvent =
   | { k: 'RESIZE'; size: Size }
   | { k: 'SET_SAFE_INSETS'; insets: SafeInsets }
   | { k: 'SET_TOOL'; tool: Tool }
+  | { k: 'SET_MEMO_INK_COLOR'; color: string }
   | { k: 'SET_DRAWING'; drawing: DrawingRef | null }
   | { k: 'SET_BUSY'; busy: boolean }
   | { k: 'SELECT_DEFECT'; defectId: string | null; reveal: boolean }

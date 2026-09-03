@@ -1347,6 +1347,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               onChange={(tool) => send({ k: 'SET_TOOL', tool })}
               aimOn={aimOn}
               onToggleAim={() => setAimOn((v) => !v)}
+              memoInkColor={state.canvas.memoInkColor}
+              onSetMemoInkColor={(color) => send({ k: 'SET_MEMO_INK_COLOR', color })}
             />
           </div>
 

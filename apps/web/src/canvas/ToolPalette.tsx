@@ -8,7 +8,7 @@
  * 영역이 선택됐을 때만 모양 선택 줄이 펼쳐진다 — 팔레트가 세로로 길어지면
  * 도면 가장자리를 잡아먹는다.
  */
-import type { Tool } from '@onspect/canvas-core';
+import { MEMO_INK_PRESETS, type Tool } from '@onspect/canvas-core';
 
 export type ToolPaletteProps = {
   tool: Tool;
@@ -23,6 +23,9 @@ export type ToolPaletteProps = {
    */
   aimOn?: boolean;
   onToggleAim?: () => void;
+  /** 필기메모 색상 선택(2026-09-03) — 다음 획에 쓸 색. `MEMO` 도구일 때만 아래 펼쳐진다 */
+  memoInkColor: string;
+  onSetMemoInkColor: (color: string) => void;
 };
 
 type Item = {
@@ -149,7 +152,15 @@ const AREA_TOOLS: { tool: Tool; label: string; icon: JSX.Element }[] = [
 
 const AREA_SET: Tool[] = ['AREA_RECT', 'AREA_ELLIPSE'];
 
-export function ToolPalette({ tool, disabled, onChange, aimOn = false, onToggleAim }: ToolPaletteProps) {
+export function ToolPalette({
+  tool,
+  disabled,
+  onChange,
+  aimOn = false,
+  onToggleAim,
+  memoInkColor,
+  onSetMemoInkColor,
+}: ToolPaletteProps) {
   const areaActive = AREA_SET.includes(tool);
 
   return (
@@ -189,6 +200,25 @@ export function ToolPalette({ tool, disabled, onChange, aimOn = false, onToggleA
                   >
                     {a.icon}
                   </button>
+                ))}
+              </div>
+            )}
+
+            {/* 필기메모 색상(2026-09-03) — 메모 도구일 때만 펼친다. 다음 획부터 적용, 이미 쓴 메모는 안 바뀐다 */}
+            {item.id === 'memo' && tool === 'MEMO' && (
+              <div className="palette__sub palette__sub--color" role="group" aria-label="필기메모 색">
+                {MEMO_INK_PRESETS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    className="palette__swatch"
+                    aria-pressed={memoInkColor === c.value}
+                    aria-label={c.label}
+                    title={`필기메모 색 — ${c.label} (다음 획부터)`}
+                    disabled={disabled}
+                    style={{ background: c.value }}
+                    onClick={() => onSetMemoInkColor(c.value)}
+                  />
                 ))}
               </div>
             )}

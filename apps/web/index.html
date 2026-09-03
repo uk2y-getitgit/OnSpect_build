@@ -40,6 +40,22 @@
       })();
     </script>
 
+    <!--
+      밝은/어두운 테마 (2026-09-03 사용자 요청, 태블릿 전용) — 위 U-4 와 같은 이유로 body 렌더 전에
+      찍는다. 시스템 설정을 따라가지 않는다 — 사용자가 직접 고른 값만 쓴다(안 골랐으면 밝은 테마).
+      토글은 `useTheme.ts` + `App.tsx`(태블릿에서만 노출).
+    -->
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('onspect:theme');
+          document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+        } catch (e) {
+          /* localStorage 접근 불가 — 밝은 테마로 렌더된다(styles.css 기본값) */
+        }
+      })();
+    </script>
+
     <!-- PWA (P1) — display:standalone · orientation:any (D10 이 가로·세로를 둘 다 정의했다) -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#1b4ba8" />

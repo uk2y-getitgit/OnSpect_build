@@ -153,6 +153,7 @@ export function initialCanvasState(canvas: Size = { w: 0, h: 0 }): CanvasState {
     busy: false,
     pendingSketch: null,
     inkMemoId: null,
+    memoInkColor: MEMO_INK,
   };
 }
 
@@ -327,7 +328,7 @@ export function ghostOf(state: CanvasState, ctx: ReduceContext): GhostShape | nu
     return {
       k: 'SKETCH',
       points: d.pathPreview.map((n) => toScreen(n, vp, iw, ih)),
-      color: memoTool ? MEMO_INK : color,
+      color: memoTool ? state.memoInkColor : color,
       width: Math.max(1, (memoTool ? MEMO_INK_WIDTH : st.sketchWidth) * vp.zoom),
     };
   }
@@ -592,6 +593,10 @@ function reduceCore(state: CanvasState, ev: InputEvent, ctx: ReduceContext): Red
 
     case 'SET_TOOL':
       return ok({ ...state, tool: ev.tool, drag: null, guides: [] }, ctx);
+
+    // 필기메모 색상 선택(2026-09-03 사용자 요청) — 다음 획부터 적용된다. 이미 그린 메모는 안 바뀐다
+    case 'SET_MEMO_INK_COLOR':
+      return ok({ ...state, memoInkColor: ev.color }, ctx);
 
     case 'FIT':
       return ok(fitState(state), ctx);
@@ -2208,6 +2213,9 @@ function commitCreateMemoInk(
     width: MEMO_INK_WIDTH,
   };
   const now = (ctx.now ?? (() => 0))();
+  // 색상 선택(2026-09-03) — 기본 앰버 그대로면 예전처럼 style:null 로 남긴다(마이그레이션 없음).
+  // 프리셋을 골랐을 때만 style.color 에 기록한다
+  const memoStyle = state.memoInkColor === MEMO_INK ? null : { color: state.memoInkColor };
   const memo: Memo = {
     id: ctx.makeId(),
     projectId: ctx.projectId ?? '',
@@ -2217,7 +2225,7 @@ function commitCreateMemoInk(
     pos: roundNorm(inkAnchor([path])),
     text: '',
     paths: [path],
-    style: null,
+    style: memoStyle,
     createdAt: now,
     updatedAt: now,
     deviceId: ctx.deviceId ?? '',
