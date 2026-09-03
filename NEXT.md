@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-03 (Supabase 서버 스키마 적용 완료 + 로컬 삭제전파 장치 완료)
+마지막 갱신: 2026-09-03 (`feat/ui-behavior-0903` code-reviewer 검수 조건부통과 → `main` 병합 완료)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -37,7 +37,7 @@ npm install
 npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(같은 Wi-Fi): http://<이 PC의 LAN IP>:5173/
 ```
 
-테스트 **667개**(canvas-core 360 · project-core 307) · 타입 검사 · 프로덕션 빌드 전부 통과.
+테스트 **823개**(canvas-core 470 · project-core 353) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
 
 ### 2026-09-03 — 실사용 피드백 2라운드 (같은 브랜치)
@@ -68,11 +68,19 @@ GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
 - **잠금 규칙** — `isLocked` 가 `status !== 'CURRENT'` 에서 `status === 'PREV_PENDING'` 으로.
   보수완료 값 편집과 네 종류 전부 사진 추가가 함께 열렸다. **파급이 가장 넓은 변경이다**
 
+#### code-reviewer 검수 완료 → `main` 병합 완료 (2026-09-03)
+
+`feat/ui-behavior-0903` 전체(18커밋)를 `main` 병합 전 검수 — **조건부 통과**(심각 0 · 보통 1 · 경미 2).
+전문: `_workspace/81_code-reviewer_findings_UIBehavior0903_Full.md`.
+
+- D37 재확정 전 옛 규칙("좌표는 안 옮긴다")을 서술하던 주석 3곳(`a4.ts`·`DrawingScaleDialog.tsx`·
+  `ProjectSetup.tsx`) — 코드 동작은 이미 맞았고 주석만 위험했다. **정정 완료**
+- D35(잠금 규칙 반전)·D36(정렬 재설계)·D37(좌표 동반이동) 전부 코드로 직접 재확인 —
+  옛 규칙 잔재 0건, 좌표 변환 수식 수기 검산 통과
+- `main` fast-forward 병합(`70c2d24`) · `feat/photo-polish` 도 같이 갱신 · Vercel 자동배포
+
 #### 아직 안 한 것
 
-- 🔴 **code-reviewer 검수 미실시.** 이 브랜치의 커밋 전부가 대상이다.
-  `main` 병합 **전에** `/onspect-code-review` 를 돌리는 것을 강하게 권한다 —
-  좌표를 실제로 옮기고 잠금 규칙을 뒤집은 라운드다
 - 도면 크기 조절은 **Undo 스택에 안 올라간다.** 되돌리기는 다이얼로그 [취소] 가 스냅샷으로 한다
   (`[A4로 맞추기]` 와 같은 성격). 커맨드로 승격할지는 미정
 - `ExportRun` 은 번호 매핑만 저장하고 좌표는 저장하지 않아, 정렬·크기조절 후
@@ -85,8 +93,7 @@ GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
 사용자가 준 요청 16건(공통 5 · PC 2 · 태블릿 9). 요청 원문은
 `_workspace/00_input/scope_UIBehavior0903.md`, 확정 사항은 **D27~D34**, 질문은 Q63~Q73.
 
-> **이 브랜치는 아직 `main` 에 병합하지 않았다.** 메인 PC 에서 이어받아 진행할 예정이다.
-> `git fetch && git checkout feat/ui-behavior-0903`
+> ✅ **`main` 에 병합 완료(2026-09-03).** 검수 결과는 위 "실사용 피드백 2라운드" 섹션 참고.
 
 | # | 항목 | 커밋 |
 |---|---|---|
