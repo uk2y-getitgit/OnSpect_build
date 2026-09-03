@@ -762,16 +762,36 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
 
   const paintScale = useCallback(
     (res: { nextDrawings: Drawing[]; nextDefects: Defect[]; nextMemos: Memo[] }, persist: boolean) => {
+      const snap = scaleSnapshot.current;
       const byId = new Map(res.nextDrawings.map((d) => [d.id, d]));
+
+      /*
+       * `모든 도면` 을 켰다가 다시 끄면, 앞서 미리보기로 바꿔 둔 **다른 도면들**이 그대로 남는다.
+       * 적용 대상에서 빠진 것은 스냅샷으로 되돌린다 — 안 그러면 저장은 이 도면만 되는데
+       * 화면에는 다른 층도 바뀐 채로 남아 "적용했는데 왜 저장이 안 됐지" 가 된다.
+       */
+      const revert = [...scaleTouched.current].filter((id) => !byId.has(id));
+      const revertSet = new Set(revert);
+      if (snap) for (const d of snap.drawings) if (revertSet.has(d.id)) byId.set(d.id, d);
+
       setDrawings((prev) => prev.map((d) => byId.get(d.id) ?? d));
-      for (const d of res.nextDrawings) {
-        releaseComposite(d.id); // 새 배율로 다시 합성하도록 런타임 캐시만 버린다
-        scaleTouched.current.add(d.id);
-      }
+      for (const id of byId.keys()) releaseComposite(id); // 다시 합성하도록 런타임 캐시만 버린다
+      // 되돌린 것은 이미 원본 상태라 더 추적하지 않는다 — 계속 들고 있으면
+      // 미리보기 프레임마다 그 도면들의 합성 캐시를 헛되이 버린다
+      scaleTouched.current = new Set(res.nextDrawings.map((d) => d.id));
+
       dispatch({
         t: 'SET_DRAWING_GEOMETRY',
-        defects: res.nextDefects,
-        memos: res.nextMemos,
+        defects: [
+          ...res.nextDefects,
+          ...(snap ? snap.defects.filter((d) => revertSet.has(d.drawingId)) : []),
+        ],
+        memos: [
+          ...res.nextMemos,
+          ...(snap ? snap.memos.filter((m) => revertSet.has(m.drawingId)) : []),
+        ],
+        // 되돌린 것까지 저장 대기열에 올려도 값이 원본과 같아 디스크에 쓸 내용이 없다.
+        // 다만 `persist` 는 적용 순간에만 true 라 미리보기 중에는 아무것도 안 쓴다
         persist,
       });
     },

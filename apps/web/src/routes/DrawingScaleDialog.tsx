@@ -39,9 +39,16 @@ export function DrawingScaleDialog({
   onApply: (scale: number, allDrawings: boolean) => void;
   onClose: () => void;
 }) {
-  const current = clampScale(drawing.imgScale ?? 1);
+  /**
+   * ⚠️ **열 때 한 번만 잡는다.** 실시간 미리보기가 `drawing.imgScale` 을 바꾸므로
+   * prop 에서 매 렌더 다시 읽으면 기준값이 슬라이더를 따라와 `changed` 가 언제나 false 가 되고
+   * **[적용]이 영영 비활성**이 된다 (사용자 신고 2026-09-03 — "모든 도면 적용을 체크하지 않으면
+   * 적용 불가"). `|| allDrawings` 가 있어서 체크했을 때만 눌리던 것이 그 증상이었다.
+   */
+  const [current] = useState(() => clampScale(drawing.imgScale ?? 1));
   const [scale, setScale] = useState(current);
   const [allDrawings, setAllDrawings] = useState(false);
+  // 배율이 그대로여도 `모든 도면` 은 다른 도면들을 바꾸므로 적용할 것이 있다
   const changed = Math.abs(scale - current) > 1e-9 || allDrawings;
 
   /**
