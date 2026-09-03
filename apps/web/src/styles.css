@@ -4756,3 +4756,42 @@ select.input { cursor: pointer; }
 .app[data-shell^='tablet'] .idf .idf-presetgrid {
   grid-template-columns: repeat(3, 1fr);
 }
+
+/* ── T-7 사진 추가 타일 (현장/태블릿) ──────────────────────────────────
+   사진이 들어갈 자리를 미리 보여주고, 그 칸 자체가 추가 버튼이다.
+   썸네일과 **같은 크기·같은 그리드 칸**이라 사진이 늘어나면 자연스럽게 오른쪽으로 밀린다. */
+.photoTile--add {
+  border-style: dashed;
+  background: transparent;
+}
+
+.photoTile__add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.photoTile__add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.photoTile__addIcon {
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.photoTile__addLabel {
+  font-size: 11.5px;
+  line-height: 1.2;
+}

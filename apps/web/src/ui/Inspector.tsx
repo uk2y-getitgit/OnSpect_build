@@ -175,6 +175,10 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
           </p>
         ))}
 
+      {/* T-7 — 현장(태블릿)에서는 사진이 **폼보다 위**다. 결함을 찍으면 사진부터 붙이는
+          순서라, 아래 있으면 매번 스크롤해야 한다. PC 는 §2-5 대로 폼 아래 그대로 */}
+      {tablet && photoSlot}
+
       <div className="inspector__form">
         {settings ? (
           <DefectInfoForm
@@ -217,8 +221,9 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
             </dl>
           </>
         )}
-        {/* S5 — 결함정보 폼 **아래**에 사진 섹션이 온다 (§2-5) */}
-        {photoSlot}
+        {/* S5 — 결함정보 폼 **아래**에 사진 섹션이 온다 (§2-5).
+            태블릿에서는 이미 위에 그렸으므로 여기서는 그리지 않는다 (T-7) */}
+        {!tablet && photoSlot}
       </div>
 
       <div className="inspector__actions">

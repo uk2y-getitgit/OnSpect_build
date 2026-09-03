@@ -20,6 +20,7 @@ import {
   type PhotoAnnotation,
   type PhotoEdits,
 } from '@onspect/project-core';
+import { useUiMode } from '../../shell/useUiMode';
 import type { RejectedPhoto } from '../../data/photoIngest';
 import { MAX_PHOTOS_PER_PICK, PHOTO_ACCEPT_ATTR } from '../../data/photoIngest';
 import { PhotoPreviewDialog } from './PhotoPreviewDialog';
@@ -158,6 +159,10 @@ export function PhotoSection(props: PhotoSectionProps) {
   const preview = previewId ? (photos.find((p) => p.id === previewId) ?? null) : null;
   const previewIndex = preview ? photos.findIndex((p) => p.id === preview.id) : -1;
 
+  // T-7 — 현장(태블릿)에서는 그리드 **첫 칸이 곧 사진추가 버튼**이다.
+  // 사진은 그 오른쪽으로 채워진다. PC 는 지금 그대로 둔다
+  const { tablet } = useUiMode();
+
   return (
     <section className="photos" aria-label="사진">
       <header className="photos__head">
@@ -236,13 +241,37 @@ export function PhotoSection(props: PhotoSectionProps) {
         onChange={pickReplacement}
       />
 
-      {photos.length === 0 ? (
+      {photos.length === 0 && !tablet ? (
         <p className="photos__empty">
           아직 사진이 없습니다. <b>+ 사진 추가</b> 로 여러 장을 한 번에 고를 수 있습니다.
         </p>
       ) : (
         <>
           <ul className="photos__grid">
+            {/* T-7 — 사진이 들어갈 자리를 미리 보여주고, 그 칸 자체가 추가 버튼이다.
+                손가락으로 누를 면이 작은 상단 버튼 하나뿐이면 현장에서 놓치기 쉽다 */}
+            {tablet && (
+              <li className="photoTile photoTile--add">
+                <button
+                  type="button"
+                  className="photoTile__add"
+                  onClick={() => addInputRef.current?.click()}
+                  disabled={addDisabled || busy}
+                  title={
+                    addDisabled
+                      ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+                      : disabled
+                        ? '이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다'
+                        : '사진을 골라 추가합니다'
+                  }
+                >
+                  <span className="photoTile__addIcon" aria-hidden="true">
+                    +
+                  </span>
+                  <span className="photoTile__addLabel">{busy ? '처리 중…' : '사진 추가'}</span>
+                </button>
+              </li>
+            )}
             {photos.map((p) => {
               const url = urls.get(p.thumbBlobKey) ?? null;
               return (
@@ -322,9 +351,11 @@ export function PhotoSection(props: PhotoSectionProps) {
               );
             })}
           </ul>
-          <p className="photos__hint">
-            드래그로 순서 변경 · 우클릭(또는 <b>⋯</b>)으로 메뉴 · 클릭하면 크게 보기
-          </p>
+          {photos.length > 0 && (
+            <p className="photos__hint">
+              드래그로 순서 변경 · 우클릭(또는 <b>⋯</b>)으로 메뉴 · 클릭하면 크게 보기
+            </p>
+          )}
         </>
       )}
 
