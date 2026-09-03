@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/tablet", "destination": "/index.html" },
+    { "source": "/pc", "destination": "/index.html" }
+  ]
+}
