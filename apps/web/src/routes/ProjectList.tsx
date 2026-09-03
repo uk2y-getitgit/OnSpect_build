@@ -4,7 +4,7 @@
  * 앱 최초 진입은 항상 여기다. **마지막 용역으로 자동 진입하지 않는다** —
  * 다른 용역을 열려던 사용자를 방해한다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatBytes,
   formatDateTime,
@@ -16,6 +16,7 @@ import {
 } from '@onspect/project-core';
 import { useAppData } from '../data/appData';
 import { estimateStorage } from '../data/idb/db';
+import { exportProjectToZip, importProjectFromZip } from '../data/projectTransfer';
 import { seedSampleProject, SAMPLE_SUMMARY } from '../data/sampleProject';
 import { navigate } from '../router';
 import { BusyButton, EmptyState } from '../ui/Form';
@@ -110,6 +111,54 @@ export function ProjectList() {
     navigate({ name: 'SETUP', projectId: r.project.id });
   }, [storage, seeding, guard, reload, toast]);
 
+  // ── D38(Q74) — 로그인 없이 기기 간 이동: 파일로 내보내기/가져오기 ─────────────
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const exportProject = useCallback(
+    async (s: ProjectSummary) => {
+      if (storage.phase !== 'READY' || exportingId) return;
+      const name = projectDisplayName(s.project);
+      setExportingId(s.project.id);
+      try {
+        const { blob, fileName } = await exportProjectToZip(storage.repo, s.project.id);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast(`'${name}'을 파일로 내보냈습니다 — ${fileName}`);
+      } catch (err) {
+        toast(err instanceof Error ? err.message : '내보내기에 실패했습니다', { kind: 'warn' });
+      } finally {
+        setExportingId(null);
+      }
+    },
+    [storage, exportingId, toast],
+  );
+
+  const importFromFile = useCallback(
+    async (file: File) => {
+      if (storage.phase !== 'READY' || importing) return;
+      setImporting(true);
+      try {
+        // `guard()`(저장 실패 배너)를 안 쓴다 — "잘못된 파일"은 저장 실패가 아니라
+        // 사용자가 파일을 잘못 골랐다는 뜻이라 토스트로 충분하다
+        const r = await importProjectFromZip(storage.repo, file);
+        reload();
+        toast(`'${r.projectName}'을(를) 새 용역으로 가져왔습니다`);
+        navigate({ name: 'SETUP', projectId: r.projectId });
+      } catch (err) {
+        toast(err instanceof Error ? err.message : '가져오기에 실패했습니다', { kind: 'warn' });
+      } finally {
+        setImporting(false);
+      }
+    },
+    [storage, importing, reload, toast],
+  );
+
   if (storage.phase === 'LOADING' || filtered === null) {
     return (
       <div className="page">
@@ -166,6 +215,26 @@ export function ProjectList() {
             onClick={() => void makeSample()}
           >
             샘플 용역 만들기
+          </BusyButton>
+          {/* D38(Q74) — 로그인 없이 기기 간 이동. 항상 새 용역으로 들어온다(같은 파일 재수입 안전) */}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            className="visually-hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = ''; // 같은 파일을 연달아 골라도 change가 다시 뜨게
+              if (file) void importFromFile(file);
+            }}
+          />
+          <BusyButton
+            busy={importing}
+            className="btn"
+            title="다른 기기에서 내보낸 OnSpect 백업 파일(.zip)을 새 용역으로 불러옵니다"
+            onClick={() => importInputRef.current?.click()}
+          >
+            파일에서 가져오기
           </BusyButton>
           <button type="button" className="btn btn--primary" onClick={() => navigate({ name: 'NEW' })}>
             용역 만들기
@@ -242,6 +311,11 @@ export function ProjectList() {
                     {
                       label: '이름 · 정보 수정',
                       onSelect: () => navigate({ name: 'EDIT', projectId: s.project.id }),
+                    },
+                    {
+                      // D38(Q74) — 로그인 없이 기기 간 이동. 다른 기기의 [파일에서 가져오기]로 이어진다
+                      label: exportingId === s.project.id ? '내보내는 중…' : '파일로 내보내기',
+                      onSelect: () => void exportProject(s),
                     },
                     {
                       label: '삭제',

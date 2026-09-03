@@ -758,6 +758,62 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     return { buildings: buildingMap.size, floors: floorMap.size, drawings: drawingCount, defects: defectCount };
   }
 
+  /**
+   * 기기 간 프로젝트 이동(D38 · Q74) — **가져오기 실행.**
+   *
+   * 호출부(`apps/web/src/data/projectTransfer.ts`)가 이미 `remapTransferBundle` 로
+   * id 를 전부 새로 이어 둔 상태로 넘긴다 — 여기는 그걸 그대로 한 트랜잭션에 쓰기만 한다.
+   *
+   * ⚠️ **`stamp()`/`stampDefect()` 를 안 쓴다** — `updatedAt`·`deviceId`·`createdBy` 를
+   * 원본 기기 값 그대로 보존한다. 가져오기는 **편집이 아니다**: 지금 시각으로 다시 찍으면
+   * 나중에 Track 1 서버 동기화가 붙었을 때 내용은 안 바뀌었는데 `updatedAt` 만 최신이 되어
+   * LWW 병합이 "더 최근"으로 잘못 판단할 수 있다(D23).
+   *
+   * blob 은 `putBlobIn`(참조 1)으로 새로 넣는다 — 도면·사진의 `*BlobKey` 는 remap 하지 않은
+   * 원래 값 그대로라, 여기서 그 키로 바이트를 심으면 저장된 레코드가 바로 찾아 그린다.
+   */
+  async importBundle(input: {
+    project: Project;
+    buildings: readonly Building[];
+    floors: readonly Floor[];
+    drawings: readonly Drawing[];
+    defects: readonly Defect[];
+    memos: readonly Memo[];
+    photos: readonly Photo[];
+    itemSettings: ItemSettings | null;
+    blobs: ReadonlyMap<string, Blob>;
+  }): Promise<void> {
+    const stores = [
+      STORE.projects,
+      STORE.buildings,
+      STORE.floors,
+      STORE.drawings,
+      STORE.defects,
+      STORE.memos,
+      STORE.photos,
+      STORE.itemSettings,
+      STORE.blobs,
+    ];
+    const tx = this.db.transaction(stores, 'readwrite');
+    tx.objectStore(STORE.projects).put(input.project);
+    const bs = tx.objectStore(STORE.buildings);
+    for (const b of input.buildings) bs.put(b);
+    const fs = tx.objectStore(STORE.floors);
+    for (const f of input.floors) fs.put(f);
+    const ds = tx.objectStore(STORE.drawings);
+    for (const d of input.drawings) ds.put(d);
+    const xs = tx.objectStore(STORE.defects);
+    for (const d of input.defects) xs.put(d);
+    const ms = tx.objectStore(STORE.memos);
+    for (const m of input.memos) ms.put(m);
+    const ps = tx.objectStore(STORE.photos);
+    for (const p of input.photos) ps.put(p);
+    if (input.itemSettings) tx.objectStore(STORE.itemSettings).put(input.itemSettings);
+    const blobStore = tx.objectStore(STORE.blobs);
+    for (const [key, blob] of input.blobs) await putBlobIn(blobStore, key, blob, 1);
+    await txDone(tx);
+  }
+
   // ── 항목 설정 (S3 §2-1 · §2-4) ──────────────────────────────────────────
   /**
    * **항상 기본키로 읽는다.** `by_project` 인덱스는 쓰지 않는다 —
