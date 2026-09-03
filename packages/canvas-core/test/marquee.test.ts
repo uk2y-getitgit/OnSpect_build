@@ -9,9 +9,12 @@ import { describe, expect, it } from 'vitest';
 import {
   initialCanvasState,
   marqueeRectOf,
+  multiTranslateOf,
   reduce,
   type ReduceContext,
 } from '../src/interaction.js';
+import { applyCommand, invertCommand } from '../src/commands.js';
+import { clampDefectsTranslate, translateDefects } from '../src/defectGeom.js';
 import { toScreen } from '../src/geometry.js';
 import { defect, GS } from './helpers.js';
 import type { CanvasState, Defect, InputEvent, Keys } from '../src/types.js';
@@ -202,5 +205,164 @@ describe('C-4 일괄 삭제', () => {
     const r = reduce(state, { k: 'CONFIRM_DELETE_DEFECTS', defectIds: ['a', 'b'] }, ctx);
     const cmd = r.commands[0] as { k: 'DELETE_DEFECTS'; defects: readonly Defect[] };
     expect(cmd.defects.map((d) => d.id)).toEqual(['a']);
+  });
+});
+
+describe('C-4b 일괄 이동', () => {
+  /** 잡을 지점 = 결함 a 의 마크 중심 */
+  const grabAt = (s: CanvasState) => at(s, { x: 0.1, y: 0.1 });
+
+  it('여러 개를 잡아 놓고 하나를 끌면 전부 같이 간다 — 커맨드는 하나', () => {
+    const { state, ctx } = boot([A, B]);
+    const picked = dragMarquee(state, ctx).state;
+    expect(picked.multi).toHaveLength(2);
+
+    const from = grabAt(picked);
+    const to = { x: from.x + 100, y: from.y + 50 };
+    const r = run(picked, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: from, button: 0, keys: K },
+      { k: 'POINTER_MOVE', pointerId: 1, screen: to, keys: K },
+      { k: 'POINTER_UP', pointerId: 1, screen: to, keys: K },
+    ]);
+    const cmds = r.commands.filter((c) => c.k === 'TRANSLATE_DEFECTS');
+    expect(cmds).toHaveLength(1);
+    const c = cmds[0] as { defectIds: readonly string[]; dx: number; dy: number };
+    expect([...c.defectIds].sort()).toEqual(['a', 'b']);
+    expect(c.dx).toBeGreaterThan(0);
+    expect(c.dy).toBeGreaterThan(0);
+  });
+
+  it('선택을 유지한다 — 잡은 것이 이미 선택된 결함이면 multi 가 안 풀린다', () => {
+    const { state, ctx } = boot([A, B]);
+    const picked = dragMarquee(state, ctx).state;
+    const down = reduce(
+      picked,
+      { k: 'POINTER_DOWN', pointerId: 1, screen: grabAt(picked), button: 0, keys: K },
+      ctx,
+    ).state;
+    expect([...down.multi].sort()).toEqual(['a', 'b']);
+    expect(down.drag?.kind).toBe('MOVE_MULTI');
+  });
+
+  it('선택 밖의 빈 곳을 누르면 선택이 풀린다', () => {
+    const { state, ctx } = boot([A, B]);
+    const picked = dragMarquee(state, ctx).state;
+    const down = reduce(
+      picked,
+      { k: 'POINTER_DOWN', pointerId: 1, screen: at(picked, { x: 0.6, y: 0.6 }), button: 0, keys: K },
+      ctx,
+    ).state;
+    expect(down.multi).toEqual([]);
+  });
+
+  it('끄는 동안 문서를 안 건드린다 — 미리보기만 움직인다', () => {
+    const { state, ctx } = boot([A, B]);
+    const picked = dragMarquee(state, ctx).state;
+    const from = grabAt(picked);
+    const r = run(picked, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: from, button: 0, keys: K },
+      { k: 'POINTER_MOVE', pointerId: 1, screen: { x: from.x + 100, y: from.y + 50 }, keys: K },
+    ]);
+    expect(r.commands).toEqual([]);
+    const t = multiTranslateOf(r.state);
+    expect(t).not.toBeNull();
+    expect(t!.dx).toBeGreaterThan(0);
+  });
+
+  it('미리보기 델타와 커밋 델타가 같다 — 손을 뗄 때 그림이 안 튄다', () => {
+    const { state, ctx } = boot([A, B]);
+    const picked = dragMarquee(state, ctx).state;
+    const from = grabAt(picked);
+    const to = { x: from.x + 130, y: from.y + 70 };
+    const mid = run(picked, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: from, button: 0, keys: K },
+      { k: 'POINTER_MOVE', pointerId: 1, screen: to, keys: K },
+    ]).state;
+    const preview = multiTranslateOf(mid)!;
+    const up = reduce(mid, { k: 'POINTER_UP', pointerId: 1, screen: to, keys: K }, ctx);
+    const c = up.commands[0] as { dx: number; dy: number };
+    expect(c.dx).toBeCloseTo(preview.dx, 12);
+    expect(c.dy).toBeCloseTo(preview.dy, 12);
+  });
+
+  it('잠긴 결함은 따라오지 않는다', () => {
+    const locked = defect('b', 2, { x: 0.14, y: 0.12 }, { x: 0.16, y: 0.1 }, {
+      status: 'PREV_PENDING',
+      prevDefectId: 'old-b',
+    });
+    const { state, ctx } = boot([A, locked]);
+    const picked = dragMarquee(state, ctx).state;
+    const from = grabAt(picked);
+    const to = { x: from.x + 100, y: from.y + 50 };
+    const r = run(picked, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: from, button: 0, keys: K },
+      { k: 'POINTER_MOVE', pointerId: 1, screen: to, keys: K },
+      { k: 'POINTER_UP', pointerId: 1, screen: to, keys: K },
+    ]);
+    const c = r.commands.find((x) => x.k === 'TRANSLATE_DEFECTS') as { defectIds: readonly string[] };
+    expect(c.defectIds).toEqual(['a']);
+  });
+
+  it('끌지 않고 그냥 눌렀다 떼면 아무 커맨드도 안 나간다', () => {
+    const { state, ctx } = boot([A, B]);
+    const picked = dragMarquee(state, ctx).state;
+    const from = grabAt(picked);
+    const r = run(picked, ctx, [
+      { k: 'POINTER_DOWN', pointerId: 1, screen: from, button: 0, keys: K },
+      { k: 'POINTER_UP', pointerId: 1, screen: from, keys: K },
+    ]);
+    expect(r.commands).toEqual([]);
+  });
+});
+
+describe('C-4b 일괄 이동 — 순수 함수', () => {
+  it('같은 델타로 옮기므로 상대 위치가 유지된다', () => {
+    const out = translateDefects([A, B], new Set(['a', 'b']), 0.1, 0.05);
+    const a0 = A.marks[0]!.geometry as { x: number; y: number };
+    const b0 = B.marks[0]!.geometry as { x: number; y: number };
+    const a1 = out[0]!.marks[0]!.geometry as { x: number; y: number };
+    const b1 = out[1]!.marks[0]!.geometry as { x: number; y: number };
+    expect(a1.x - a0.x).toBeCloseTo(b1.x - b0.x, 12);
+    expect(a1.y - a0.y).toBeCloseTo(b1.y - b0.y, 12);
+  });
+
+  it('목록에 없는 결함은 그대로 둔다', () => {
+    const out = translateDefects([A, FAR], new Set(['a']), 0.1, 0.1);
+    expect(out[1]).toBe(FAR);
+  });
+
+  it('사용자가 옮긴 라벨은 따라가고, 자동 배치 라벨은 손대지 않는다', () => {
+    const auto = defect('c', 3, { x: 0.2, y: 0.2 }, { x: 0.22, y: 0.18 }, {
+      label: { defectId: 'c', x: 0.22, y: 0.18, anchorMarkId: 'c-m0', placed: false },
+    });
+    const [movedPlaced] = translateDefects([A], new Set(['a']), 0.1, 0.1);
+    expect(movedPlaced!.label.x).toBeCloseTo(A.label.x + 0.1, 12);
+
+    const [movedAuto] = translateDefects([auto], new Set(['c']), 0.1, 0.1);
+    expect(movedAuto!.label.x).toBeCloseTo(auto.label.x, 12);
+  });
+
+  it('델타를 좁혀 모든 마크가 도면 안에 남는다 — 결함마다 따로 자르지 않는다', () => {
+    const near = defect('n', 4, { x: 0.98, y: 0.5 }, { x: 0.96, y: 0.48 });
+    const { dx } = clampDefectsTranslate([A, near], 0.5, 0);
+    expect(dx).toBeCloseTo(0.02, 12);
+    const out = translateDefects([A, near], new Set(['a', 'n']), dx, 0);
+    for (const d of out) {
+      for (const m of d.marks) {
+        const g = m.geometry as { x: number };
+        expect(g.x).toBeLessThanOrEqual(1 + 1e-9);
+        expect(g.x).toBeGreaterThanOrEqual(-1e-9);
+      }
+    }
+  });
+
+  it('되돌리기는 부호만 뒤집으면 된다', () => {
+    const cmd = { k: 'TRANSLATE_DEFECTS', defectIds: ['a', 'b'], dx: 0.1, dy: 0.05 } as const;
+    const moved = applyCommand([A, B], cmd);
+    const back = applyCommand(moved, invertCommand(cmd));
+    const orig = A.marks[0]!.geometry as { x: number; y: number };
+    const now = back.find((d) => d.id === 'a')!.marks[0]!.geometry as { x: number; y: number };
+    expect(now.x).toBeCloseTo(orig.x, 12);
+    expect(now.y).toBeCloseTo(orig.y, 12);
   });
 });

@@ -32,6 +32,7 @@ import {
 import {
   byZAscending,
   defectScreen,
+  translateDefects,
   type DefectScreen,
   type MarkScreen,
   type PreviewOverride,
@@ -195,6 +196,8 @@ export type RenderInput = {
   multi?: readonly string[];
   /** C-4 — 지금 끌고 있는 영역선택 사각형(스크린 px). `marqueeRectOf` 가 만든다 */
   marquee?: SRect | null;
+  /** C-4b — 진행 중인 일괄 이동. `multiTranslateOf` 가 만든다 */
+  translate?: { ids: ReadonlySet<string>; dx: number; dy: number } | null;
 };
 
 /** 아직 커밋되지 않은 생성 미리보기. 문서에 없으므로 DefectScreen 이 아니다 */
@@ -244,8 +247,16 @@ export function buildScreens(input: {
    * 긴 번호(`1F-01`)가 원 밖으로 넘친다. **번호를 그리는 호출부는 반드시 넘겨라.**
    */
   displayNumbers?: Record<string, string>;
+  /**
+   * C-4b — 진행 중인 **일괄 이동**. 지정한 결함만 같은 델타로 옮겨서 그린다.
+   * 문서는 안 바뀐다 — 손을 뗄 때 `TRANSLATE_DEFECTS` 가 같은 델타로 한 번에 커밋한다.
+   */
+  translate?: { ids: ReadonlySet<string>; dx: number; dy: number } | null;
 }): DefectScreen[] {
-  const { drawing, viewport, defects, globalStyle, preview, displayNumbers } = input;
+  const { drawing, viewport, globalStyle, preview, displayNumbers, translate } = input;
+  const defects = translate
+    ? translateDefects(input.defects, translate.ids, translate.dx, translate.dy)
+    : input.defects;
   return [...defects]
     .sort(byZAscending)
     .map((d) =>

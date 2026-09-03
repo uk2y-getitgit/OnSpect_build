@@ -9,7 +9,7 @@ import {
   LABEL_AUTO_ANGLE_DEG,
   LABEL_AUTO_DIST_FACTOR,
 } from './constants.js';
-import { angleDeg, radians, toScreen } from './geometry.js';
+import { angleDeg, clamp, radians, toScreen } from './geometry.js';
 import { nearestAngle, SET_8 } from './snapAngle.js';
 import { areaBoundaryPoint, type SRect } from './shapes.js';
 import { estimateEm } from './titleBlock.js';
@@ -383,6 +383,98 @@ export function defectScreen(
     markR: style.markRadius * vp.zoom,
     style,
   };
+}
+
+/* ── C-4b (D32) 일괄 이동 ─────────────────────────────────────────────────
+ * 여러 결함을 **같은 델타**로 옮긴다. 결함마다 따로 클램프하면 상대 위치가 깨지므로
+ * 델타 자체를 먼저 좁힌다(`clampDefectsTranslate`).
+ * ------------------------------------------------------------------------ */
+
+/** 마크 하나의 정규화 경계상자 */
+function markBounds(g: MarkGeometry): { x0: number; y0: number; x1: number; y1: number } {
+  switch (g.k) {
+    case 'POINT':
+      return { x0: g.x, y0: g.y, x1: g.x, y1: g.y };
+    case 'ARROW': {
+      const xs = g.points.map((p) => p.x);
+      const ys = g.points.map((p) => p.y);
+      return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+    }
+    default:
+      return { x0: g.x, y0: g.y, x1: g.x + g.w, y1: g.y + g.h };
+  }
+}
+
+/**
+ * 델타를 좁혀 **모든 마크가 도면 안(0~1)에 남게** 한다.
+ *
+ * ⚠️ 결함마다 따로 클램프하면 안 된다 — 한 결함만 벽에 걸려 멈추면 나머지는 계속 가서
+ * 서로의 상대 위치가 깨진다. 여러 개를 함께 옮기는 의미가 사라진다.
+ * (라벨은 클램프하지 않는다 — §2-1-a 대로 소프트 리밋만 있다)
+ */
+export function clampDefectsTranslate(
+  defects: readonly Defect[],
+  dx: number,
+  dy: number,
+): { dx: number; dy: number } {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const d of defects) {
+    for (const m of d.marks) {
+      const b = markBounds(m.geometry);
+      x0 = Math.min(x0, b.x0);
+      y0 = Math.min(y0, b.y0);
+      x1 = Math.max(x1, b.x1);
+      y1 = Math.max(y1, b.y1);
+    }
+  }
+  if (!Number.isFinite(x0)) return { dx: 0, dy: 0 };
+  return {
+    dx: clamp(dx, -x0, 1 - x1),
+    dy: clamp(dy, -y0, 1 - y1),
+  };
+}
+
+/**
+ * 결함 하나를 평행이동한다. 마크 · 자유그리기가 함께 간다.
+ *
+ * **라벨은 사용자가 직접 옮긴 것(`placed`)일 때만 함께 간다.** 자동 배치 라벨은
+ * 마크를 따라 매번 다시 계산되므로, 여기서 좌표를 건드리면 이중으로 밀린다 (A2 와 같은 규칙).
+ */
+export function translateDefect(d: Defect, dx: number, dy: number): Defect {
+  return {
+    ...d,
+    marks: d.marks.map((m) => ({ ...m, geometry: translateGeometryBy(m.geometry, dx, dy) })),
+    label: d.label.placed ? { ...d.label, x: d.label.x + dx, y: d.label.y + dy } : d.label,
+    sketch: sketchOf(d).map((p) => ({
+      ...p,
+      points: p.points.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })),
+    })),
+  };
+}
+
+function translateGeometryBy(g: MarkGeometry, dx: number, dy: number): MarkGeometry {
+  switch (g.k) {
+    case 'POINT':
+      return { k: 'POINT', x: g.x + dx, y: g.y + dy };
+    case 'ARROW':
+      return { k: 'ARROW', points: g.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
+    default:
+      return { ...g, x: g.x + dx, y: g.y + dy };
+  }
+}
+
+/** 지정한 id 들만 같은 델타로 옮긴 새 배열. 미리보기와 커맨드가 **같은 함수**를 쓴다 */
+export function translateDefects(
+  defects: readonly Defect[],
+  ids: ReadonlySet<string>,
+  dx: number,
+  dy: number,
+): Defect[] {
+  if (ids.size === 0 || (dx === 0 && dy === 0)) return [...defects];
+  return defects.map((d) => (ids.has(d.id) ? translateDefect(d, dx, dy) : d));
 }
 
 /** 전회차 표기는 1차 범위에서 선택만 가능 (A8) */

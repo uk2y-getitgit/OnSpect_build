@@ -28,6 +28,7 @@ import {
   balloonHalfExtra,
   centerOfGeometry,
   centerOfMark,
+  clampDefectsTranslate,
   effectiveLabelNorm,
   isLocked,
   sketchOf,
@@ -222,6 +223,20 @@ export function memoPreviewOf(state: CanvasState): { memoId: string; pos: SPoint
   return { memoId: d.memoId, pos: s };
 }
 
+/**
+ * C-4b — 진행 중인 **일괄 이동**의 대상과 델타. 없으면 `null`.
+ *
+ * 미리보기와 커밋이 같은 값을 본다 — 갈라지면 손을 뗀 순간 그림이 튄다.
+ */
+export function multiTranslateOf(
+  state: CanvasState,
+): { ids: ReadonlySet<string>; dx: number; dy: number } | null {
+  const d = state.drag;
+  if (!d || d.kind !== 'MOVE_MULTI' || !d.moved) return null;
+  if (d.previewNorm.x === 0 && d.previewNorm.y === 0) return null;
+  return { ids: new Set(state.multi), dx: d.previewNorm.x, dy: d.previewNorm.y };
+}
+
 export function screensOf(state: CanvasState, ctx: ReduceContext): DefectScreen[] {
   if (!state.drawing) return [];
   return buildScreens({
@@ -231,6 +246,7 @@ export function screensOf(state: CanvasState, ctx: ReduceContext): DefectScreen[
     globalStyle: ctx.globalStyle,
     preview: previewOf(state),
     displayNumbers: ctx.displayNumbers,
+    translate: multiTranslateOf(state),
   });
 }
 
@@ -973,6 +989,26 @@ function onPointerDown(
    */
   if (!(hit?.defectId && next0.multi.includes(hit.defectId))) {
     next0 = { ...next0, multi: [] };
+  } else if (next0.tool === 'SELECT' && next0.multi.length > 1) {
+    /*
+     * C-4b — 여러 개를 잡아 놓고 그중 하나를 끌면 **전부 같이 간다.**
+     * 잠긴 결함을 잡은 것이면 여기로 오지 않는다 — 아래 단일 경로가 평소대로 거절한다.
+     */
+    const grabbed = findDefect(ctx, hit.defectId);
+    if (grabbed && !isLocked(grabbed)) {
+      return ok(
+        {
+          ...next0,
+          selection: { ...NO_SELECTION },
+          drag: newDrag('MOVE_MULTI', ev.pointerId, ev.screen, next0.viewport, {
+            defectId: hit.defectId,
+            previewNorm: { x: 0, y: 0 },
+          }),
+          guides: [],
+        },
+        ctx,
+      );
+    }
   }
 
   /**
@@ -1352,6 +1388,26 @@ function onPointerMove(
   const iw = state.drawing.imageWidth;
   const ih = state.drawing.imageHeight;
 
+  // ── C-4b 일괄 이동 — 델타만 담는다. 문서는 손을 뗄 때 한 번에 바뀐다 ─────
+  if (drag.kind === 'MOVE_MULTI') {
+    const ids = new Set(state.multi);
+    // 잠긴 결함은 따라오지 않는다 — 선택은 됐지만 이동 대상이 아니다
+    const moving = (ctx.defects ?? []).filter((d) => ids.has(d.id) && !isLocked(d));
+    const raw = {
+      dx: (ev.screen.x - drag.startScreen.x) / drag.startViewport.zoom / iw,
+      dy: (ev.screen.y - drag.startScreen.y) / drag.startViewport.zoom / ih,
+    };
+    const d2 = clampDefectsTranslate(moving, raw.dx, raw.dy);
+    return ok(
+      {
+        ...state,
+        keys: ev.keys,
+        drag: { ...drag, moved, previewNorm: { x: d2.dx, y: d2.dy } },
+      },
+      ctx,
+    );
+  }
+
   // ── C-4 영역선택 — 사각형만 키운다. 문서도 선택도 아직 안 바꾼다 ─────────
   if (drag.kind === 'MARQUEE') {
     return ok(
@@ -1703,6 +1759,32 @@ function onPointerUp(
   if (!drag || drag.pointerId !== ev.pointerId) return ok({ ...state, keys: ev.keys }, ctx);
 
   const cleared: CanvasState = { ...state, keys: ev.keys, drag: null, guides: [] };
+
+  // ── C-4b 일괄 이동 확정 ────────────────────────────────────────────────
+  if (drag.kind === 'MOVE_MULTI') {
+    const dx = drag.previewNorm.x;
+    const dy = drag.previewNorm.y;
+    if (!drag.moved || (dx === 0 && dy === 0)) return ok(cleared, ctx);
+    const ids = new Set(state.multi);
+    const moving = (ctx.defects ?? []).filter((d) => ids.has(d.id) && !isLocked(d));
+    if (moving.length === 0) return ok(cleared, ctx);
+    const lockedCount = state.multi.length - moving.length;
+    return ok(
+      cleared,
+      ctx,
+      [{ k: 'TRANSLATE_DEFECTS', defectIds: moving.map((d) => d.id), dx, dy }],
+      lockedCount > 0
+        ? [
+            {
+              k: 'TOAST',
+              kind: 'info',
+              text: `${moving.length}건을 옮겼습니다 — ${lockedCount}건은 잠겨 있어 그대로입니다`,
+              undoable: true,
+            },
+          ]
+        : [],
+    );
+  }
 
   // ── C-4 영역선택 확정 — 사각형에 걸친 결함을 한꺼번에 잡는다 ───────────
   if (drag.kind === 'MARQUEE') {

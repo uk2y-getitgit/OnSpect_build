@@ -22,7 +22,7 @@ import {
   type RenderInput,
   type TitleBlockConfig,
 } from '@onspect/canvas-core';
-import { DEFAULT_GLOBAL_STYLE, marqueeRectOf } from '@onspect/canvas-core';
+import { DEFAULT_GLOBAL_STYLE, marqueeRectOf, multiTranslateOf } from '@onspect/canvas-core';
 import { loadDrawing, cachedDrawing, type LoadedDrawing } from './imageLoader';
 import { prepare, renderOps } from './renderCanvas2d';
 import {
@@ -255,9 +255,10 @@ export function CanvasView({
       pending,
       titleBlock,
       legend,
-      // C-4 — 영역선택. 둘 다 순수 파생값이라 저장·Undo 어디에도 안 들어간다
+      // C-4 — 영역선택. 셋 다 순수 파생값이라 저장·Undo 어디에도 안 들어간다
       multi: state.multi,
       marquee: marqueeRectOf(state),
+      translate: multiTranslateOf(state),
     };
   }, [
     drawing,
@@ -309,6 +310,8 @@ export function CanvasView({
       preview: inp.preview,
       // 번호가 길면 풍선이 좌우로 늘어난다 — 히트 테스트도 같은 값을 본다 (검수 심각2)
       displayNumbers: inp.displayNumbers,
+      // C-4b — 일괄 이동 미리보기. 커밋과 **같은 함수**(translateDefects)를 탄다
+      translate: inp.translate,
     });
     renderOps(ctx, buildOverlay(inp, screens), image);
   }, [renderInput, image, state.canvas.w, state.canvas.h]);

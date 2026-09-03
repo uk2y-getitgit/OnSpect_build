@@ -414,7 +414,12 @@ export type DragKind =
    *
    * 팬은 잃지 않는다 — 중클릭 · Space+좌클릭이 그대로 팬이다.
    */
-  | 'MARQUEE';
+  | 'MARQUEE'
+  /**
+   * C-4b (D32) — 영역선택 **일괄 이동**. 잡은 결함 하나가 아니라 선택된 전부가 같이 간다.
+   * `previewNorm` 에 **좌표가 아니라 클램프된 델타**가 들어간다 (아래 주석 참조).
+   */
+  | 'MOVE_MULTI';
 
 export type DragState = {
   kind: DragKind;
@@ -430,7 +435,12 @@ export type DragState = {
   markId: string | null;
   /** MOVE_MARK 일 때 라벨이 따라오도록 (A2) */
   labelOriginNorm: NPoint | null;
-  /** 드래그 중 미리보기 위치. 커밋(POINTER_UP) 전까지 문서는 건드리지 않는다 */
+  /**
+   * 드래그 중 미리보기 위치. 커밋(POINTER_UP) 전까지 문서는 건드리지 않는다.
+   *
+   * ⚠️ `MOVE_MULTI` 에서만 의미가 다르다 — **위치가 아니라 델타(dx,dy)** 다.
+   * 여러 결함이 한 좌표를 공유할 수 없어서 그렇다. `multiTranslateOf` 로만 읽어라.
+   */
   previewNorm: NPoint;
   labelPreviewNorm: NPoint | null;
   /** MOVE_LABEL 일 때 앵커의 스크린 좌표. 드래그 중 뷰포트가 고정이므로 유효 */

@@ -6,6 +6,7 @@
  *
  * 모든 적용은 불변 갱신이다. 어댑터는 코어 상태를 직접 mutate 하지 않는다(경계 규칙 5).
  */
+import { translateDefects } from './defectGeom.js';
 import type {
   Defect,
   DefectAttrs,
@@ -34,6 +35,14 @@ export type Command =
   | { k: 'DELETE_DEFECTS'; defects: readonly Defect[] }
   /** `DELETE_DEFECTS` 의 역커맨드. Undo 스택에 직접 쌓이지 않는다 */
   | { k: 'CREATE_DEFECTS'; defects: readonly Defect[] }
+  /**
+   * C-4b (D32) — 영역선택 **일괄 이동**. 여러 결함을 같은 델타로 옮긴다.
+   *
+   * 델타 하나만 담으므로 역커맨드가 부호만 뒤집으면 된다 — 결함마다 from/to 를
+   * 담으면 커맨드가 커지고 되돌리기가 어긋날 여지가 생긴다.
+   * 클램프는 **저장 전에 끝나 있어야 한다**(`clampDefectsTranslate`).
+   */
+  | { k: 'TRANSLATE_DEFECTS'; defectIds: readonly string[]; dx: number; dy: number }
   /**
    * P-2 (D28) — 번호 풍선 **격자 정렬**. 여러 결함을 한 커맨드로 옮긴다.
    *
@@ -190,6 +199,8 @@ export function describeCommand(c: Command): string {
       return `결함 ${c.defects.length}건 삭제`;
     case 'CREATE_DEFECTS':
       return `결함 ${c.defects.length}건 복원`;
+    case 'TRANSLATE_DEFECTS':
+      return `표기 ${c.defectIds.length}건 이동`;
     case 'MOVE_LABEL':
       return '번호 이동';
     case 'MOVE_MARK':
@@ -259,6 +270,9 @@ export function applyCommand(defects: readonly Defect[], c: Command): Defect[] {
 
     case 'CREATE_DEFECTS':
       return sorted([...defects, ...c.defects]);
+
+    case 'TRANSLATE_DEFECTS':
+      return translateDefects(defects, new Set(c.defectIds), c.dx, c.dy);
 
     case 'ALIGN_LABELS': {
       const byId = new Map(c.items.map((i) => [i.defectId, i]));
@@ -470,6 +484,7 @@ export function defectTargetsOf(c: Command): string[] {
   if (c.k === 'ALIGN_LABELS') return c.items.map((i) => i.defectId);
   // C-4 — 일괄 삭제·복원도 한 커맨드가 여러 결함을 건드린다
   if (c.k === 'DELETE_DEFECTS' || c.k === 'CREATE_DEFECTS') return c.defects.map((d) => d.id);
+  if (c.k === 'TRANSLATE_DEFECTS') return [...c.defectIds];
   const one = defectTargetOf(c);
   return one === null ? [] : [one];
 }
@@ -490,6 +505,7 @@ export function defectTargetOf(c: Command): string | null {
     case 'ALIGN_LABELS':
     case 'DELETE_DEFECTS':
     case 'CREATE_DEFECTS':
+    case 'TRANSLATE_DEFECTS':
       return null;
     default:
       return c.defectId;
@@ -506,6 +522,8 @@ export function invertCommand(c: Command): Command {
       return { k: 'CREATE_DEFECTS', defects: c.defects };
     case 'CREATE_DEFECTS':
       return { k: 'DELETE_DEFECTS', defects: c.defects };
+    case 'TRANSLATE_DEFECTS':
+      return { k: 'TRANSLATE_DEFECTS', defectIds: c.defectIds, dx: -c.dx, dy: -c.dy };
     case 'ALIGN_LABELS':
       return {
         k: 'ALIGN_LABELS',
