@@ -126,7 +126,20 @@ export type Label = {
   placed: boolean;
 };
 
-export type DefectStatus = 'CURRENT' | 'PREV_PENDING' | 'REPAIRED';
+/**
+ * 표기 종류 (2026-09-03 사용자 재확정 — 3종 → **4종**).
+ *
+ * | 값 | 화면 이름 | 색 | 뜻 |
+ * |---|---|---|---|
+ * | `CURRENT` | 결함 | 빨강 | **기본값.** 이번 회차에서 확인한 결함 |
+ * | `NEW` | 신규 | 보라 | 이번 회차에 새로 생긴 것 |
+ * | `PREV_PENDING` | 전차 | 남색 | 전회차에서 넘어온 것 (**유일하게 잠긴다**) |
+ * | `REPAIRED` | 보수완료 | 파랑 | 보수가 끝난 것 |
+ *
+ * ⚠️ **저장된 값의 뜻은 안 뒤집혔다.** `CURRENT`·`PREV_PENDING`·`REPAIRED` 는 그대로고
+ * 이름과 색만 바뀌었다. `NEW` 만 새로 생겼으므로 IndexedDB 마이그레이션이 필요 없다.
+ */
+export type DefectStatus = 'CURRENT' | 'NEW' | 'PREV_PENDING' | 'REPAIRED';
 
 /**
  * 개별 스타일 오버라이드. 크기 단위는 **이미지 px**.

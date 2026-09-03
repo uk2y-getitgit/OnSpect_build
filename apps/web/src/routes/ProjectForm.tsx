@@ -39,7 +39,7 @@ type Draft = {
   name: string;
   prevProjectId: string;
   copyStructure: boolean;
-  /** F7 — S1 의 결정을 뒤집는다. 결함까지 가져오면 status=PREV_PENDING(보라)으로 들어간다 */
+  /** F7 — S1 의 결정을 뒤집는다. 결함까지 가져오면 status=PREV_PENDING(전차 · 남색)으로 들어간다 */
   copyDefects: boolean;
 };
 
@@ -379,7 +379,7 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
               </label>
             )}
 
-            {/* F7 — S1 의 결정을 뒤집는다. 결함까지 가져오면 status=PREV_PENDING(보라)으로 들어간다 */}
+            {/* F7 — S1 의 결정을 뒤집는다. 결함까지 가져오면 status=PREV_PENDING(전차 · 남색)으로 들어간다 */}
             {!editing && draft.prevProjectId !== '' && draft.copyStructure && (
               <label className="check">
                 <input

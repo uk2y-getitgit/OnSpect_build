@@ -56,10 +56,16 @@ describe('T-7 · 잠금 예외 — 사진 추가만 열어 준다', () => {
     expect(canAddPhotos(cur)).toBe(true);
   });
 
-  it('보수완료 결함은 사진도 막는다 — 사진으로 되살리는 것은 이번 범위가 아니다', () => {
+  it('보수완료는 이제 잠기지 않는다 (2026-09-03 — 잠기는 것은 전차뿐)', () => {
     const repaired = defect('d3', 3, AT, LB, { status: 'REPAIRED' });
-    expect(isLocked(repaired)).toBe(true);
-    expect(canAddPhotos(repaired)).toBe(false);
+    expect(isLocked(repaired)).toBe(false);
+    expect(canAddPhotos(repaired)).toBe(true);
+  });
+
+  it('신규도 잠기지 않는다', () => {
+    const fresh = defect('d4', 4, AT, LB, { status: 'NEW' });
+    expect(isLocked(fresh)).toBe(false);
+    expect(canAddPhotos(fresh)).toBe(true);
   });
 });
 
@@ -122,8 +128,8 @@ describe('T-7 · SET_DEFECT_STATUS 커맨드', () => {
     expect(memoTargetsOf(toCurrent)).toEqual([]);
   });
 
-  it('Undo 안내 문구가 방향을 구분한다', () => {
-    expect(describeCommand(toCurrent)).toBe('금회차로 전환');
-    expect(describeCommand(invertCommand(toCurrent))).toBe('전회차로 되돌리기');
+  it('Undo 안내 문구가 바뀐 종류를 밝힌다 (4종)', () => {
+    expect(describeCommand(toCurrent)).toBe('표기 종류 변경 → 결함');
+    expect(describeCommand(invertCommand(toCurrent))).toBe('표기 종류 변경 → 전차');
   });
 });

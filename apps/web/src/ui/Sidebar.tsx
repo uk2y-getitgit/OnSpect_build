@@ -11,8 +11,9 @@ import { countIncomplete, describeMissing, isIncomplete, type Defect } from '@on
 import { sortByOrder, type Building, type Drawing, type Floor } from '@onspect/project-core';
 
 const STATUS_LABEL: Record<Defect['status'], string> = {
-  CURRENT: '현회차',
-  PREV_PENDING: '전회차',
+  CURRENT: '결함',
+  NEW: '신규',
+  PREV_PENDING: '전차',
   REPAIRED: '보수완료',
 };
 

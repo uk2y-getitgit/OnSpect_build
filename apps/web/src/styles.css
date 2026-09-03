@@ -33,9 +33,13 @@
   --accent-ink: #1b4ba8;
 
   /* 도면 위 예약색 — UI 가 쓰지 않는다 (상태 칩에서만 인용) */
+  /* 2026-09-03 4종 재정의 — 결함(빨강) · 신규(보라) · 전차(남색) · 보수완료(파랑).
+     `canvas-core/constants.ts` 의 STATUS_COLOR 와 **같은 값**이어야 한다.
+     갈라지면 도면 위 풍선과 목록 배지의 색이 서로 다른 말을 한다 */
   --defect-current: #e5342a;
-  --defect-prev: #7c4dff;
-  --defect-repaired: #9aa4b0;
+  --defect-new: #7c4dff;
+  --defect-prev: #16266e;
+  --defect-repaired: #1e88e5;
 
   /* 캔버스 보조 */
   --guide: #00b8d4;
@@ -558,6 +562,7 @@ kbd {
   background: var(--defect-current);
 }
 
+.dlist__seq[data-status='NEW']          { background: var(--defect-new); }
 .dlist__seq[data-status='PREV_PENDING'] { background: var(--defect-prev); }
 .dlist__seq[data-status='REPAIRED']     { background: var(--defect-repaired); }
 
@@ -586,6 +591,7 @@ kbd {
   font-size: 12px;
 }
 
+/* 2026-09-03 — 흐리게 하지 않는다. 선택자는 남기되 시각적 약화는 뺐다 */
 .dlist__row[data-status='REPAIRED'] .dlist__member {
   text-decoration: line-through;
   color: var(--text-dim);
@@ -622,15 +628,21 @@ kbd {
   color: #a72219;
   border-color: #f5cdc9;
 }
-.chip--status[data-status='PREV_PENDING'] {
+.chip--status[data-status='NEW'] {
   background: #f0ebff;
   color: #5b34c9;
   border-color: #ddd2fb;
 }
+.chip--status[data-status='PREV_PENDING'] {
+  background: #e7ebf7;
+  color: #16266e;
+  border-color: #c6cfe6;
+}
+/* 보수완료는 더 이상 회색으로 흐리게 두지 않는다 (사용자 지시 2026-09-03) */
 .chip--status[data-status='REPAIRED'] {
-  background: var(--surface-2);
-  color: var(--text-muted);
-  border-color: var(--border);
+  background: #e6f2fd;
+  color: #10609f;
+  border-color: #c3dff7;
 }
 
 .badge {
@@ -1180,6 +1192,7 @@ kbd {
   font-weight: 700;
 }
 
+.inspector__seq[data-status='NEW']          { background: var(--defect-new); }
 .inspector__seq[data-status='PREV_PENDING'] { background: var(--defect-prev); }
 .inspector__seq[data-status='REPAIRED']     { background: var(--defect-repaired); }
 
@@ -3020,6 +3033,7 @@ select.input { cursor: pointer; }
   font-size: 12px;
 }
 
+.sdp__seq[data-status='NEW']          { background: var(--defect-new); }
 .sdp__seq[data-status='PREV_PENDING'] { background: var(--defect-prev); }
 .sdp__seq[data-status='REPAIRED']     { background: var(--defect-repaired); }
 
@@ -3309,6 +3323,7 @@ select.input { cursor: pointer; }
 /* 체크박스 옆 색 견본 — 도면 위 마커·범례와 같은 예약색이다 */
 .tbset__dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
 .tbset__dot[data-status='CURRENT'] { background: var(--defect-current); }
+.tbset__dot[data-status='NEW'] { background: var(--defect-new); }
 .tbset__dot[data-status='PREV_PENDING'] { background: var(--defect-prev); }
 .tbset__dot[data-status='REPAIRED'] { background: var(--defect-repaired); }
 

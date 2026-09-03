@@ -23,9 +23,11 @@ import type { ItemSettings } from '@onspect/project-core';
 import { useUiMode } from '../shell/useUiMode';
 import { DefectInfoForm } from './defectForm/DefectInfoForm';
 
+/** 2026-09-03 — 4종 재정의. 범례·종류선택과 **같은 말**을 쓴다 */
 const STATUS_LABEL: Record<Defect['status'], string> = {
-  CURRENT: '현회차',
-  PREV_PENDING: '전회차 미보수',
+  CURRENT: '결함',
+  NEW: '신규',
+  PREV_PENDING: '전차',
   REPAIRED: '보수완료',
 };
 
@@ -34,9 +36,10 @@ const STATUS_LABEL: Record<Defect['status'], string> = {
  * 도면 위 범례가 `신규 · 결함 · 보수완료` 인데 여기서 다른 말을 쓰면 색을 못 잇는다.
  */
 const STATUS_PICK: ReadonlyArray<{ value: DefectStatus; label: string; hint: string }> = [
-  { value: 'CURRENT', label: '신규', hint: '이번 회차에 새로 찾은 결함 (빨강)' },
-  { value: 'PREV_PENDING', label: '결함', hint: '전회차에서 넘어온 미보수 결함 (보라)' },
-  { value: 'REPAIRED', label: '보수완료', hint: '보수가 끝난 결함 (회색)' },
+  { value: 'CURRENT', label: '결함', hint: '이번 회차에서 확인한 결함 (빨강 · 기본값)' },
+  { value: 'NEW', label: '신규', hint: '이번 회차에 새로 생긴 결함 (보라)' },
+  { value: 'PREV_PENDING', label: '전차', hint: '전회차에서 넘어온 결함 (남색) — 값 편집이 잠깁니다' },
+  { value: 'REPAIRED', label: '보수완료', hint: '보수가 끝난 결함 (파랑)' },
 ];
 
 export type InspectorProps = {
@@ -152,7 +155,7 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
             })}
           </div>
           <p className="idf-field__hint">
-            종류를 바꾸면 도면 위 색도 함께 바뀝니다. 「결함」 · 「보수완료」 는 값 편집이 잠깁니다.
+            종류를 바꾸면 도면 위 색도 함께 바뀝니다. 「전차」 만 값 편집이 잠깁니다.
           </p>
         </div>
       )}
@@ -166,14 +169,10 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
         (defect.status === 'PREV_PENDING' ? (
           // G-8 — 값은 여전히 잠겨 있지만 사진 한 가지만 열려 있다. 그 사실을 여기서 말해 준다
           <p className="notice" role="status">
-            전회차 표기입니다. 값은 고칠 수 없지만, <b>이번 회차에 찍은 사진을 추가하면</b>{' '}
-            금회차 결함으로 전환됩니다.
+            전차 표기입니다. 값은 고칠 수 없지만, <b>이번 회차에 찍은 사진을 추가하면</b>{' '}
+            이번 회차 결함으로 전환됩니다. 위 <b>표기 종류</b> 에서 직접 바꿔도 됩니다.
           </p>
-        ) : (
-          <p className="notice" role="status">
-            보수완료 표기입니다. 이 화면에서는 <b>선택만</b> 가능하며 값을 고칠 수 없습니다.
-          </p>
-        ))}
+        ) : null)}
 
       {/* T-7 — 현장(태블릿)에서는 사진이 **폼보다 위**다. 결함을 찍으면 사진부터 붙이는
           순서라, 아래 있으면 매번 스크롤해야 한다. PC 는 §2-5 대로 폼 아래 그대로 */}

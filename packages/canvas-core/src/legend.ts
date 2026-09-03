@@ -62,7 +62,7 @@ export const DEFAULT_LEGEND: LegendConfig = {
 };
 
 // ── D15 상태 범례 ──────────────────────────────────────────────────────────
-export type LegendStatusKind = 'CURRENT' | 'PREV_PENDING' | 'REPAIRED';
+export type LegendStatusKind = 'CURRENT' | 'NEW' | 'PREV_PENDING' | 'REPAIRED';
 
 /**
  * 상태 행 고정 문구 (U-3 · 2026-09-02).
@@ -72,14 +72,28 @@ export type LegendStatusKind = 'CURRENT' | 'PREV_PENDING' | 'REPAIRED';
  * 회차를 밝혀야 하지만, 도면 위에서 색을 *읽는* 자리는 짧을수록 읽힌다.
  */
 export const STATUS_LEGEND_LABEL: Record<LegendStatusKind, string> = {
-  CURRENT: '신규',
-  PREV_PENDING: '결함',
+  CURRENT: '결함',
+  NEW: '신규',
+  PREV_PENDING: '전차',
   REPAIRED: '보수완료',
 };
 
 /** 어느 상태 행을 켤지. `project-core` 의 `ProjectLegend` 가 구조적으로 이 형태다 (D13) */
+/**
+ * ⚠️ **저장 필드 이름과 화면 이름이 어긋나 있다.** 2026-09-03 종류 재정의(3종→4종) 때
+ * 이름만 바뀌었고 **저장 필드는 그대로 뒀다** — 이름을 바꾸면 마이그레이션이 필요하다.
+ *
+ * | 저장 필드 | 상태값 | 화면 이름 |
+ * |---|---|---|
+ * | `statusNew` | `CURRENT` | 결함 |
+ * | `statusNewFound` | `NEW` | 신규 |
+ * | `statusPending` | `PREV_PENDING` | 전차 |
+ * | `statusRepaired` | `REPAIRED` | 보수완료 |
+ */
 export type StatusLegendToggles = {
   statusNew: boolean;
+  /** 2026-09-03 신설. 옛 레코드에는 없다 — 읽는 쪽이 기본값으로 채운다 */
+  statusNewFound?: boolean;
   statusPending: boolean;
   statusRepaired: boolean;
 };
@@ -94,7 +108,7 @@ export type StatusLegendDefect = { status: LegendStatusKind };
  *    범례는 *"이 도면의 이 색이 무슨 뜻인가"* 를 설명하는 표다.
  *    도면에 없는 색을 설명하면 **거짓말이 된다.**
  *
- * 순서는 항상 신규 → 미보수 → 보수완료다(입력 순서에 기대지 않는다).
+ * 순서는 항상 결함 → 신규 → 전차 → 보수완료다(입력 순서에 기대지 않는다).
  */
 export function statusRows(
   cfg: StatusLegendToggles,
@@ -102,11 +116,12 @@ export function statusRows(
 ): LegendStatusRow[] {
   const on: Record<LegendStatusKind, boolean> = {
     CURRENT: cfg.statusNew,
+    NEW: cfg.statusNewFound ?? false,
     PREV_PENDING: cfg.statusPending,
     REPAIRED: cfg.statusRepaired,
   };
   const out: LegendStatusRow[] = [];
-  for (const kind of ['CURRENT', 'PREV_PENDING', 'REPAIRED'] as const) {
+  for (const kind of ['CURRENT', 'NEW', 'PREV_PENDING', 'REPAIRED'] as const) {
     if (!on[kind]) continue;
     if (!defects.some((d) => d.status === kind)) continue;
     out.push({ color: STATUS_COLOR[kind], desc: STATUS_LEGEND_LABEL[kind] });

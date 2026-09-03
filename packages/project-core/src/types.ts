@@ -314,8 +314,17 @@ export type ProjectLegend = {
   /** 범례 블록 전체 마스터 스위치 */
   enabled: boolean;
   lgScale: number;
-  /** D15 상태 범례 3행. **기본 전부 false** — 기존 출력물이 한 글자도 안 바뀌게 */
+  /**
+   * D15 상태 범례 행. **기본 전부 false** — 기존 출력물이 한 글자도 안 바뀌게.
+   *
+   * ⚠️ 2026-09-03 종류가 3종→4종이 되면서 **화면 이름과 필드 이름이 어긋난다.**
+   * 필드를 바꾸면 마이그레이션이 필요해서 그대로 뒀다.
+   * `statusNew`=결함(CURRENT) · `statusNewFound`=신규(NEW) ·
+   * `statusPending`=전차(PREV_PENDING) · `statusRepaired`=보수완료(REPAIRED)
+   */
   statusNew: boolean;
+  /** 2026-09-03 신설. 옛 레코드에는 없다 — `projectLegendOf` 가 false 로 채운다 */
+  statusNewFound: boolean;
   statusPending: boolean;
   statusRepaired: boolean;
 };
@@ -324,6 +333,7 @@ export const DEFAULT_PROJECT_LEGEND: ProjectLegend = {
   enabled: true,
   lgScale: 1,
   statusNew: false,
+  statusNewFound: false,
   statusPending: false,
   statusRepaired: false,
 };
@@ -341,6 +351,7 @@ export function projectLegendOf(lg: Partial<ProjectLegend> | null | undefined): 
     enabled: lg.enabled ?? DEFAULT_PROJECT_LEGEND.enabled,
     lgScale: lg.lgScale ?? DEFAULT_PROJECT_LEGEND.lgScale,
     statusNew: lg.statusNew ?? DEFAULT_PROJECT_LEGEND.statusNew,
+    statusNewFound: lg.statusNewFound ?? DEFAULT_PROJECT_LEGEND.statusNewFound,
     statusPending: lg.statusPending ?? DEFAULT_PROJECT_LEGEND.statusPending,
     statusRepaired: lg.statusRepaired ?? DEFAULT_PROJECT_LEGEND.statusRepaired,
   };

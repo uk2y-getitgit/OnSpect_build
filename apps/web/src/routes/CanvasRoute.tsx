@@ -1372,8 +1372,9 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
                       defectId: selected.id,
                       to,
                       toast: {
-                        CURRENT: '신규(현회차)로 바꿨습니다',
-                        PREV_PENDING: '결함(전회차 미보수)으로 바꿨습니다',
+                        CURRENT: '결함으로 바꿨습니다',
+                        NEW: '신규로 바꿨습니다',
+                        PREV_PENDING: '전차로 바꿨습니다 — 값 편집이 잠깁니다',
                         REPAIRED: '보수완료로 바꿨습니다',
                       }[to],
                     })

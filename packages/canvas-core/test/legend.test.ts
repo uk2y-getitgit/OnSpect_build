@@ -45,10 +45,11 @@ describe('실측 기준값', () => {
 
 /** U-3 — 도면 위 좁은 표라 회차 괄호를 뺐다. 상태 셀렉터 라벨과 **일부러 다르다** */
 describe('STATUS_LEGEND_LABEL — U-3 축약 문구', () => {
-  it('신규 · 결함 · 보수완료', () => {
+  it('결함 · 신규 · 전차 · 보수완료 (2026-09-03 4종 재정의)', () => {
     expect(STATUS_LEGEND_LABEL).toEqual({
-      CURRENT: '신규',
-      PREV_PENDING: '결함',
+      CURRENT: '결함',
+      NEW: '신규',
+      PREV_PENDING: '전차',
       REPAIRED: '보수완료',
     });
   });

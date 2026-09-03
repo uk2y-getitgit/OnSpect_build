@@ -238,7 +238,9 @@ export function describeCommand(c: Command): string {
     case 'SET_DEFECT_ATTRS':
       return '결함정보 수정';
     case 'SET_DEFECT_STATUS':
-      return c.to === 'CURRENT' ? '금회차로 전환' : '전회차로 되돌리기';
+      return `표기 종류 변경 → ${
+        { CURRENT: '결함', NEW: '신규', PREV_PENDING: '전차', REPAIRED: '보수완료' }[c.to]
+      }`;
     default:
       return '변경';
   }

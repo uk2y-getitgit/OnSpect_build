@@ -477,9 +477,15 @@ export function translateDefects(
   return defects.map((d) => (ids.has(d.id) ? translateDefect(d, dx, dy) : d));
 }
 
-/** 전회차 표기는 1차 범위에서 선택만 가능 (A8) */
+/**
+ * 잠긴 표기 = 값을 고칠 수 없다 (A8).
+ *
+ * **2026-09-03 사용자 재확정 — 잠기는 것은 `전차`(전회차에서 넘어온 것) 하나뿐이다.**
+ * 결함 · 신규 · 보수완료는 전부 편집 가능하다. 예전에는 `status !== 'CURRENT'` 라
+ * 보수완료까지 잠겼는데, 실무에서 보수완료 표기의 부재·규모를 고쳐야 하는 일이 있었다.
+ */
 export function isLocked(defect: Defect): boolean {
-  return defect.status !== 'CURRENT';
+  return defect.status === 'PREV_PENDING';
 }
 
 /**
@@ -516,7 +522,11 @@ export function canSetStatus(
  *    전회차 사진을 이번 용역으로 **복사해 오는 것**(사진 승계 · K13)과는 무관하다.
  */
 export function canAddPhotos(defect: Defect): boolean {
-  return defect.status === 'CURRENT' || defect.status === 'PREV_PENDING';
+  // 2026-09-03 — 잠기는 것이 `전차` 하나뿐이 되면서 사진도 전부 열렸다.
+  // 전차는 원래부터 G-8 예외로 열려 있었고(사진을 붙이면 금회차로 전환),
+  // 보수완료는 이제 편집 가능한 종류라 막을 이유가 없다.
+  void defect;
+  return true;
 }
 
 /** z-order: seq 오름차순, 동률이면 defectId 사전순 (§2-4 / §2-9-b) */

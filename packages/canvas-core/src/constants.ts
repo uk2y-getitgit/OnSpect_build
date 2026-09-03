@@ -275,21 +275,30 @@ export const MEMO_BOX_DASH: readonly number[] = [6, 4];
 export const MEMO_BOX_ALPHA = 0.45;
 
 /** 상태별 기본 표기색 (§2-9-c · 디자인시스템 §3 예약색) */
-export const STATUS_COLOR: Record<'CURRENT' | 'PREV_PENDING' | 'REPAIRED', string> = {
+export const STATUS_COLOR: Record<'CURRENT' | 'NEW' | 'PREV_PENDING' | 'REPAIRED', string> = {
+  /** 결함 — 기본값 */
   CURRENT: '#e5342a',
-  PREV_PENDING: '#7c4dff',
-  REPAIRED: '#9aa4b0',
+  /** 신규 */
+  NEW: '#7c4dff',
+  /** 전차 — 남색. 선택색(#2d6cdf)·보수완료(#1e88e5)보다 확실히 어둡다 */
+  PREV_PENDING: '#16266e',
+  /** 보수완료 — 파랑. 가이드선 시안(#00b8d4)과 구분된다 */
+  REPAIRED: '#1e88e5',
 };
 
-/** 상태별 기본 불투명도 (REPAIRED 는 40%) */
-export const STATUS_OPACITY: Record<'CURRENT' | 'PREV_PENDING' | 'REPAIRED', number> = {
+/**
+ * 상태별 기본 불투명도.
+ *
+ * 2026-09-03 — **전부 1이다.** 예전에는 보수완료를 회색 40% 로 흐리게 그렸는데,
+ * 사용자가 *"회색+흐리게 하지 말 것"* 이라고 못박았다. 보수완료도 도면에서 또렷하게 읽혀야 한다.
+ */
+export const STATUS_OPACITY: Record<'CURRENT' | 'NEW' | 'PREV_PENDING' | 'REPAIRED', number> = {
   CURRENT: 1,
+  NEW: 1,
   PREV_PENDING: 1,
-  REPAIRED: 0.4,
+  REPAIRED: 1,
 };
 
-// ── 선택 / 호버 표현 (스크린 px. UI 신호이므로 줌과 무관하게 일정) ──────────
-/** 선택 링 색 — UI 계열. 도면 위 예약색과 겹치지 않는다 */
 export const SELECTION_COLOR = '#2d6cdf';
 /** 선택 글로우 두께 */
 export const SELECTION_RING_PX = 3;

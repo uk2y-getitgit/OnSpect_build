@@ -269,8 +269,11 @@ describe('커서 (ui-quality §3)', () => {
     expect(spacePan.cursor).toBe('grab');
   });
 
-  it('전회차 표기 위에서는 move 가 아니라 pointer 다', () => {
-    const p = defect('p', 1, { x: 0.3, y: 0.5 }, { x: 0.6, y: 0.4 }, { status: 'REPAIRED' });
+  it('전차 표기 위에서는 move 가 아니라 pointer 다 (2026-09-03 — 잠기는 것은 전차뿐)', () => {
+    const p = defect('p', 1, { x: 0.3, y: 0.5 }, { x: 0.6, y: 0.4 }, {
+      status: 'PREV_PENDING',
+      prevDefectId: 'old-p',
+    });
     const { state, ctx } = boot([p]);
     const s = screensOf(state, ctx)[0]!;
     const hovered = reduce(state, { k: 'POINTER_MOVE', pointerId: 1, screen: s.label, keys: K }, ctx).state;
@@ -303,13 +306,18 @@ describe('T4 · 렌더 모델', () => {
     expect(texts[0]).toMatchObject({ text: '표-12' });
   });
 
-  it('REPAIRED 는 회색 + 불투명도 40% (B11)', () => {
+  it('보수완료는 파랑이고 흐리지 않다 (2026-09-03 — "회색+흐리게 하지 말 것")', () => {
     const d = defect('a', 1, { x: 0.3, y: 0.5 }, { x: 0.5, y: 0.3 }, { status: 'REPAIRED' });
     const inp = input([d], { a: '1' });
     const ops = buildOverlay(inp, buildScreens(inp));
     const circle = ops.find((o) => o.k === 'circle' && o.fill === GS.statusColor.REPAIRED);
     expect(circle).toBeDefined();
-    if (circle && circle.k === 'circle') expect(circle.alpha).toBeCloseTo(0.4);
+    if (circle && circle.k === 'circle') expect(circle.alpha).toBeCloseTo(1);
+  });
+
+  it('네 종류가 서로 다른 색이다 — 도면에서 구분되지 않으면 종류를 나눈 의미가 없다', () => {
+    const colors = Object.values(GS.statusColor);
+    expect(new Set(colors).size).toBe(4);
   });
 
   it('화면 밖 결함은 컬링된다', () => {

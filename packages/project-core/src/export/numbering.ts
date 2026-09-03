@@ -19,7 +19,7 @@ export type NumberMode = 'PER_FLOOR' | 'CONTINUOUS';
 
 export type NumberingSurveyKind = 'EXTERIOR' | 'DETAIL';
 
-export type NumberingStatus = 'CURRENT' | 'PREV_PENDING' | 'REPAIRED';
+export type NumberingStatus = 'CURRENT' | 'NEW' | 'PREV_PENDING' | 'REPAIRED';
 
 /**
  * 번호부여가 보는 결함의 최소 형태.
@@ -210,7 +210,7 @@ export function assignNumbers(
   return { rows, byDefect, floorRanges, excluded, warnings: { incomplete, noPhoto } };
 }
 
-/** 3. 상태 필터 — `CURRENT` 는 항상 포함된다 */
+/** 3. 상태 필터 — `CURRENT`(결함) 와 `NEW`(신규) 는 **항상 포함된다**. 둘 다 이번 회차다 */
 function statusAllowed(status: NumberingStatus, p: NumberingParams): boolean {
   if (status === 'REPAIRED') return p.includeRepaired;
   if (status === 'PREV_PENDING') return p.includePrevPending;

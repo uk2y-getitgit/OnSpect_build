@@ -188,7 +188,11 @@ describe('C-4 일괄 삭제', () => {
   });
 
   it('전부 잠겨 있으면 확인창 없이 경고만 낸다', () => {
-    const l1 = defect('a', 1, { x: 0.1, y: 0.1 }, { x: 0.12, y: 0.08 }, { status: 'REPAIRED' });
+    // 2026-09-03 — 잠기는 것은 `전차`(PREV_PENDING) 하나뿐이다
+    const l1 = defect('a', 1, { x: 0.1, y: 0.1 }, { x: 0.12, y: 0.08 }, {
+      status: 'PREV_PENDING',
+      prevDefectId: 'old-a',
+    });
     const { state, ctx } = boot([l1]);
     const picked = dragMarquee(state, ctx).state;
     const r = reduce(picked, { k: 'DELETE_SELECTION' }, ctx);
@@ -199,7 +203,8 @@ describe('C-4 일괄 삭제', () => {
 
   it('확인 단계에서도 잠긴 결함은 한 번 더 걸러진다 (마지막 관문)', () => {
     const locked = defect('b', 2, { x: 0.14, y: 0.12 }, { x: 0.16, y: 0.1 }, {
-      status: 'REPAIRED',
+      status: 'PREV_PENDING',
+      prevDefectId: 'old-b',
     });
     const { state, ctx } = boot([A, locked]);
     const r = reduce(state, { k: 'CONFIRM_DELETE_DEFECTS', defectIds: ['a', 'b'] }, ctx);

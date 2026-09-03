@@ -21,12 +21,13 @@ export type SimilarDefectItem = {
   memberName: string | null;
   defectTypeName: string | null;
   floorName: string | null;
-  status: 'CURRENT' | 'PREV_PENDING' | 'REPAIRED';
+  status: 'CURRENT' | 'NEW' | 'PREV_PENDING' | 'REPAIRED';
 };
 
 const STATUS_LABEL: Record<SimilarDefectItem['status'], string> = {
-  CURRENT: '현회차',
-  PREV_PENDING: '전회차 미보수',
+  CURRENT: '결함',
+  NEW: '신규',
+  PREV_PENDING: '전차',
   REPAIRED: '보수완료',
 };
 

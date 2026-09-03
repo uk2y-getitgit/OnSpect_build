@@ -183,7 +183,7 @@ export function PhotoSection(props: PhotoSectionProps) {
             disabled={addDisabled || busy}
             title={
               addDisabled
-                ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+                ? '이 표기에는 사진을 추가할 수 없습니다'
                 : disabled
                   ? '이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다'
                   : '카메라로 지금 찍어 이 결함에 붙입니다'
@@ -198,7 +198,7 @@ export function PhotoSection(props: PhotoSectionProps) {
             disabled={addDisabled || busy}
             title={
               addDisabled
-                ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+                ? '이 표기에는 사진을 추가할 수 없습니다'
                 : disabled
                   ? // G-8 — 전회차 결함의 유일한 열린 문. 무엇이 일어나는지 미리 말해 준다
                     `이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다 (한 번에 최대 ${MAX_PHOTOS_PER_PICK}장)`
@@ -259,7 +259,7 @@ export function PhotoSection(props: PhotoSectionProps) {
                   disabled={addDisabled || busy}
                   title={
                     addDisabled
-                      ? '보수완료 표기에는 사진을 추가할 수 없습니다'
+                      ? '이 표기에는 사진을 추가할 수 없습니다'
                       : disabled
                         ? '이번 회차에 찍은 사진을 붙이면 이 결함이 금회차로 전환됩니다'
                         : '사진을 골라 추가합니다'

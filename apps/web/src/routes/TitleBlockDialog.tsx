@@ -253,7 +253,17 @@ export function TitleBlockDialog({
               onChange={(e) => setLeg('statusNew', e.target.checked)}
             />
             <span className="tbset__dot" data-status="CURRENT" aria-hidden="true" />
-            <span>신규(현회차)</span>
+            <span>결함</span>
+          </label>
+          <label className="tbset__check">
+            <input
+              type="checkbox"
+              checked={lg.statusNewFound}
+              disabled={!lg.enabled}
+              onChange={(e) => setLeg('statusNewFound', e.target.checked)}
+            />
+            <span className="tbset__dot" data-status="NEW" aria-hidden="true" />
+            <span>신규</span>
           </label>
           <label className="tbset__check">
             <input
@@ -263,7 +273,7 @@ export function TitleBlockDialog({
               onChange={(e) => setLeg('statusPending', e.target.checked)}
             />
             <span className="tbset__dot" data-status="PREV_PENDING" aria-hidden="true" />
-            <span>미보수(전회차)</span>
+            <span>전차</span>
           </label>
           <label className="tbset__check">
             <input
