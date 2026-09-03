@@ -194,6 +194,16 @@ export const RENDER_DEFAULTS = {
   sketchWidth: 3,
 } as const;
 
+/**
+ * C-1 — 화살촉 길이 상한 = **꺾은선 전체 길이 × 이 비율**.
+ *
+ * 촉 크기 자체는 `RENDER_DEFAULTS.arrowHead`(이미지 px) × zoom 이라 이미 도면 축척에 고정돼 있다.
+ * 유일하게 길이에 끌려다니던 것이 `shapes.ts` 의 "한 구간 절반" 클램프였다(= 머리쪽 첫 구간).
+ * 상한 기준을 전체 길이로 올려서, 첫 지시선을 짧게 꺾어 그려도 촉 크기가 그대로이게 한다.
+ * (전체 길이가 촉의 2배도 안 되는 아주 짧은 화살표에서만 줄어든다 — Q67 B안)
+ */
+export const ARROW_HEAD_MAX_RATIO = 0.5;
+
 /** 영역 기본 스타일 (상세기획 §3-5) */
 export const AREA_DEFAULT_SHAPE = 'SOLID' as const;
 export const AREA_DEFAULT_FILL = 'NONE' as const;

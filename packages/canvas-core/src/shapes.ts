@@ -8,6 +8,7 @@
  * 이 파일은 순수 함수만 담는다. 상태·시간·난수를 모른다.
  */
 import { AREA_HANDLES, type Handle, type MarkGeometry, type NPoint, type SPoint } from './types.js';
+import { ARROW_HEAD_MAX_RATIO } from './constants.js';
 import { clamp, dist, distPointSegment, sub, unit } from './geometry.js';
 
 // ── 사각형 ─────────────────────────────────────────────────────────────────
@@ -254,6 +255,47 @@ export function boundsOf(pts: readonly SPoint[]): SRect | null {
 }
 
 // ── 화살표 ─────────────────────────────────────────────────────────────────
+/** 폴리라인 전 구간 길이의 합. 스크린 px */
+export function polylineLength(pts: readonly SPoint[]): number {
+  let sum = 0;
+  for (let i = 1; i < pts.length; i += 1) sum += dist(pts[i - 1]!, pts[i]!);
+  return sum;
+}
+
+/**
+ * C-1 — 화살촉 길이를 **꺾은선 전체 길이** 기준으로 확정한다.
+ *
+ * `arrowHeadPolygon`·`arrowShaftEnd` 안의 `Math.min(head, len*0.5)` 는 넘겨받은 `from→to`
+ * **한 구간**만 본다. 화살표는 `points[0]` 이 촉이고 `points[1]` 이 그 다음 꺾임점이라
+ * 그 한 구간 = **머리쪽 첫 구간**이다. 그래서 첫 지시선을 짧게 잡아 꺾으면 촉이 같이 줄었다
+ * (= 사용자가 본 "첫 지시선 길이에 따라 화살표 크기가 달라진다").
+ *
+ * 여기서는 ① 상한을 전체 길이 × `ARROW_HEAD_MAX_RATIO` 로 걸고,
+ * ② 첫 구간 클램프가 그 값을 다시 깎지 못하도록 **방향은 같고 거리만 충분히 뒤로 물린 기준점**
+ * (`ref`)을 함께 돌려준다. `shapes.ts` 의 클램프 자체는 다른 호출부를 위한 안전장치로 남는다(U48).
+ *
+ * @param points 스크린 px. `points[0]` = 촉, `points[1]` = 다음 꺾임점
+ * @param head   축척 고정 촉 길이(= `arrowHead` 이미지 px × zoom), 스크린 px
+ * @returns 촉을 그릴 수 없으면(점 부족·첫 구간 0 길이) null
+ */
+export function resolveArrowHead(
+  points: readonly SPoint[],
+  head: number,
+  ratio: number = ARROW_HEAD_MAX_RATIO,
+): { head: number; ref: SPoint } | null {
+  if (points.length < 2) return null;
+  const tip = points[0]!;
+  const next = points[1]!;
+  const v = sub(next, tip);
+  const len = Math.hypot(v.x, v.y);
+  if (len < 0.5) return null;
+  const h = Math.min(head, polylineLength(points) * ratio);
+  const u = { x: v.x / len, y: v.y / len };
+  // 첫 구간 클램프(len*0.5)가 h 를 깎지 않을 만큼만 뒤로 물린다. 방향은 그대로다
+  const back = Math.max(len, h * 2);
+  return { head: h, ref: { x: tip.x + u.x * back, y: tip.y + u.y * back } };
+}
+
 /**
  * 화살촉 삼각형 3점. `head` 는 스크린 px 길이.
  * 꼬리→머리 방향이 0 길이면 그릴 수 없으므로 null.

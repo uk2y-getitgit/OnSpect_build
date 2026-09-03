@@ -36,7 +36,7 @@ import {
   type MarkScreen,
   type PreviewOverride,
 } from './defectGeom.js';
-import { rectsIntersect } from './geometry.js';
+import { dist, rectsIntersect } from './geometry.js';
 import { leaderSegment } from './hitTest.js';
 import type { MemoScreen } from './memoGeom.js';
 import {
@@ -48,6 +48,7 @@ import {
   hatchEllipse,
   hatchRect,
   rectOutline,
+  resolveArrowHead,
   stadiumPolyline,
   type SRect,
 } from './shapes.js';
@@ -583,23 +584,31 @@ function arrowOps(
   out: DrawOp[],
 ): void {
   if (points.length < 2) return;
-  const head = Math.max(6, st.arrowHead * zoom);
   const width = Math.max(1, st.markStroke * zoom) + (hovered ? HOVER_STROKE_GROW_PX : 0);
 
   const tip = points[0]!;
   const next = points[1]!;
+  // C-1 — 촉 길이는 **도면 축척 고정**(arrowHead 이미지 px × zoom)이고, 상한만 꺾은선 **전체 길이**로 건다.
+  // resolveArrowHead 가 돌려주는 ref 는 "방향은 next 와 같고 거리만 뒤로 물린" 가상 기준점이라,
+  // shapes.ts 의 첫 구간 클램프가 이 촉을 다시 깎지 않는다. 첫 지시선을 짧게 꺾어도 촉 크기가 그대로다.
+  const spec = resolveArrowHead(points, Math.max(6, st.arrowHead * zoom));
+  const head = spec ? spec.head : Math.max(6, st.arrowHead * zoom);
   // arrowShaftEnd/arrowHeadPolygon 은 "to 에서 from 반대 방향으로 화살촉을 그린다"는 계약이다.
-  // 화살촉이 tip 에 있고 next 반대쪽을 가리켜야 하므로 from=next, to=tip 으로 뒤집어 넘긴다
-  out.push({
-    k: 'line',
-    a: next,
-    b: arrowShaftEnd(next, tip, head),
-    color: st.color,
-    width,
-    alpha,
-    cap: 'round',
-  });
-  const tri = arrowHeadPolygon(next, tip, head);
+  // 화살촉이 tip 에 있고 next 반대쪽을 가리켜야 하므로 from=ref(=next 방향), to=tip 으로 뒤집어 넘긴다
+  const from = spec ? spec.ref : next;
+  // 촉이 첫 구간을 통째로 덮는 경우(급하게 꺾인 짧은 화살표) 몸통 선은 방향이 뒤집힌다 — 그리지 않는다
+  if (dist(next, tip) > head * 0.9) {
+    out.push({
+      k: 'line',
+      a: next,
+      b: arrowShaftEnd(from, tip, head),
+      color: st.color,
+      width,
+      alpha,
+      cap: 'round',
+    });
+  }
+  const tri = arrowHeadPolygon(from, tip, head);
   if (tri) {
     out.push({
       k: 'polyline',
