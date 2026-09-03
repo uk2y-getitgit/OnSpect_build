@@ -344,9 +344,9 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
   );
 
   /**
-   * F5-3 — 배율 적용. **좌표는 한 글자도 건드리지 않는다.**
-   * 저장하는 것은 `imgScale`(숫자)과 `imgLayout`(도면 영역) 뿐이고,
-   * 합성된 이미지는 저장소가 아니라 런타임 캐시에만 들어간다.
+   * F5-3 — 배율 적용. **D37(2026-09-03) — 결함·메모 좌표도 함께 옮긴다.**
+   * 저장하는 것은 `imgScale`(숫자)·`imgLayout`(도면 영역)에 더해 옮겨진 결함·메모 좌표다.
+   * 합성된 이미지 자체는 저장소가 아니라 런타임 캐시에만 들어간다.
    */
   const applyScale = useCallback(
     (dw: Drawing, raw: number) => {

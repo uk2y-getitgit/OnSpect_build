@@ -1,10 +1,11 @@
 /**
  * F5-3 — 도면 크기 조절.
  *
- * A4 지면 안에서 도면 그림이 차지하는 배율만 바꾼다.
- * **결함 표기 좌표는 옮기지 않는다** (Numdraw 는 옮겼지만 우리 좌표는 0~1 정규화라
- * 함께 옮기면 두 번 변환되어 어긋난다 — F5-3 원문 · 불변식 #1).
- * 그래서 결함이 이미 있는 도면에서는 "그림만 움직인다"를 분명히 알린다.
+ * A4 지면 안에서 도면 그림이 차지하는 배율을 바꾼다.
+ * **결함·메모 좌표도 그림을 따라 함께 옮긴다** (D37, 2026-09-03 실사용 피드백으로 F5-3 원문을
+ * 뒤집어 재확정 — Numdraw와 같은 동작으로 되돌아간 것). 실제 이동은 여기서 직접 하지 않고
+ * `CanvasRoute.tsx::computeScale` → `applyDrawingScale`가 변경 전·후 `imgLayout`을 합성한
+ * 변환(`layoutTransform`, 불변식 #1: 0~1 정규화 유지) 한 번으로 적용한다.
  */
 import { useState } from 'react';
 import { clampScale, MAX_SCALE, MIN_SCALE, type Drawing } from '@onspect/project-core';

@@ -22,9 +22,10 @@ export type FitRect = { x: number; y: number; w: number; h: number };
 /**
  * 도면 그림이 A4 지면 안에서 차지하는 배율. Numdraw 실측값 그대로.
  *
- * ⚠️ **넘버링 좌표는 절대 함께 옮기지 않는다** (F5-3 원문). Numdraw 는 배율이 바뀌면
- * 넘버링 좌표를 같은 비율로 이동시켰지만, 우리 좌표는 0~1 정규화(불변식 #1)라
- * 그 코드를 이식하면 **두 번 변환되어 어긋난다.**
+ * ⚠️ **넘버링 좌표는 배율 변경에 맞춰 함께 옮긴다** (D37, F5-3 원문을 실사용 피드백으로
+ * 재확정 — 2026-09-03). 우리 좌표는 0~1 정규화(불변식 #1)라 여기서 직접 옮기지 않고,
+ * 변경 전·후 두 `imgLayout`(A4Transform)을 합성한 변환을 호출자(`drawingScale.ts::layoutTransform`)가
+ * 별도로 적용한다 — 두 번 변환되어 어긋나는 걸 막으려면 그 합성 변환 **한 번만** 써야 한다.
  */
 export const MIN_SCALE = 0.3;
 export const MAX_SCALE = 2.5;
