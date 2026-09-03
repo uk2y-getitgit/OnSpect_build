@@ -15,7 +15,6 @@ import {
   canRedo,
   changedAttrKeys,
   canUndo,
-  DEFAULT_GLOBAL_STYLE,
   defectTargetOf,
   describeCommand,
   EMPTY_HISTORY,
@@ -40,6 +39,7 @@ import {
   type Memo,
   type ReduceContext,
 } from '@onspect/canvas-core';
+import { globalStyleForLabelScale } from './canvas/labelStyle';
 import type { ToastItem } from './ui/Overlays';
 
 export type Toast = ToastItem;
@@ -118,13 +118,26 @@ export type AppState = {
    * 어느 프로파일이 터치인지 아는 것은 어댑터뿐이다(경계 규칙 1 — 코어는 `navigator` 를 모른다).
    */
   hitProfile: HitProfile | null;
+  /**
+   * C-2 — 현재 도면의 번호 풍선 배율 (`Drawing.labelScale ?? 1`).
+   *
+   * ⭐ **리듀서가 쓰는 `globalStyle` 과 화면이 그리는 `globalStyle` 을 같게 만드는 값이다.**
+   *    예전에는 렌더만 배율을 반영하고 리듀서는 `DEFAULT_GLOBAL_STYLE`(34) 을 하드코딩해서,
+   *    풍선을 키우면 히트 영역·자동배치 거리·정렬 스냅 후보가 보이는 것과 어긋났다.
+   *
+   * `canvas-core` 의 `DrawingRef` 에 넣지 않은 이유: 이것은 **앱 표시설정**이다(U46).
+   * `hitProfile` 과 같은 방식으로 어댑터가 `ReduceContext` 에 주입한다(경계 규칙 1).
+   * 기본값 `1` 에서는 `globalStyleForLabelScale` 이 `DEFAULT_GLOBAL_STYLE` **같은 참조**를
+   * 돌려주므로 PC 기본 도면의 동작은 한 픽셀도 바뀌지 않는다(U47).
+   */
+  labelScale: number;
   idSeed: number;
   toastSeed: number;
 };
 
 export type Action =
   | { t: 'INPUT'; ev: InputEvent }
-  | { t: 'SET_FLOOR'; floorId: string; drawing: DrawingRef | null }
+  | { t: 'SET_FLOOR'; floorId: string; drawing: DrawingRef | null; labelScale: number }
   | {
       t: 'LOAD';
       projectId: string;
@@ -154,6 +167,11 @@ export type Action =
   | { t: 'SET_DEFECT_STATUS'; defectId: string; to: DefectStatus; toast?: string }
   /** T2-1 — 태블릿 모드 진입/이탈. `null` 이면 마우스 기본값으로 돌아간다 */
   | { t: 'SET_HIT_PROFILE'; profile: HitProfile | null }
+  /**
+   * C-2 — 번호 풍선 배율 변경 (`F6` 의 `−` `100%` `+`).
+   * 저장(`Drawing.labelScale`)과 **같은 순간** 리듀서 기준도 갱신해야 둘이 안 갈라진다.
+   */
+  | { t: 'SET_LABEL_SCALE'; scale: number }
   | { t: 'FLUSHED'; seq: number }
   | { t: 'UNDO' }
   | { t: 'REDO' }
@@ -186,6 +204,7 @@ export function initialAppState(init: {
     defaultAttrs: {},
     toolbarFor: null,
     hitProfile: null,
+    labelScale: 1,
     idSeed: 1,
     toastSeed: 1,
   };
@@ -256,13 +275,25 @@ function reduceApp(state: AppState, action: Action): AppState {
       // 같은 값이면 상태를 갈지 않는다 — 방향 전환마다 캔버스가 통째로 다시 그려지지 않게
       return state.hitProfile === action.profile ? state : { ...state, hitProfile: action.profile };
 
+    case 'SET_LABEL_SCALE':
+      // 같은 값이면 상태를 갈지 않는다 (`SET_HIT_PROFILE` 과 같은 이유)
+      return state.labelScale === action.scale ? state : { ...state, labelScale: action.scale };
+
     case 'FLUSHED':
       // 흘려보낸 뒤에도 새 변경이 들어왔으면 그대로 둔다
       return state.writes.seq === action.seq ? { ...state, writes: NO_WRITES } : state;
 
     case 'SET_FLOOR': {
+      // C-2 — 도면이 바뀌면 그 도면의 풍선 배율도 **같은 액션 안에서** 갈아끼운다.
+      //       한 틱이라도 늦으면 전환 직후 첫 입력이 이전 도면 배율로 히트 판정된다
       return runInput(
-        { ...state, floorId: action.floorId, menu: null, confirm: null },
+        {
+          ...state,
+          floorId: action.floorId,
+          labelScale: action.labelScale,
+          menu: null,
+          confirm: null,
+        },
         { k: 'SET_DRAWING', drawing: action.drawing },
       );
     }
@@ -404,7 +435,8 @@ function runInput(state: AppState, ev: InputEvent): AppState {
     // 화면 렌더(`CanvasView`)와 같은 소스를 쓴다 — 두 벌로 만들면 반드시 어긋난다
     displayNumbers: displayNumbersOf(drawingDefects),
     memos: memosOfDrawing(state.memos, drawingId),
-    globalStyle: DEFAULT_GLOBAL_STYLE,
+    // C-2 — 화면과 **같은 소스**. 하드코딩된 34 를 쓰면 히트 영역이 보이는 풍선과 어긋난다
+    globalStyle: globalStyleForLabelScale(state.labelScale),
     makeId: () => {
       seed += 1;
       return `n${seed.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;

@@ -21,7 +21,6 @@ import {
   buildOverlay,
   buildScreens,
   memoScreens,
-  DEFAULT_GLOBAL_STYLE,
   type Defect,
   type DefectScreen,
   type GlobalStyle,
@@ -31,6 +30,7 @@ import {
 import type { Drawing, ExportParams, Project } from '@onspect/project-core';
 import { cachedCompositeUrl, compositeUrl, needsCompose } from '../canvas/drawingComposite';
 import { loadDrawing, type LoadedDrawing } from '../canvas/imageLoader';
+import { globalStyleForLabelScale } from '../canvas/labelStyle';
 import { legendConfigFor, titleBlockConfigFor } from '../canvas/pageDecor';
 import { prepare, renderOps } from '../canvas/renderCanvas2d';
 
@@ -288,11 +288,12 @@ async function loadDrawingFor(d: Drawing, input: LocationMapInput): Promise<Load
   return loadDrawing(d.id, url, d.imageWidth, d.imageHeight);
 }
 
-/** F6 — 번호 풍선 크기는 도면 단위 설정이다. 화면과 같은 계산을 쓴다 */
+/**
+ * F6 — 번호 풍선 크기는 도면 단위 설정이다. 화면과 같은 계산을 쓴다.
+ * C-2 — 계산 본체는 `canvas/labelStyle.ts` 한 곳뿐이다. 여기서는 위임만 한다.
+ */
 export function globalStyleFor(d: Drawing): GlobalStyle {
-  const s = d.labelScale ?? 1;
-  if (s === 1) return DEFAULT_GLOBAL_STYLE;
-  return { ...DEFAULT_GLOBAL_STYLE, balloonRadius: DEFAULT_GLOBAL_STYLE.balloonRadius * s };
+  return globalStyleForLabelScale(d.labelScale);
 }
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };

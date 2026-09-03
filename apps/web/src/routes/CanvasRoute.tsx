@@ -15,7 +15,6 @@ import {
   canAddPhotos,
   canRedo,
   canUndo,
-  DEFAULT_GLOBAL_STYLE,
   ghostOf,
   pendingGhostsOf,
   isLocked,
@@ -48,6 +47,7 @@ import { ContextToolbar } from '../canvas/ContextToolbar';
 import { MemoEditor } from '../canvas/MemoEditor';
 import { ToolPalette } from '../canvas/ToolPalette';
 import { revokeAll } from '../canvas/imageLoader';
+import { globalStyleForLabelScale } from '../canvas/labelStyle';
 import { legendConfigFor, titleBlockConfigFor } from '../canvas/pageDecor';
 import { TitleBlockDialog } from './TitleBlockDialog';
 import {
@@ -298,7 +298,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             imageHeight: currentDrawing.imageHeight,
           }
         : null,
+      // C-2 — 도면마다 다른 풍선 배율. 전환과 **같은 액션**에 실어야 첫 입력이 어긋나지 않는다
+      labelScale: currentDrawing?.labelScale ?? 1,
     });
+    // ⚠️ `labelScale` 을 의존성에 넣지 않는다 — `SET_FLOOR` 는 `SET_DRAWING` 을 태워
+    //    **뷰포트를 다시 맞춘다.** 배율만 바뀐 경우는 아래 `SET_LABEL_SCALE` 이 따로 처리한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedFloor?.id, currentDrawing?.id]);
 
   // 도면 Blob → objectURL. **네트워크를 타지 않는다** (§2-9-d)
@@ -406,12 +411,30 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     [state.memos, state.canvas.drawing?.id],
   );
 
+  /**
+   * F6 — 번호 풍선 크기. 도면마다 결함 밀도가 달라 도면 단위로 둔다(도곽·범례와 같은 스코프).
+   * C-2 — **렌더 · 리듀서 · 파생 계산 · 툴바 위치가 전부 이 하나를 쓴다.**
+   *        계산 본체는 `canvas/labelStyle.ts` 한 곳뿐이고, 배율 1 이면 `DEFAULT_GLOBAL_STYLE`
+   *        **같은 참조**라 기본 도면의 메모이제이션이 한 번도 깨지지 않는다(U47).
+   */
+  const labelScale = currentDrawing?.labelScale ?? 1;
+  const globalStyle = useMemo(() => globalStyleForLabelScale(labelScale), [labelScale]);
+
+  /**
+   * C-2 — 리듀서가 쓰는 배율을 화면과 맞춘다.
+   * 도면 전환은 `SET_FLOOR` 가 같은 액션에서 처리하므로, 여기는 **같은 도면에서 배율만 바뀐**
+   * 경우(F6 `−`/`+`)를 위한 것이다. 같은 값이면 리듀서가 상태를 갈지 않는다.
+   */
+  useEffect(() => {
+    dispatch({ t: 'SET_LABEL_SCALE', scale: labelScale });
+  }, [labelScale]);
+
   /** 코어에 넘기는 컨텍스트 — 파생 계산(memoScreensOf · ghostOf)도 같은 값을 쓴다 */
   const reduceCtx = useMemo<ReduceContext>(
     () => ({
       defects,
       memos,
-      globalStyle: DEFAULT_GLOBAL_STYLE,
+      globalStyle,
       makeId: () => '',
       floorId: state.floorId,
       projectId,
@@ -419,7 +442,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       // **PC 는 넘기지 않는다** → 코어가 `DEFAULT_HIT_PROFILE`(마우스 값)을 쓴다 = 동작 불변.
       ...(tablet ? { hitProfile: TOUCH_HIT_PROFILE } : {}),
     }),
-    [defects, memos, state.floorId, projectId, tablet],
+    [defects, memos, globalStyle, state.floorId, projectId, tablet],
   );
 
   const memoScreens = useMemo(
@@ -468,14 +491,6 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentDrawing?.id, project?.legend, lgPreview, legendSig],
   );
-
-  // F6 — 번호 풍선 크기. 도면마다 결함 밀도가 달라 도면 단위로 둔다(도곽·범례와 같은 스코프).
-  // 좌표·자동배치 거리 계산에는 관여하지 않는다 — **화면·출력 크기만** 바꾼다.
-  const globalStyle = useMemo(() => {
-    const s = currentDrawing?.labelScale ?? 1;
-    if (s === 1) return DEFAULT_GLOBAL_STYLE;
-    return { ...DEFAULT_GLOBAL_STYLE, balloonRadius: DEFAULT_GLOBAL_STYLE.balloonRadius * s };
-  }, [currentDrawing?.labelScale]);
 
   /** F5-1·F5-2 — 도곽·범례 설정 저장. ProjectSetup 의 같은 이름 함수와 동일한 로직 */
   /**
@@ -639,7 +654,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       drawing: state.canvas.drawing,
       viewport: state.canvas.viewport,
       defects,
-      globalStyle: DEFAULT_GLOBAL_STYLE,
+      // C-2 — 툴바 위치도 **보이는 풍선**을 기준으로 잡아야 한다. 하드코딩하면 배율에서 어긋난다
+      globalStyle,
       preview: previewOf(state.canvas),
     });
     const s = screens.find((x) => x.defectId === selected.id);
@@ -656,7 +672,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       x: Math.min(Math.max(s.label.x, 150), Math.max(150, state.canvas.canvas.w - 150)),
       y,
     };
-  }, [selected, state.canvas, state.toolbarFor, defects]);
+  }, [selected, state.canvas, state.toolbarFor, defects, globalStyle]);
 
   const selectFloor = useCallback(
     (f: Floor) => {
