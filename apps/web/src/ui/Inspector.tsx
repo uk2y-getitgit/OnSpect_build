@@ -11,11 +11,13 @@
 import { forwardRef, type ReactNode } from 'react';
 import {
   attrsOf,
+  canSetStatus,
   describeMissing,
   isIncomplete,
   isLocked,
   type Defect,
   type DefectAttrs,
+  type DefectStatus,
 } from '@onspect/canvas-core';
 import type { ItemSettings } from '@onspect/project-core';
 import { useUiMode } from '../shell/useUiMode';
@@ -26,6 +28,16 @@ const STATUS_LABEL: Record<Defect['status'], string> = {
   PREV_PENDING: '전회차 미보수',
   REPAIRED: '보수완료',
 };
+
+/**
+ * C-5 — 종류 선택 버튼에 쓰는 짧은 라벨. **범례와 같은 말을 쓴다**(U-3 확정) —
+ * 도면 위 범례가 `신규 · 결함 · 보수완료` 인데 여기서 다른 말을 쓰면 색을 못 잇는다.
+ */
+const STATUS_PICK: ReadonlyArray<{ value: DefectStatus; label: string; hint: string }> = [
+  { value: 'CURRENT', label: '신규', hint: '이번 회차에 새로 찾은 결함 (빨강)' },
+  { value: 'PREV_PENDING', label: '결함', hint: '전회차에서 넘어온 미보수 결함 (보라)' },
+  { value: 'REPAIRED', label: '보수완료', hint: '보수가 끝난 결함 (회색)' },
+];
 
 export type InspectorProps = {
   defect: Defect | null;
@@ -52,15 +64,10 @@ export type InspectorProps = {
   onResetLabel: () => void;
   onDelete: () => void;
   /**
-   * G-8 (T-7) — `[전회차로 되돌리기]`. 상태를 `CURRENT → PREV_PENDING` 으로 되돌린다.
-   *
-   * 가정 N8: 사진을 지워도 **자동으로는 되돌아가지 않는다.** 되돌리는 통로는 이 버튼뿐이고
-   * **사진 유무와 무관하게 항상 눌린다** — "사진이 없을 때만" 으로 좁히면, 사진을 지운 뒤
-   * 되돌리려던 사용자가 순서를 거꾸로 밟았을 때 길이 막힌다.
-   *
-   * 주지 않으면 버튼 자체가 뜨지 않는다.
+   * C-5 (D33) — 표기 종류(status) 변경. 색은 `statusColor[status]` 를 타고 자동으로 따라온다.
+   * 주지 않으면 종류 선택 줄 자체가 뜨지 않는다.
    */
-  onRevertToPrev?: () => void;
+  onStatusChange?: (to: DefectStatus) => void;
 };
 
 export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Inspector(
@@ -74,7 +81,7 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
     similarCount = 0,
     onResetLabel,
     onDelete,
-    onRevertToPrev,
+    onStatusChange,
   },
   ref,
 ) {
@@ -96,10 +103,6 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
 
   const locked = isLocked(defect);
   const incomplete = isIncomplete(defect);
-  // G-8 (T-7) — 전회차에서 승계된 결함만 되돌릴 곳이 있다.
-  // 이번 회차에 새로 그린 결함(`prevDefectId === null`)에 이 버튼을 주면
-  // 있지도 않은 "전회차" 로 보내 버려 출력에서 통째로 빠진다
-  const revertable = defect.status === 'CURRENT' && defect.prevDefectId !== null;
 
   return (
     <aside className="inspector" aria-label="결함 정보">
@@ -115,6 +118,44 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
           {STATUS_LABEL[defect.status]}
         </span>
       </div>
+
+      {/* C-5 (D33) — 표기 종류 선택. 바꾸면 색은 `statusColor[status]` 를 타고 자동으로 따라온다.
+          ⚠️ **`locked` 로 막지 않는다.** 이 줄은 잠금의 근거(status)를 바꾸는 자리라,
+          잠금으로 막으면 한 번 「결함」·「보수완료」로 바꾼 결함을 영영 되돌릴 수 없다.
+          이 줄이 G-8 의 옛 `[전회차로 되돌리기]` 버튼을 대신한다 — 같은 일을 하는 문이 둘이면 헷갈린다 */}
+      {onStatusChange && (
+        <div className="idf-field">
+          <div className="idf-field__head">
+            <span className="idf-field__label">표기 종류</span>
+          </div>
+          <div className="segmented" role="group" aria-label="표기 종류">
+            {STATUS_PICK.map((opt) => {
+              const isCurrent = defect.status === opt.value;
+              const allowed = isCurrent || canSetStatus(defect, opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className="segmented__item"
+                  data-selected={isCurrent}
+                  disabled={!allowed}
+                  title={
+                    allowed
+                      ? opt.hint
+                      : '전회차에서 넘어온 결함이 아니어서 「결함」으로 바꿀 수 없습니다 — 보수완료 미포함으로 뽑은 출력에서 이 결함이 사라집니다'
+                  }
+                  onClick={() => !isCurrent && onStatusChange(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="idf-field__hint">
+            종류를 바꾸면 도면 위 색도 함께 바뀝니다. 「결함」 · 「보수완료」 는 값 편집이 잠깁니다.
+          </p>
+        </div>
+      )}
 
       {incomplete && (
         <p className="notice notice--warn" role="status">
@@ -201,17 +242,6 @@ export const Inspector = forwardRef<HTMLDivElement, InspectorProps>(function Ins
         >
           번호 위치 초기화
         </button>
-        {/* G-8 (T-7) — 사진을 지워도 자동으로 돌아가지 않는다(N8). 되돌리는 문은 여기 하나뿐이다 */}
-        {revertable && onRevertToPrev && (
-          <button
-            type="button"
-            className="btn"
-            onClick={onRevertToPrev}
-            title="이 결함을 다시 전회차 미보수(보라)로 되돌립니다. 되돌리면 값 편집이 다시 잠깁니다"
-          >
-            전회차로 되돌리기
-          </button>
-        )}
         <button
           type="button"
           className="btn btn--danger"

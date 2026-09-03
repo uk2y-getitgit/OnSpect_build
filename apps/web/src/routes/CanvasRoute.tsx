@@ -1351,14 +1351,20 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             similarCount={similarItems.length}
             onResetLabel={() => selected && send({ k: 'RESET_LABEL', defectId: selected.id })}
             onDelete={() => send({ k: 'DELETE_SELECTION' })}
-            onRevertToPrev={
+            // C-5 (D33) — 표기 종류 변경. 허용 여부 판정은 뷰·리듀서 양쪽 다
+            // `canSetStatus` 하나만 본다. 색은 status 를 따라 자동으로 바뀐다
+            onStatusChange={
               selected
-                ? () =>
+                ? (to) =>
                     dispatch({
                       t: 'SET_DEFECT_STATUS',
                       defectId: selected.id,
-                      to: 'PREV_PENDING',
-                      toast: '전회차 미보수로 되돌렸습니다',
+                      to,
+                      toast: {
+                        CURRENT: '신규(현회차)로 바꿨습니다',
+                        PREV_PENDING: '결함(전회차 미보수)으로 바꿨습니다',
+                        REPAIRED: '보수완료로 바꿨습니다',
+                      }[to],
                     })
                 : undefined
             }

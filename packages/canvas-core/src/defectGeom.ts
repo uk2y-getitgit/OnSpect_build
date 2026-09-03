@@ -15,6 +15,7 @@ import { areaBoundaryPoint, type SRect } from './shapes.js';
 import { estimateEm } from './titleBlock.js';
 import type {
   Defect,
+  DefectStatus,
   Mark,
   MarkGeometry,
   MarkType,
@@ -387,6 +388,25 @@ export function defectScreen(
 /** 전회차 표기는 1차 범위에서 선택만 가능 (A8) */
 export function isLocked(defect: Defect): boolean {
   return defect.status !== 'CURRENT';
+}
+
+/**
+ * C-5 (D33) — 표기 종류(status)를 이 값으로 바꿀 수 있는가.
+ *
+ * 세 종류(신규 · 결함 · 보수완료)를 전부 열되 **막는 것은 하나뿐**이다:
+ * `prevDefectId` 가 없는 결함을 전회차(`PREV_PENDING`)로 만드는 것.
+ * 있지도 않은 전회차로 보내면 `includePrevPending=false` 로 뽑은 출력에서
+ * 그 결함이 통째로 사라진다 (U43).
+ *
+ * ⚠️ **`isLocked` 를 보지 않는다.** 이 판정은 잠금의 *근거*(status)를 바꾸는 자리라
+ * 잠금으로 막으면 한 번 바꾼 결함을 영영 되돌릴 수 없다(D33 "종류 변경만은 항상 활성").
+ */
+export function canSetStatus(
+  defect: Pick<Defect, 'status' | 'prevDefectId'>,
+  to: DefectStatus,
+): boolean {
+  if (defect.status === to) return false;
+  return !(to === 'PREV_PENDING' && defect.prevDefectId === null);
 }
 
 /**

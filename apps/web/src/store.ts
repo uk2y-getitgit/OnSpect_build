@@ -19,6 +19,7 @@ import {
   describeCommand,
   EMPTY_HISTORY,
   initialCanvasState,
+  canSetStatus,
   isLocked,
   memoTargetsOf,
   pushHistory,
@@ -552,12 +553,12 @@ function setDefectAttrs(
  *    유일한 통로다. `setDefectAttrs` 처럼 `isLocked` 로 막으면 전회차 결함은 영원히
  *    금회차가 될 수 없다 — 그래서 게이트 대신 **허용 전이 목록**으로 좁힌다.
  *
- * 허용하는 것은 두 방향뿐이다:
- *   · `PREV_PENDING → CURRENT` — 이번 회차 사진이 붙었다 (상세기획 §Phase 2-D)
- *   · `CURRENT → PREV_PENDING` — 사용자가 명시적으로 되돌렸다 (가정 N8)
+ * **C-5 (D33)** — 세 종류(신규 · 결함 · 보수완료)를 전부 열었다. 막는 것은 하나뿐이다:
+ * `prevDefectId` 가 없는 결함을 전회차로 만드는 것 (`includePrevPending=false` 출력에서
+ * 통째로 사라진다 — U43). 판정은 `canvas-core` 의 `canSetStatus` 한 곳에서만 한다.
  *
- * `REPAIRED` 가 얽힌 전이는 조용히 무시한다. 보수완료 결함의 잠금을 사진으로 푸는 것은
- * 이번 범위가 아니고, 여기서 열어 두면 실수로 새는 통로가 된다.
+ * 뷰(`Inspector`)도 같은 함수로 버튼을 막지만 **마지막 관문은 여기다**
+ * (`setDefectAttrs` 와 같은 원칙 — 검수 48 경미1).
  */
 function setDefectStatus(
   state: AppState,
@@ -567,14 +568,7 @@ function setDefectStatus(
 ): AppState {
   const d = state.defects.find((x) => x.id === defectId);
   if (!d || d.status === to) return state;
-  const allowed =
-    (d.status === 'PREV_PENDING' && to === 'CURRENT') ||
-    // 되돌릴 전회차 결함이 실제로 있을 때만 돌려보낸다. `prevDefectId` 가 없는 결함을
-    // 전회차로 만들면 `includePrevPending=false` 출력에서 통째로 사라진다.
-    // 뷰(`Inspector.tsx:98`)도 같은 조건으로 버튼을 감추지만 **마지막 관문은 여기다**
-    // (`setDefectAttrs` 와 같은 원칙 — 검수 48 경미1).
-    (d.status === 'CURRENT' && to === 'PREV_PENDING' && d.prevDefectId !== null);
-  if (!allowed) return state;
+  if (!canSetStatus(d, to)) return state;
   const committed = applyAndPush(state, {
     k: 'SET_DEFECT_STATUS',
     defectId,
