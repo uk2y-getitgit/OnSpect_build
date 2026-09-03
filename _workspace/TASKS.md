@@ -147,3 +147,18 @@
 | U3-B-R | U-3 검수 (canvas-core 변경 + DB호환 주장) | code-reviewer | U3-B | ✅ `60_code-reviewer_findings_UI3_Legend.md` — 통과, 지적사항 없음 |
 | U3-B | U-3 결함유형범례 제거 + 상태범례 문구 축약(신규/결함/보수완료) | builder | - | ✅ `58_builder_log_UI3_Legend.md` · 커밋 `cea85b1` · 타입/테스트676(canvas368+project308)/빌드 통과 · DB_VERSION 1 유지 · 확인요청2건(라벨 확정, 다이얼로그 체크박스 문구 통일 여부) |
 | U4 | PC/태블릿 구분 배포 — 리더 직접 처리 | 리더 | - | ⬜ |
+
+---
+
+# 라운드: UI·동작 개선 (2026-09-03) — 브랜치 `feat/ui-behavior-0903`
+
+요청 원문: `_workspace/00_input/scope_UIBehavior0903.md` · 확정: D27~D30 · 질문: Q63~Q66(답변완료)
+
+> 이 PC 에서는 **코드만** 고친다. 메인 PC 에서 이어받아 진행 예정.
+
+| # | 작업 | 담당 | 상태 |
+|---|---|---|---|
+| R0 | 브랜치 생성 · 배포주소 기록 · 요청 원문 정리 | 리더 | ✅ 완료 |
+| R1 | 차단질문 4건(Q63~Q66) 사용자 확정 → D27~D30 | 리더 | ✅ 완료 |
+| R2 | 스펙 확정 · 16건 작업 분해 → `70_plan-reviewer_spec_UIBehavior0903.md` | plan-reviewer | 🔄 진행중 |
+| R3~ | 구현 배치 (R2 결과에 따라 확정) | builder | ⏸ 대기 |

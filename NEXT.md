@@ -7,6 +7,20 @@
 
 ---
 
+## 🌐 배포 주소 (테스트용 · 2026-09-03 기록)
+
+| 대상 | URL |
+|---|---|
+| **PC 버전** | https://on-spect-build-web.vercel.app/pc |
+| **태블릿 버전** | https://on-spect-build-web.vercel.app/tablet |
+| 실기기 자동판정 | https://on-spect-build-web.vercel.app/ |
+
+`/pc`·`/tablet` 는 U-4에서 만든 강제전환 경로다 — 같은 배포에서 UI만 바꿔 연다
+(`apps/web/index.html` 부트스트랩 → `<html data-ui-mode>` → `useUiMode.ts`, rewrite 는 `vercel.json`).
+`?ui=pc|tablet` 쿼리도 같다. 한 번 들어가면 그 선택이 localStorage 에 남는다.
+
+---
+
 ## 지금 상태 한 줄
 
 **PC 웹에서 용역을 만들고 도면을 올리고 결함을 찍고 정보·사진을 입력한 뒤,
