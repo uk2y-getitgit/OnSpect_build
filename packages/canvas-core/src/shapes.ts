@@ -8,7 +8,6 @@
  * 이 파일은 순수 함수만 담는다. 상태·시간·난수를 모른다.
  */
 import { AREA_HANDLES, type Handle, type MarkGeometry, type NPoint, type SPoint } from './types.js';
-import { ARROW_HEAD_MAX_RATIO } from './constants.js';
 import { clamp, dist, distPointSegment, sub, unit } from './geometry.js';
 
 // ── 사각형 ─────────────────────────────────────────────────────────────────
@@ -270,9 +269,15 @@ export function polylineLength(pts: readonly SPoint[]): number {
  * 그 한 구간 = **머리쪽 첫 구간**이다. 그래서 첫 지시선을 짧게 잡아 꺾으면 촉이 같이 줄었다
  * (= 사용자가 본 "첫 지시선 길이에 따라 화살표 크기가 달라진다").
  *
- * 여기서는 ① 상한을 전체 길이 × `ARROW_HEAD_MAX_RATIO` 로 걸고,
- * ② 첫 구간 클램프가 그 값을 다시 깎지 못하도록 **방향은 같고 거리만 충분히 뒤로 물린 기준점**
- * (`ref`)을 함께 돌려준다. `shapes.ts` 의 클램프 자체는 다른 호출부를 위한 안전장치로 남는다(U48).
+ * **2026-09-03 재수정 (Q67 → A안).** 사용자가 실사용에서 *"화살표 크기 축척 동일하게 유지"* 를
+ * 다시 요구했다. 이전 판(B1)은 상한을 전체 길이 × 0.5 로 남겨 뒀는데, 안전진단 도면의 지시선은
+ * 짧은 경우가 많아 그 상한에 자주 걸렸다 — 사용자 눈에는 여전히 "길이에 따라 촉이 변한다" 였다.
+ *
+ * 이제 **길이에 따른 축소가 전혀 없다.** 촉은 언제나 `arrowHead`(이미지 px) × zoom 이다.
+ * 대신 촉이 첫 구간을 덮는 경우의 몸통선은 호출부(`arrowOps`)가 안 그린다 — 그 판정은 그대로다.
+ *
+ * `ref` 는 그대로 필요하다. `shapes.ts` 안쪽 클램프(`Math.min(head, len*0.5)`)는 다른 호출부용
+ * 안전장치로 남아 있어서, 뒤로 물린 기준점이 없으면 첫 구간이 짧을 때 다시 깎인다(U48).
  *
  * @param points 스크린 px. `points[0]` = 촉, `points[1]` = 다음 꺾임점
  * @param head   축척 고정 촉 길이(= `arrowHead` 이미지 px × zoom), 스크린 px
@@ -281,7 +286,6 @@ export function polylineLength(pts: readonly SPoint[]): number {
 export function resolveArrowHead(
   points: readonly SPoint[],
   head: number,
-  ratio: number = ARROW_HEAD_MAX_RATIO,
 ): { head: number; ref: SPoint } | null {
   if (points.length < 2) return null;
   const tip = points[0]!;
@@ -289,7 +293,8 @@ export function resolveArrowHead(
   const v = sub(next, tip);
   const len = Math.hypot(v.x, v.y);
   if (len < 0.5) return null;
-  const h = Math.min(head, polylineLength(points) * ratio);
+  // 길이에 따른 축소 없음 — 촉은 도면 축척에만 매인다
+  const h = head;
   const u = { x: v.x / len, y: v.y / len };
   // 첫 구간 클램프(len*0.5)가 h 를 깎지 않을 만큼만 뒤로 물린다. 방향은 그대로다
   const back = Math.max(len, h * 2);

@@ -12,7 +12,7 @@
  * 여기서 재는 것은 전부 **스크린 px** 다(§2-2-a). 정규화 공간에서 길이를 재면 종횡비 때문에 틀린다.
  */
 import { describe, expect, it } from 'vitest';
-import { ARROW_HEAD_MAX_RATIO, RENDER_DEFAULTS } from '../src/constants.js';
+import { RENDER_DEFAULTS } from '../src/constants.js';
 import { buildOverlay, buildScreens, type DrawOp } from '../src/renderModel.js';
 import { arrowHeadPolygon, polylineLength, resolveArrowHead } from '../src/shapes.js';
 import type { Defect, Mark, MarkGeometry, NPoint, Selection, SPoint } from '../src/types.js';
@@ -105,12 +105,33 @@ describe('resolveArrowHead — 상한 기준이 첫 구간이 아니라 전체 �
     expect(Math.hypot(tri[0]!.x - mid.x, tri[0]!.y - mid.y)).toBeCloseTo(22, 6);
   });
 
-  it('아주 짧은 화살표에서만 전체 길이의 절반으로 줄어든다 (Q67 B안 — 안전장치 유지)', () => {
-    const pts: SPoint[] = [
+  it('짧은 화살표에서도 촉이 안 줄어든다 (2026-09-03 재수정 — Q67 A안)', () => {
+    // 안전진단 지시선은 짧은 경우가 많다. 길이에 따라 촉이 변하면 도면마다 크기가 달라 보인다
+    const short: SPoint[] = [
       { x: 0, y: 0 },
       { x: 20, y: 0 },
     ];
-    expect(resolveArrowHead(pts, 22)!.head).toBeCloseTo(20 * ARROW_HEAD_MAX_RATIO, 6);
+    const long: SPoint[] = [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+    ];
+    expect(resolveArrowHead(short, 22)!.head).toBe(22);
+    expect(resolveArrowHead(long, 22)!.head).toBe(22);
+    expect(resolveArrowHead(short, 22)!.head).toBe(resolveArrowHead(long, 22)!.head);
+  });
+
+  it('첫 지시선 길이를 바꿔도 촉 크기가 같다 — 사용자가 신고한 바로 그 케이스', () => {
+    const shortFirst: SPoint[] = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 300 },
+    ];
+    const longFirst: SPoint[] = [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 300 },
+    ];
+    expect(resolveArrowHead(shortFirst, 22)!.head).toBe(resolveArrowHead(longFirst, 22)!.head);
   });
 
   it('점이 모자라거나 첫 구간이 0 길이면 null', () => {

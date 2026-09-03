@@ -19,11 +19,12 @@ import {
   describeCommand,
   EMPTY_HISTORY,
   initialCanvasState,
-  alignLabelsToGrid,
+  alignLabelsOrthogonal,
   canSetStatus,
   effectiveLabelNorm,
   isLocked,
-  labelGridStepImgPx,
+  labelAlignGapImgPx,
+  labelAlignToleranceImgPx,
   resolveStyle,
   memoTargetsOf,
   pushHistory,
@@ -596,8 +597,10 @@ function setDefectStatus(
 /**
  * P-2 (D28 · Q71) — 지금 열린 도면의 번호 풍선을 격자에 맞춰 정렬한다.
  *
- * · 격자 간격 = `balloonRadius × 2.5`(이미지 px). 도면별 번호 크기(`labelScale`)가
- *   이미 `balloonRadius` 에 반영돼 있어 **도면마다 자동으로 맞고 새 저장 필드가 안 생긴다**
+ * · **직교 정렬** — 서로 가까운 것끼리 같은 세로줄·가로줄로 모은다. 허용오차는 풍선 **지름**
+ *   (`balloonRadius × 2`, 이미지 px). 도면별 번호 크기(`labelScale`)가 이미 `balloonRadius` 에
+ *   반영돼 있어 **도면마다 자동으로 맞고 새 저장 필드가 안 생긴다**
+ *   (2026-09-03 — 절대 격자는 칸이 풍선 하나 크기라 거의 안 움직였다. 사용자 신고로 재작성)
  * · 대상 = 지금 열린 도면 전체. **잠긴 결함(전회차·보수완료)은 제외** — 기존 잠금 규칙과 일관
  * · 결함점(마크)은 안 움직인다. 움직이는 것은 풍선뿐이고 지시선이 따라 늘어난다
  * · 커맨드 **하나** 로 올린다 → Ctrl+Z 한 번에 정렬 전체가 되돌아간다
@@ -627,8 +630,9 @@ function alignLabels(state: AppState): AppState {
     return { defectId: d.id, x: p.x, y: p.y };
   });
 
-  const stepImgPx = labelGridStepImgPx(global.balloonRadius);
-  const after = alignLabelsToGrid(before, stepImgPx / iw, stepImgPx / ih);
+  const tolPx = labelAlignToleranceImgPx(global.balloonRadius);
+  const gapPx = labelAlignGapImgPx(global.balloonRadius);
+  const after = alignLabelsOrthogonal(before, tolPx / iw, tolPx / ih, gapPx / ih);
 
   const items = before.map((b, i) => {
     const a = after[i]!;
@@ -650,7 +654,7 @@ function alignLabels(state: AppState): AppState {
   }
 
   const committed = applyAndPush(state, { k: 'ALIGN_LABELS', items });
-  return withToast(committed, 'info', `번호 ${moved.length}개를 정렬했습니다`, true);
+  return withToast(committed, 'info', `번호 ${moved.length}개를 줄 맞춰 정렬했습니다`, true);
 }
 
 function applyAndPush(state: AppState, c: Command): AppState {

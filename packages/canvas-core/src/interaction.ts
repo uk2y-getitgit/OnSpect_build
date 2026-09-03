@@ -2451,7 +2451,9 @@ function onKeyDown(
   }
 
   if (key === 'Delete' || key === 'Backspace') {
-    if (!s.selection.defectId) return ok(s, ctx);
+    // C-4 — 영역선택은 단일 `selection` 을 비운다. `defectId` 만 보면 여기서 막혀
+    // `onDelete` 의 다중 분기까지 가지도 못한다 (사용자 신고 2026-09-03)
+    if (!s.selection.defectId && s.multi.length === 0) return ok(s, ctx);
     return onDelete(s, ctx);
   }
 

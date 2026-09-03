@@ -1,81 +1,160 @@
 /**
- * P-2 (D28 · Q71) — 번호 풍선 격자 스냅 정렬.
+ * P-2 — 번호 풍선 **직교 정렬** (2026-09-03 재작성).
  *
- * 회귀 위험 두 가지를 고정한다:
- *  ① **결정성** — 같은 입력이면 언제나 같은 그림. 두 번 눌러 결과가 달라지면 보고서 재현이 깨진다
- *  ② **종횡비** — 정규화 공간에서 균등 격자를 만들면 도면이 가로로 길 때 격자가 찌그러진다
+ * 회귀 위험 세 가지를 고정한다:
+ *  ① **실제로 줄이 선다** — 이전 절대격자 판은 칸이 풍선 하나 크기라 거의 안 움직였다
+ *  ② **결정성** — 같은 입력이면 언제나 같은 그림. 두 번 눌러 결과가 달라지면 보고서 재현이 깨진다
+ *  ③ **종횡비** — 가로·세로 허용오차를 따로 받는다
  */
 import { describe, expect, it } from 'vitest';
 import {
-  alignLabelsToGrid,
+  alignLabelsOrthogonal,
   applyCommand,
   invertCommand,
-  labelGridStepImgPx,
-  LABEL_GRID_FACTOR,
+  labelAlignGapImgPx,
+  labelAlignToleranceImgPx,
+  LABEL_ALIGN_TOLERANCE_FACTOR,
   type Command,
+  type LabelGridItem,
 } from '../src/index.js';
 import { defect } from './helpers.js';
 
-describe('alignLabelsToGrid — 격자 스냅', () => {
-  it('가장 가까운 격자점으로 옮긴다', () => {
-    const out = alignLabelsToGrid([{ defectId: 'a', x: 0.11, y: 0.19 }], 0.1, 0.1);
-    expect(out[0]!.x).toBeCloseTo(0.1, 10);
-    expect(out[0]!.y).toBeCloseTo(0.2, 10);
+const TOL = 0.05;
+const GAP = 0.06;
+
+describe('alignLabelsOrthogonal — 줄 맞추기', () => {
+  it('조금씩 어긋난 x 들이 **하나의 세로줄**로 모인다 — 이것이 "직교" 다', () => {
+    const out = alignLabelsOrthogonal(
+      [
+        { defectId: 'a', x: 0.30, y: 0.10 },
+        { defectId: 'b', x: 0.32, y: 0.40 },
+        { defectId: 'c', x: 0.31, y: 0.70 },
+      ],
+      TOL,
+      TOL,
+      GAP,
+    );
+    expect(out[0]!.x).toBeCloseTo(out[1]!.x, 12);
+    expect(out[1]!.x).toBeCloseTo(out[2]!.x, 12);
+    // 평균으로 잡는다 — 한쪽으로 끌려가지 않는다
+    expect(out[0]!.x).toBeCloseTo(0.31, 12);
+  });
+
+  it('조금씩 어긋난 y 들이 하나의 가로줄로 모인다', () => {
+    const out = alignLabelsOrthogonal(
+      [
+        { defectId: 'a', x: 0.10, y: 0.50 },
+        { defectId: 'b', x: 0.40, y: 0.52 },
+      ],
+      TOL,
+      TOL,
+      GAP,
+    );
+    expect(out[0]!.y).toBeCloseTo(out[1]!.y, 12);
+  });
+
+  it('멀리 떨어진 것은 다른 줄로 남는다 — 도면 전체가 한 줄로 빨려들지 않는다', () => {
+    const out = alignLabelsOrthogonal(
+      [
+        { defectId: 'a', x: 0.10, y: 0.10 },
+        { defectId: 'b', x: 0.90, y: 0.10 },
+      ],
+      TOL,
+      TOL,
+      GAP,
+    );
+    expect(out[0]!.x).not.toBeCloseTo(out[1]!.x, 6);
+  });
+
+  it('조금씩 어긋난 값이 사슬처럼 이어져도 덩어리 폭은 허용오차를 안 넘는다', () => {
+    // 0.30 · 0.34 · 0.38 · 0.42 — 이웃 간격은 전부 0.04(<0.05) 지만 전체 폭은 0.12
+    const out = alignLabelsOrthogonal(
+      [
+        { defectId: 'a', x: 0.30, y: 0.1 },
+        { defectId: 'b', x: 0.34, y: 0.3 },
+        { defectId: 'c', x: 0.38, y: 0.5 },
+        { defectId: 'd', x: 0.42, y: 0.7 },
+      ],
+      TOL,
+      TOL,
+      GAP,
+    );
+    const lines = new Set(out.map((o) => o.x.toFixed(6)));
+    expect(lines.size).toBeGreaterThan(1);
   });
 
   it('입력 순서를 그대로 지킨다 — 호출자가 인덱스로 짝지을 수 있어야 한다', () => {
-    const out = alignLabelsToGrid(
+    const out = alignLabelsOrthogonal(
       [
         { defectId: 'z', x: 0.9, y: 0.9 },
         { defectId: 'a', x: 0.1, y: 0.1 },
       ],
-      0.1,
-      0.1,
+      TOL,
+      TOL,
+      GAP,
     );
     expect(out.map((o) => o.defectId)).toEqual(['z', 'a']);
   });
 
-  it('stepX 와 stepY 가 다르면 각 축을 따로 스냅한다 (종횡비 보정)', () => {
-    const out = alignLabelsToGrid([{ defectId: 'a', x: 0.26, y: 0.26 }], 0.5, 0.1);
-    expect(out[0]!.x).toBeCloseTo(0.5, 10);
-    expect(out[0]!.y).toBeCloseTo(0.3, 10);
-  });
-
-  it('같은 칸으로 반올림되는 둘은 겹치지 않는다', () => {
-    const out = alignLabelsToGrid(
+  it('같은 자리로 겹친 둘은 세로줄을 유지한 채 아래로 밀린다', () => {
+    const out = alignLabelsOrthogonal(
       [
         { defectId: 'a', x: 0.5, y: 0.5 },
         { defectId: 'b', x: 0.51, y: 0.5 },
       ],
-      0.1,
-      0.1,
+      TOL,
+      TOL,
+      GAP,
     );
-    expect(`${out[0]!.x},${out[0]!.y}`).not.toBe(`${out[1]!.x},${out[1]!.y}`);
+    expect(out[0]!.x).toBeCloseTo(out[1]!.x, 12); // 같은 세로줄
+    expect(Math.abs(out[0]!.y - out[1]!.y)).toBeCloseTo(GAP, 12); // 겹치지 않는다
   });
 
   it('결정적이다 — 같은 입력을 두 번 넣으면 같은 결과', () => {
-    const input = [
+    const input: LabelGridItem[] = [
       { defectId: 'c', x: 0.5, y: 0.5 },
       { defectId: 'a', x: 0.5, y: 0.5 },
       { defectId: 'b', x: 0.5, y: 0.5 },
     ];
-    expect(alignLabelsToGrid(input, 0.1, 0.1)).toEqual(alignLabelsToGrid(input, 0.1, 0.1));
+    expect(alignLabelsOrthogonal(input, TOL, TOL, GAP)).toEqual(
+      alignLabelsOrthogonal(input, TOL, TOL, GAP),
+    );
   });
 
-  it('이미 격자에 맞은 것은 그대로 둔다', () => {
-    const out = alignLabelsToGrid([{ defectId: 'a', x: 0.3, y: 0.4 }], 0.1, 0.1);
-    expect(out[0]!.x).toBeCloseTo(0.3, 10);
-    expect(out[0]!.y).toBeCloseTo(0.4, 10);
+  it('한 번 정렬한 결과를 다시 정렬해도 그대로다 (멱등)', () => {
+    const input: LabelGridItem[] = [
+      { defectId: 'a', x: 0.30, y: 0.10 },
+      { defectId: 'b', x: 0.32, y: 0.40 },
+      { defectId: 'c', x: 0.31, y: 0.70 },
+    ];
+    const once = alignLabelsOrthogonal(input, TOL, TOL, GAP);
+    expect(alignLabelsOrthogonal(once, TOL, TOL, GAP)).toEqual(once);
   });
 
-  it('간격이 0 이하면 아무것도 안 옮긴다 (도면 크기를 아직 모를 때)', () => {
+  it('가로·세로 허용오차를 따로 쓴다 (종횡비 보정)', () => {
+    const out = alignLabelsOrthogonal(
+      [
+        { defectId: 'a', x: 0.30, y: 0.30 },
+        { defectId: 'b', x: 0.34, y: 0.34 },
+      ],
+      0.1, // x 는 넉넉 → 같은 세로줄
+      0.01, // y 는 빡빡 → 다른 가로줄
+      GAP,
+    );
+    expect(out[0]!.x).toBeCloseTo(out[1]!.x, 12);
+    expect(out[0]!.y).not.toBeCloseTo(out[1]!.y, 6);
+  });
+
+  it('허용오차가 0 이하면 아무것도 안 옮긴다 (도면 크기를 아직 모를 때)', () => {
     const input = [{ defectId: 'a', x: 0.123, y: 0.456 }];
-    expect(alignLabelsToGrid(input, 0, 0.1)).toEqual(input);
-    expect(alignLabelsToGrid(input, 0.1, -1)).toEqual(input);
+    expect(alignLabelsOrthogonal(input, 0, TOL, GAP)).toEqual(input);
+    expect(alignLabelsOrthogonal(input, TOL, -1, GAP)).toEqual(input);
   });
 
-  it('격자 간격은 풍선 크기에 비례한다 — 새 저장 필드가 필요 없는 이유', () => {
-    expect(labelGridStepImgPx(34)).toBe(34 * LABEL_GRID_FACTOR);
+  it('허용오차는 풍선 지름 — 새 저장 필드가 필요 없는 이유', () => {
+    expect(labelAlignToleranceImgPx(34)).toBe(34 * LABEL_ALIGN_TOLERANCE_FACTOR);
+    // 미는 간격은 지름보다 넓어야 테두리가 안 닿는다
+    expect(labelAlignGapImgPx(34)).toBeGreaterThan(labelAlignToleranceImgPx(34));
   });
 });
 
