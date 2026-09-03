@@ -139,6 +139,82 @@ kbd {
   grid-template-columns: minmax(0, 1fr) var(--inspector-w);
 }
 
+/* ── T-8 · 결함정보 패널 폭 조절 (태블릿 가로 전용) ─────────────────────
+   경계는 CSS 그리드 열 경계라 폭이 0이다. 그래서 **투명 히트 띠**를 경계 위에 겹쳐 둔다.
+   ⭐ 상시 드래그가 아니라 **롱프레스 진입**이다 — 상시로 두면 이 띠가 캔버스 우측 끝을
+      덮어 결함 표기 오탭이 난다. 평소에는 눈에 보이지도 않는다.
+   ⚠️ 이 규칙은 `.app[data-shell='tablet-landscape']` 안에서만 산다. **PC 는 한 줄도 안 바뀐다.** */
+.body {
+  position: relative;
+}
+
+.inspector-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* 12px 띠를 경계선 위에 정확히 걸친다 (U50) */
+  right: calc(var(--inspector-w) - 6px);
+  width: 12px;
+  z-index: 6;
+  touch-action: none;
+  cursor: col-resize;
+  background: transparent;
+}
+
+/* 진입 전에는 아무것도 보이지 않는다 */
+.inspector-resize::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition:
+    background var(--t-hover),
+    width var(--t-hover),
+    left var(--t-hover);
+}
+
+/* 롱프레스가 걸린 뒤에만 경계선이 파랗게 굵어진다 */
+.app[data-resizing='on'] .inspector-resize::before {
+  left: 3px;
+  width: 6px;
+  background: var(--accent);
+}
+
+.app[data-resizing='on'] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* 드래그 중에는 패널 폭이 프레임마다 바뀐다 — 전이가 붙으면 손끝을 늦게 따라온다 */
+.app[data-resizing='on'] .body {
+  transition: none;
+}
+
+/* ── T-8 · 패널 내부는 **CSS 만으로** 폭에 반응한다 (U51) ────────────────
+   JS 로 폭을 읽어 리렌더하면 드래그 중 60fps 가 안 나온다.
+   버튼 그리드·사진 타일은 원래 `auto-fill` 이라 폭을 따라가고,
+   넓혀 놓았을 때만 손가락 타깃을 키운다. */
+.app[data-shell='tablet-landscape'] .inspector {
+  container-type: inline-size;
+  container-name: inspector;
+}
+
+@container inspector (min-width: 380px) {
+  .inspector .idf-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+  .inspector .idf-presetgrid {
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  }
+  .inspector .photos__grid {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  }
+}
+
 @media (max-width: 1200px) {
   :root {
     --sidebar-w: 232px;

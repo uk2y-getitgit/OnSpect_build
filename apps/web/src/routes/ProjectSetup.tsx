@@ -26,7 +26,6 @@ import {
   validateFloorName,
   type Building,
   type CopyStructureResult,
-  clampScale,
   DEFAULT_DRAWING_TITLE_BLOCK,
   fitRectToImgLayout,
   isA4Normalized,
@@ -52,7 +51,11 @@ import {
   renormalizeAll,
   type RenormalizeCounts,
 } from '../data/renormalize';
-import { scaledImgLayout } from '../data/imageIngest';
+import {
+  applyDrawingScale,
+  drawingScaleAppliedMessage,
+  SCALE_NEEDS_A4_MESSAGE,
+} from '../data/drawingScale';
 
 type Editing =
   | { kind: 'BUILDING'; id: string; value: string }
@@ -346,28 +349,21 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
    */
   const applyScale = useCallback(
     (dw: Drawing, raw: number) => {
-      const next = clampScale(raw);
-      const from = clampScale(dw.imgScale ?? 1);
-      if (!dw.imgLayout) {
-        toast('이 도면은 A4 정규화 전에 등록되었습니다. 먼저 [A4로 맞추기]를 해주세요', {
-          kind: 'warn',
-        });
+      // P-1 — 계산은 `data/drawingScale.ts` 한 벌뿐이다. 캔버스 상단바 진입점과 같은 것을 쓴다
+      const r = applyDrawingScale(dw, raw);
+      if (!r.ok) {
+        toast(SCALE_NEEDS_A4_MESSAGE, { kind: 'warn' });
         return;
       }
       setScaleBusy(true);
-      const updated: Drawing = {
-        ...dw,
-        imgScale: next,
-        imgLayout: scaledImgLayout(dw.imgLayout, from, next),
-        updatedAt: Date.now(),
-      };
+      const updated = r.drawing;
       setDrawings((cur) => cur.map((d) => (d.id === dw.id ? updated : d)));
       releaseComposite(dw.id); // 캔버스가 새 배율로 다시 합성하도록
       void (async () => {
         if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
         setScaleBusy(false);
         setScaling(null);
-        toast(`도면 크기를 ${Math.round(next * 100)}%로 바꿨습니다`);
+        toast(drawingScaleAppliedMessage(r.scale));
       })();
     },
     [storage, guard, toast],

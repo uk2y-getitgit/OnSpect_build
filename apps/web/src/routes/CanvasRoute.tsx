@@ -8,7 +8,16 @@
  *   · 커맨드 확정 시점에만 저장한다. 드래그 중 매 프레임 저장하지 않는다
  *   · 250ms 디바운스. 단 `visibilitychange(hidden)` · `beforeunload` · 라우트 이탈 시 **즉시 플러시**
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as RPointerEvent,
+} from 'react';
 import {
   attrsOf,
   buildScreens,
@@ -55,7 +64,14 @@ import {
   clearCompositeCache,
   compositeUrl,
   needsCompose,
+  releaseComposite,
 } from '../canvas/drawingComposite';
+import { DrawingScaleDialog } from './DrawingScaleDialog';
+import {
+  applyDrawingScale,
+  drawingScaleAppliedMessage,
+  SCALE_NEEDS_A4_MESSAGE,
+} from '../data/drawingScale';
 import { useAppData } from '../data/appData';
 import { useLastView } from '../data/useLastView';
 import { usePhotos } from '../data/usePhotos';
@@ -72,7 +88,6 @@ import { navigate, replace } from '../router';
 import { TOUCH_HIT_PROFILE, useUiMode } from '../shell/useUiMode';
 import { InspectorPlacement, type SheetSnap } from '../shell/TabletSheet';
 import { FloorChips } from '../shell/FloorChips';
-import { Minimap } from '../shell/Minimap';
 import { Sidebar } from '../ui/Sidebar';
 import { Inspector } from '../ui/Inspector';
 import { SimilarDefectPicker, type SimilarDefectItem } from '../ui/SimilarDefectPicker';
@@ -88,6 +103,41 @@ const EMPTY_PHOTOS: Photo[] = [];
 const LABEL_SCALE_MIN = 0.5;
 const LABEL_SCALE_MAX = 2;
 const LABEL_SCALE_STEP = 0.1;
+
+/**
+ * T-8 — 태블릿 가로에서 결함정보 패널(`--inspector-w`) 폭을 손가락으로 바꾼다.
+ *
+ * ⭐ **롱프레스 진입이다. 상시 드래그가 아니다.**
+ *    경계는 CSS 그리드 열 경계라 폭이 0이다. 손가락으로 잡으려면 히트 띠를 넓혀야 하는데,
+ *    그 띠가 캔버스 우측 끝을 덮으면 **결함 표기 오탭**이 난다 — 현장에서 가장 비싼 실수다.
+ *    그래서 평소에는 아무 일도 하지 않고, 1초를 버텨야 리사이즈 모드로 들어간다.
+ *
+ * 파라미터는 U50 확정값이다.
+ */
+const RESIZE_HOLD_MS = 1000;
+const RESIZE_SLOP_PX = 8;
+const INSPECTOR_W_MIN = 260;
+const INSPECTOR_W_MAX_PX = 560;
+const INSPECTOR_W_MAX_RATIO = 0.6;
+/** 기기별 UI 선호값이다 — 프로젝트 데이터가 아니라 `localStorage` 에 둔다 (U49) */
+const INSPECTOR_W_KEY = 'onspect.inspectorW';
+
+function clampInspectorW(v: number, viewportW: number): number {
+  const max = Math.max(INSPECTOR_W_MIN, Math.min(viewportW * INSPECTOR_W_MAX_RATIO, INSPECTOR_W_MAX_PX));
+  return Math.round(Math.max(INSPECTOR_W_MIN, Math.min(max, v)));
+}
+
+function readStoredInspectorW(): number | null {
+  try {
+    const raw = window.localStorage.getItem(INSPECTOR_W_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    // 사파리 프라이빗 모드 등 — 폭 기억을 못 할 뿐, 화면은 기본값으로 그대로 뜬다
+    return null;
+  }
+}
 
 export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId: string | null }) {
   const { storage, guard } = useAppData();
@@ -113,6 +163,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [titling, setTitling] = useState(false);
   const [titleBusy, setTitleBusy] = useState(false);
   /**
+   * P-1 — 도면 이미지 축척 조절. **기능은 원래 있었다**(도면관리 안에만 있어 못 찾았다).
+   * 다이얼로그(`DrawingScaleDialog`)도 적용 로직(`data/drawingScale`)도 도면관리와 **같은 것**을 쓴다.
+   */
+  const [scaling, setScaling] = useState(false);
+  const [scaleBusy, setScaleBusy] = useState(false);
+  /**
    * D16 실시간 미리보기 — 도곽·범례 다이얼로그가 **저장 전에** 흘려보낸 임시 값.
    * `null` = 오버라이드 없음(저장된 값을 쓴다). 다이얼로그가 닫히면 항상 `null` 로 돌아온다.
    */
@@ -127,6 +183,59 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   /** 세로 태블릿에서만 결함정보가 바텀시트로 간다 (D10 · 스펙 §5-1) */
   const sheetMode = shell === 'tablet-portrait';
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('PEEK');
+
+  /**
+   * T-8 — 결함정보 패널 폭. `null` 이면 CSS 기본값(`--inspector-w`)을 그대로 쓴다.
+   * **가로 태블릿에서만** 조절한다 — 세로는 바텀시트라 폭이라는 개념이 없고, PC 는 요구가 없다.
+   */
+  const appRef = useRef<HTMLDivElement | null>(null);
+  const [inspectorW, setInspectorW] = useState<number | null>(() => readStoredInspectorW());
+  const [resizing, setResizing] = useState(false);
+  const resizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startW: number;
+    timer: number;
+    armed: boolean;
+  } | null>(null);
+  const resizeBandRef = useRef<HTMLDivElement | null>(null);
+
+  /** 진행 중인 롱프레스/드래그를 흔적 없이 정리한다 */
+  const endResize = useCallback((commit: boolean) => {
+    const st = resizeRef.current;
+    resizeRef.current = null;
+    if (!st) return;
+    window.clearTimeout(st.timer);
+    const band = resizeBandRef.current;
+    if (band?.hasPointerCapture(st.pointerId)) band.releasePointerCapture(st.pointerId);
+    if (!st.armed) return;
+    setResizing(false);
+    if (!commit) return;
+    // 드래그 중에는 DOM 의 CSS 변수만 갈았다(U51 — 프레임마다 리렌더하지 않는다).
+    // 놓는 순간 한 번만 React 상태·localStorage 로 확정한다
+    const el = appRef.current;
+    const raw = el ? Number.parseFloat(el.style.getPropertyValue('--inspector-w')) : NaN;
+    if (!Number.isFinite(raw)) return;
+    const next = clampInspectorW(raw, window.innerWidth);
+    setInspectorW(next);
+    try {
+      window.localStorage.setItem(INSPECTOR_W_KEY, String(next));
+    } catch {
+      // 저장에 실패해도 이번 세션의 폭은 유지된다
+    }
+  }, []);
+
+  /**
+   * 폭 조절이 의미 있는 화면인가.
+   * 세로 태블릿은 결함정보가 바텀시트라 폭이라는 개념이 없고, PC 는 이 요구가 없다
+   * → **PC 는 DOM 도 CSS 변수도 예전 그대로다 = 동작 변화 0.**
+   */
+  const canResizeInspector = tablet && !sheetMode;
+
+  /** 저장된 폭을 화면 크기에 맞춰 다시 가둔다 — 회전하면 상한(화면×0.6)이 바뀐다 */
+  const effectiveInspectorW =
+    inspectorW === null ? null : clampInspectorW(inspectorW, window.innerWidth);
 
   /**
    * T2-6 — 바텀시트가 실제로 잡아먹는 하단 px. `TabletSheet` 가 자신의 렌더 높이를
@@ -525,6 +634,115 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     [storage, guard, toast, project],
   );
 
+  /**
+   * T-8 — 롱프레스로 리사이즈 모드 진입.
+   *
+   * `1000ms` 동안 `8px` 이내로 버티면 들어간다. 그 전에 움직이면 취소다(U50).
+   * ⚠️ 취소된 제스처는 캔버스 팬으로 **넘어가지 않는다** — 이미 발생한 pointerdown 을
+   *    다른 요소로 다시 보낼 방법이 없다. 12px 띠 안에서만 생기는 손실이라 감수한다.
+   */
+  const onResizeDown = useCallback(
+    (e: RPointerEvent<HTMLDivElement>) => {
+      if (resizeRef.current) return;
+      const band = resizeBandRef.current;
+      const app = appRef.current;
+      if (!band || !app) return;
+      // 시작 폭은 **실제 계산값** 하나에서 읽는다 — 미디어쿼리든 저장값이든 이긴 것이 여기 남는다
+      const measured = Number.parseFloat(
+        window.getComputedStyle(app).getPropertyValue('--inspector-w'),
+      );
+      const startW = Number.isFinite(measured) ? measured : INSPECTOR_W_MIN;
+      const pointerId = e.pointerId;
+      resizeRef.current = {
+        pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        startW,
+        armed: false,
+        timer: window.setTimeout(() => {
+          const st = resizeRef.current;
+          if (!st || st.pointerId !== pointerId) return;
+          st.armed = true;
+          setResizing(true);
+          // 손끝에 "잡혔다"를 알린다. 지원하지 않는 기기에서는 조용히 넘어간다
+          try {
+            navigator.vibrate?.(12);
+          } catch {
+            /* 진동은 있으면 좋고 없어도 그만이다 */
+          }
+        }, RESIZE_HOLD_MS),
+      };
+      band.setPointerCapture(pointerId);
+    },
+    [],
+  );
+
+  const onResizeMove = useCallback(
+    (e: RPointerEvent<HTMLDivElement>) => {
+      const st = resizeRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      if (!st.armed) {
+        const moved = Math.hypot(e.clientX - st.startX, e.clientY - st.startY);
+        if (moved > RESIZE_SLOP_PX) endResize(false);
+        return;
+      }
+      // ⭐ React 상태를 갈지 않는다. CSS 변수만 직접 쓴다 (U51 — 드래그 중 리렌더 0)
+      const app = appRef.current;
+      if (!app) return;
+      // 패널은 오른쪽에 있다 — 왼쪽으로 끌수록 넓어진다
+      const next = clampInspectorW(st.startW + (st.startX - e.clientX), window.innerWidth);
+      app.style.setProperty('--inspector-w', `${next}px`);
+    },
+    [endResize],
+  );
+
+  const onResizeUp = useCallback(
+    (e: RPointerEvent<HTMLDivElement>) => {
+      const st = resizeRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      endResize(true);
+    },
+    [endResize],
+  );
+
+  const onResizeCancel = useCallback(
+    (e: RPointerEvent<HTMLDivElement>) => {
+      const st = resizeRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      endResize(false);
+    },
+    [endResize],
+  );
+
+  /**
+   * P-1 · F5-3 — 도면 이미지 배율 적용. 계산은 `data/drawingScale.ts` 한 벌뿐이고
+   * `ProjectSetup` 의 [크기] 진입점과 **완전히 같은 결과**를 낸다.
+   * ⚠️ 결함·메모 좌표는 건드리지 않는다. `renormalizeAll` 을 부르지 않는다.
+   */
+  const applyScale = useCallback(
+    (raw: number) => {
+      if (!currentDrawing) return;
+      const r = applyDrawingScale(currentDrawing, raw);
+      if (!r.ok) {
+        // 옛 도면은 여기서 자동 정규화하지 않는다 — 그러면 기존 결함 좌표가 전부 옮겨진다
+        toast(SCALE_NEEDS_A4_MESSAGE, { kind: 'warn' });
+        setScaling(false);
+        return;
+      }
+      setScaleBusy(true);
+      const updated = r.drawing;
+      setDrawings((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      releaseComposite(updated.id); // 새 배율로 다시 합성하도록 런타임 캐시만 버린다
+      void (async () => {
+        if (storage.phase === 'READY') await guard(() => storage.repo.putDrawing(updated));
+        setScaleBusy(false);
+        setScaling(false);
+        toast(drawingScaleAppliedMessage(r.scale));
+      })();
+    },
+    [currentDrawing, storage, guard, toast],
+  );
+
   /** F6 — 번호 풍선 크기 조절. `imgScale`(F5-3)과 달리 결함 좌표를 전혀 건드리지 않는다 */
   const setLabelScale = useCallback(
     (next: number) => {
@@ -711,7 +929,19 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
 
   return (
     // `data-shell` — T2-1. `pc` 에는 어떤 CSS 규칙도 걸려 있지 않다(styles.css "T2-1" 절)
-    <div className="app" data-sidebar={sidebarOpen ? 'open' : 'closed'} data-shell={shell}>
+    <div
+      className="app"
+      ref={appRef}
+      data-sidebar={sidebarOpen ? 'open' : 'closed'}
+      data-shell={shell}
+      data-resizing={resizing ? 'on' : undefined}
+      /* T-8 — 저장된 패널 폭. `null` 이면 스타일시트 기본값이 그대로 이긴다 */
+      style={
+        canResizeInspector && effectiveInspectorW !== null
+          ? ({ '--inspector-w': `${effectiveInspectorW}px` } as CSSProperties)
+          : undefined
+      }
+    >
       <header className="topbar">
         <div className="topbar__left">
           <button
@@ -887,10 +1117,38 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
               </svg>
             </button>
           </div>
+
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title="A4 지면 안에서 도면 그림이 차지하는 크기를 바꿉니다 (결함 표기 위치는 그대로)"
+            disabled={!currentDrawing}
+            onClick={() => setScaling(true)}
+          >
+            도면 크기
+          </button>
         </div>
       </header>
 
       <div className="body">
+        {/*
+          T-8 — 결함정보 패널 경계의 **투명 히트 띠**(12px). 평소에는 아무 일도 하지 않는다.
+          1초를 버텨야 리사이즈 모드로 들어간다 — 상시 드래그로 두면 이 띠가 캔버스 우측 끝을
+          덮어 결함 표기 오탭이 난다. 가로 태블릿에서만 존재한다(세로는 바텀시트, PC 는 요구 없음)
+        */}
+        {canResizeInspector && (
+          <div
+            ref={resizeBandRef}
+            className="inspector-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="결함정보 패널 폭 조절 — 1초간 누르고 있으면 조절 모드로 들어갑니다"
+            onPointerDown={onResizeDown}
+            onPointerMove={onResizeMove}
+            onPointerUp={onResizeUp}
+            onPointerCancel={onResizeCancel}
+          />
+        )}
         {sidebarOpen && (
           <Sidebar
             buildings={buildings}
@@ -971,17 +1229,9 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             />
           )}
 
-          {/* T2-4 — 미니맵. 이동은 CENTER_ON_NORM(코어, Phase5 트랙A) 그대로 재사용 */}
-          {tablet && (
-            <Minimap
-              drawingUrl={drawingUrl}
-              imageWidth={currentDrawing?.imageWidth ?? 0}
-              imageHeight={currentDrawing?.imageHeight ?? 0}
-              viewport={state.canvas.viewport}
-              canvas={state.canvas.canvas}
-              onCenterOn={(n) => send({ k: 'CENTER_ON_NORM', n })}
-            />
-          )}
+          {/* T-9 — 미니맵은 **띄우지 않는다**(사용자 요청: 태블릿에서 도면을 가린다).
+              ⚠️ `shell/Minimap.tsx` 는 지우지 않았다(U52) — 되살리려면 이 자리에 다시 걸면 된다.
+              이동은 `CENTER_ON_NORM`(코어) 이라 코어 쪽은 손댈 것이 없다 */}
 
           {/* D22 안내 띠 + `[여기]` — **호스트 밖**에 둔다(엄지가 핀치 접점으로 세어지지 않게).
               `data-floating` 을 붙이지 않는다 — 붙이면 조준을 켤 때마다 도면이 움찔한다 */}
@@ -1171,6 +1421,18 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           }}
           onClose={() => {
             if (!titleBusy) setTitling(false);
+          }}
+        />
+      )}
+
+      {scaling && currentDrawing && (
+        <DrawingScaleDialog
+          drawing={currentDrawing}
+          defectCount={defects.length}
+          busy={scaleBusy}
+          onApply={applyScale}
+          onClose={() => {
+            if (!scaleBusy) setScaling(false);
           }}
         />
       )}
