@@ -21,6 +21,19 @@
   word-break: keep-all;
 }
 
+/*
+ * 2026-09-04 사용자 신고 — 인쇄(PDF로 저장)에서 회색 음영(머리말·번호칸·표 머리 등)이
+ * 안 나왔다. 브라우저는 기본적으로 배경색을 인쇄하지 않는다(사용자가 인쇄 대화상자에서
+ * "배경 그래픽"을 직접 켜야만 나온다) — 이 규칙이 없으면 그 설정을 안 켠 사람에게는
+ * 회색 칸이 전부 흰 배경으로 나간다. **모든 인쇄 뷰(손상결함표·사진첩·조사위치도)가
+ * `.pv-root` 를 공유**하므로 여기 한 번만 걸면 전부 적용된다.
+ */
+.pv-root,
+.pv-root * {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 /* 화면에서만 보이는 조작 막대. 인쇄물에는 나오지 않는다 */
 .pv-bar {
   position: sticky;
@@ -193,18 +206,26 @@
   font-size: 10pt;
 }
 
+/*
+ * 2026-09-04 5차 — 결함정보(캡션) 칸이 너무 높다는 신고로 셀 전체 높이를 줄였다.
+ * 근거: 프레임 footprint 56mm(사진 52mm + 위아래 여백 2mm씩, `.pv-pb-frame`) +
+ * 캡션 12mm(8.5pt·1.3줄간격 2줄 ≈ 7.8mm + 위아래 패딌 3mm) = 68mm.
+ * 이 값을 바꾸면 `.pv-pb-frame`/`.pv-pb-cap` 도 같이 맞춰야 캡션이 다시 넘치거나
+ * 빈 공간이 남는다.
+ */
 .pv-pb-cell {
-  height: 84mm;
+  height: 68mm;
   vertical-align: top;
   padding: 0;
 }
 
-/* 3차 수정 — 사진 칸 안쪽에 여백(margin)을 줘서 사진이 칸에 꽉 차 보이지 않게 한다.
-   자체 테두리를 두르므로(참고 양식처럼) 아래쪽에 별도 구분선이 필요 없다 */
+/* 3차 수정 — 사진 칸 안쪽에 여백(margin)만 준다. 2026-09-04 4차 — 사진 둘레 테두리는
+   사용자 신고로 뺐다(참고 양식에 없던 불필요한 선). 사진·캡션 구분선(border-bottom)만
+   유지한다 — 3차 이전과 같은 모양이다 */
 .pv-pb-frame {
   height: 52mm;
   margin: 2mm;
-  border: 0.3mm solid #1a1a1a;
+  border-bottom: 0.3mm solid #1a1a1a;
   display: flex;
   align-items: center;
   justify-content: center;
