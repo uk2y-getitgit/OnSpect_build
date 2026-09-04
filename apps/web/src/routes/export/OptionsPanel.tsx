@@ -192,7 +192,7 @@ export function OptionsPanel({ params, onChange, mapEnabled }: OptionsPanelProps
         */}
         <label
           className="xp-check"
-          title="결함번호·사진번호(정수)는 그대로입니다. 부번만 늘어납니다"
+          title="결함번호는 그대로입니다 — 같은 결함번호 칸이 사진 수만큼 반복됩니다"
         >
           <input
             type="checkbox"
@@ -201,19 +201,7 @@ export function OptionsPanel({ params, onChange, mapEnabled }: OptionsPanelProps
             checked={params.doc.includeNonPrimaryPhotos === true}
             onChange={(e) => setDoc({ includeNonPrimaryPhotos: e.target.checked })}
           />
-          <span>대표 외 사진 포함 (부번 12-1·12-2로 나갑니다·사진첩 장수가 늘어납니다)</span>
-        </label>
-        {/* F-4 — **표시만** 뺀다. 번호 자체와 `ExportRun.mapping` 은 그대로다 (불변식 #2) */}
-        <label
-          className="xp-check"
-          title="사진첩 캡션 1행만 숨깁니다. 손상결함표·결함리스트의 사진번호 열은 그대로입니다"
-        >
-          <input
-            type="checkbox"
-            checked={params.doc.hidePhotoNumber === true}
-            onChange={(e) => setDoc({ hidePhotoNumber: e.target.checked })}
-          />
-          <span>사진첩 사진번호 숨기기</span>
+          <span>대표 외 사진 포함 (결함 하나에 사진 여러 장 · 사진첩 장수가 늘어납니다)</span>
         </label>
       </fieldset>
     </div>

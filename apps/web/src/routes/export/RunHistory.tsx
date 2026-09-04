@@ -19,6 +19,11 @@ import {
 export type RunHistoryProps = {
   runs: readonly ExportRun[];
   /**
+   * 방금 `[생성]`으로 막 만든 이력의 id. 2026-09-04 — 처음 만들 때는 자동 다운로드하지
+   * 않으므로, 그 줄의 버튼만 "파일 받기"로 보여준다(다른 줄은 "같은 번호로 다시 받기").
+   */
+  lastRunId: string | null;
+  /**
    * ⭐ **이력마다 따로 물어본다** — `지금 그 이력의 조건이면 대상이 되었을 결함 id`.
    *
    * `run.mapping` 에는 **그 출력의 필터를 통과한 결함만** 들어 있다. 비교 대상을
@@ -45,6 +50,7 @@ const PRINTABLE: readonly ExportArtifactKind[] = [
 
 export function RunHistory({
   runs,
+  lastRunId,
   currentIdsFor,
   busyRunId,
   onRedownload,
@@ -105,10 +111,10 @@ export function RunHistory({
                 type="button"
                 className="btn btn--small"
                 disabled={busy}
-                title="그때 매긴 번호를 그대로 써서 엑셀·PNG 를 다시 내려받습니다 (재계산하지 않습니다)"
+                title="그때 매긴 번호를 그대로 써서 엑셀·PNG 를 내려받습니다 (재계산하지 않습니다)"
                 onClick={() => onRedownload(run)}
               >
-                {busy ? '만드는 중…' : '같은 번호로 다시 받기'}
+                {busy ? '만드는 중…' : run.id === lastRunId ? '파일 받기' : '같은 번호로 다시 받기'}
               </button>
               {PRINTABLE.map((k) => (
                 <button

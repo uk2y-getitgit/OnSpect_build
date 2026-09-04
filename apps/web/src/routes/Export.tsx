@@ -66,14 +66,19 @@ const REPEAT_ROW_NOTICE =
   `손상결함표가 여러 페이지로 나뉘면 엑셀에서 [페이지 레이아웃 → 인쇄 제목 → 반복할 행]에 ` +
   `${REPEAT_ROW_RANGE} 를 한 번 지정해 주세요 — 머리말이 페이지마다 반복됩니다.`;
 
-/** 산출물별 안내 — 무엇이 파일로 나오고 무엇이 인쇄 뷰인지 (M3 · K1) */
+/**
+ * 산출물별 안내 — 무엇이 파일로 나오고 무엇이 인쇄 뷰인지 (M3 · K1).
+ * 2026-09-04 — `[생성]`이 더 이상 자동으로 내려받지 않는다. 전부 "만든 뒤 아래 이력에서 받는다"로 통일
+ */
 const KIND_HINT: Record<ExportArtifactKind, string> = {
   DAMAGE_TABLE:
-    `엑셀 파일로 내려받습니다 (13열 · 층 섹션 · 원인 범례). ` +
-    `PDF 는 아래 이력에서 [손상결함표 PDF] (A4 가로). ${REPEAT_ROW_NOTICE}`,
-  DEFECT_LIST: '엑셀 파일로 내려받습니다 (9열 축약). PDF 는 아래 이력에서 [PDF로 인쇄]',
-  PHOTO_BOOK: '파일이 아니라 인쇄 뷰로 냅니다 — 생성 후 [사진첩 PDF] 를 누르세요',
-  LOCATION_MAP: '층마다 PNG 1장을 내려받습니다',
+    `엑셀(13열 · 층 섹션 · 원인 범례) 또는 PDF(A4 가로) — 만든 뒤 아래 이력의 ` +
+    `[파일 받기]·[손상결함표 PDF] 중 원하는 것을 누르세요. ${REPEAT_ROW_NOTICE}`,
+  DEFECT_LIST:
+    '엑셀(9열 축약) 또는 PDF — 만든 뒤 아래 이력의 [파일 받기]·[결함리스트 PDF] 중 원하는 것을 누르세요',
+  PHOTO_BOOK: '파일이 아니라 인쇄 뷰로 냅니다 — 만든 뒤 아래 이력의 [사진첩 PDF] 를 누르세요',
+  LOCATION_MAP:
+    '층별 PNG 또는 PDF — 만든 뒤 아래 이력의 [파일 받기]·[조사위치도 PDF] 중 원하는 것을 누르세요',
 };
 
 type ListDialog = { title: string; items: string[] } | null;
@@ -245,7 +250,12 @@ export function Export({ projectId }: { projectId: string }) {
           projectId,
         });
 
-        if (out.items.length > 0) await downloadSequential(out.items);
+        // 2026-09-04 — **처음 만들 때는 자동 다운로드하지 않는다**(사용자 신고: 체크한 자료가
+        // 한 번에 전부 자동 다운로드되는 게 번거롭다). 번호 스냅샷(`ExportRun`)만 남기고,
+        // 실제 파일은 아래 이력에서 [같은 번호로 다시 받기](엑셀·PNG) 또는 [···인쇄](PDF)로
+        // 그때그때 받는다 — 두 버튼 다 이미 있던 것을 그대로 쓴다.
+        // `opts.existing`(그 [다시 받기] 클릭)일 때는 지금처럼 바로 내려받는다.
+        if (opts.existing && out.items.length > 0) await downloadSequential(out.items);
 
         for (const a of out.artifacts) {
           await guard(() => repo.appendExportArtifact(record.id, a));
@@ -254,12 +264,13 @@ export function Export({ projectId }: { projectId: string }) {
         await reloadRuns();
 
         const parts: string[] = [];
-        if (out.items.length > 0) parts.push(`파일 ${out.items.length}개를 내려받았습니다`);
+        if (opts.existing) {
+          if (out.items.length > 0) parts.push(`파일 ${out.items.length}개를 내려받았습니다`);
+        } else {
+          parts.push('만들었습니다 — 아래 이력에서 받으세요');
+        }
         if (out.csvFallback.length > 0) parts.push(CSV_FALLBACK_NOTICE);
         for (const w of out.mapWarnings) parts.push(w.detail);
-        if (kindSet.has('PHOTO_BOOK') && !opts.existing) {
-          parts.push('사진첩은 아래 이력의 [사진첩 PDF] 로 인쇄하세요');
-        }
         toast(parts.join(' · ') || '출력할 것이 없습니다', {
           kind: out.mapWarnings.length > 0 || out.csvFallback.length > 0 ? 'warn' : 'info',
           ttl: 12000,
@@ -478,11 +489,13 @@ export function Export({ projectId }: { projectId: string }) {
           </h2>
           {lastRunId && (
             <p className="notice">
-              방금 만든 출력으로 인쇄하려면 아래 첫 줄의 <b>[… PDF]</b> 버튼을 누르세요.
+              방금 만든 출력은 아직 아무것도 안 받았습니다 — 아래 첫 줄에서{' '}
+              <b>[파일 받기]</b>(엑셀·PNG) 또는 <b>[… PDF]</b>를 눌러 필요한 것만 받으세요.
             </p>
           )}
           <RunHistory
             runs={runs}
+            lastRunId={lastRunId}
             currentIdsFor={currentIdsFor}
             busyRunId={busy && busy !== '생성' ? busy : null}
             onRedownload={(r) => void run(r.id, { existing: r })}

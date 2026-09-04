@@ -35,6 +35,8 @@ function def(id: string, over: Partial<DamageDefect> = {}): DamageDefect {
     widthMm: 0.2,
     lengthMm: 2500,
     areaM2: null,
+    areaWMm: null,
+    areaHMm: null,
     countEa: 2,
     progress: 'NONE',
     leak: false,

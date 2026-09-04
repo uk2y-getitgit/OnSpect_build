@@ -412,6 +412,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         : null,
       // C-2 — 도면마다 다른 풍선 배율. 전환과 **같은 액션**에 실어야 첫 입력이 어긋나지 않는다
       labelScale: currentDrawing?.labelScale ?? 1,
+      // D19 — 이 층의 출력 접두어. 캔버스 번호풍선도 출력과 같은 번호를 보여주려고 신설(2026-09-04)
+      floorCode: resolvedFloor.code ?? null,
     });
     // ⚠️ `labelScale` 을 의존성에 넣지 않는다 — `SET_FLOOR` 는 `SET_DRAWING` 을 태워
     //    **뷰포트를 다시 맞춘다.** 배율만 바뀐 경우는 아래 `SET_LABEL_SCALE` 이 따로 처리한다
@@ -580,7 +582,10 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
     [memoScreens, state.editingMemoId],
   );
 
-  const displayNumbers = useMemo(() => displayNumbersOf(defects), [defects]);
+  const displayNumbers = useMemo(
+    () => displayNumbersOf(defects, state.floorCode),
+    [defects, state.floorCode],
+  );
 
   // F5-1 도곽 — 저장 형태(project-core) → 렌더 형태(canvas-core) 로 잇는다 (D13).
   // ⭐ D16 — 값은 **용역**에서 온다. 도면에서 읽는 것은 `drawingName` 하나뿐.
@@ -1352,10 +1357,16 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             />
           </div>
 
-          {/* T2-3 — 층 전환 보완. Sidebar 트리를 대체하지 않는다(같은 onSelectFloor) */}
+          {/* T2-3 — 층 전환 보완. Sidebar 트리를 대체하지 않는다(같은 onSelectFloor).
+              2026-09-04 — 지금 작업 중인 도면과 같은 동의 층만 보인다(사용자 신고: 동이 여러 개면
+              칩 목록이 다른 동 층까지 다 섞여 나왔다). 다른 동으로 넘어가려면 사이드바 동·층 트리를 쓴다 */}
           {tablet && (
             <FloorChips
-              floors={orderedFloors}
+              floors={
+                resolvedFloor
+                  ? orderedFloors.filter((f) => f.buildingId === resolvedFloor.buildingId)
+                  : orderedFloors
+              }
               drawingByFloor={drawingByFloor}
               defectCountByFloor={defectCountByFloor}
               currentFloorId={resolvedFloor?.id ?? ''}

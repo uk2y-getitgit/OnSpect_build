@@ -258,7 +258,11 @@ export function PrintRoute({
       )}
       {data && kind === 'DEFECT_LIST' && listModel && <PrintDefectList model={listModel} />}
       {data && kind === 'PHOTO_BOOK' && (
-        <PrintPhotoBook pages={data.bookPages} images={data.photoImages?.byCell ?? {}} />
+        <PrintPhotoBook
+          pages={data.bookPages}
+          images={data.photoImages?.byCell ?? {}}
+          projectName={data.source.bundle.project.name}
+        />
       )}
       {data && kind === 'LOCATION_MAP' && <PrintLocationMap pages={data.maps} />}
     </div>

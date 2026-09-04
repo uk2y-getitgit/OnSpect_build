@@ -45,6 +45,7 @@ import {
   type Memo,
   type ReduceContext,
 } from '@onspect/canvas-core';
+import { assignNumbers, formatDefectNo, type NumberingDefect } from '@onspect/project-core';
 import { globalStyleForLabelScale } from './canvas/labelStyle';
 import type { ToastItem } from './ui/Overlays';
 
@@ -141,13 +142,27 @@ export type AppState = {
    * 돌려주므로 PC 기본 도면의 동작은 한 픽셀도 바뀌지 않는다(U47).
    */
   labelScale: number;
+  /**
+   * D19·D20 — 지금 층의 출력 접두어(`1F`·`B1F`…). `null` = 접두어 없음(옵트인 미설정).
+   *
+   * 2026-09-04 — 캔버스 번호풍선이 **입력순번이 아니라 출력과 같은 계산번호**를 보여주게 하려고
+   * 신설했다(`displayNumbersOf`). `labelScale`(C-2)과 같은 이유로 상태에 둔다 — `runInput`/
+   * `alignLabels`/화면 렌더 세 곳이 **같은 값**을 봐야 번호가 어긋나지 않는다(검수 심각2 전례).
+   */
+  floorCode: string | null;
   idSeed: number;
   toastSeed: number;
 };
 
 export type Action =
   | { t: 'INPUT'; ev: InputEvent }
-  | { t: 'SET_FLOOR'; floorId: string; drawing: DrawingRef | null; labelScale: number }
+  | {
+      t: 'SET_FLOOR';
+      floorId: string;
+      drawing: DrawingRef | null;
+      labelScale: number;
+      floorCode: string | null;
+    }
   | {
       t: 'LOAD';
       projectId: string;
@@ -231,6 +246,7 @@ export function initialAppState(init: {
     toolbarFor: null,
     hitProfile: null,
     labelScale: 1,
+    floorCode: null,
     idSeed: 1,
     toastSeed: 1,
   };
@@ -252,9 +268,42 @@ export function memosOfDrawing(memos: readonly Memo[], drawingId: string | null)
  * 캔버스가 그릴 숫자. **여기가 주입 지점이다** (§2-1-b).
  * Phase 4 조사위치도 출력은 같은 렌더 모델에 `assignNumbers()` 결과를 넣어 재사용한다.
  */
-export function displayNumbersOf(defects: readonly Defect[]): Record<string, string> {
+/**
+ * 캔버스 번호풍선에 보여줄 문자열.
+ *
+ * 2026-09-04 사용자 신고로 교체 — **더 이상 입력순번(`seq`)이 아니라 실제 출력과 같은
+ * 계산번호 + 층접두어**다. 예전엔 중간 결함을 지워도 남은 번호가 안 당겨지고, 새로 찍으면
+ * 항상 맨 끝 순번을 받아 "중간 번호를 다시 못 만든다"는 혼동을 줬다 — 정작 출력물(Export)은
+ * 이미 매번 새로 빈틈없이 번호를 매기고 있었다(`assignNumbers`). 여기서도 **같은 함수**를 써서
+ * 화면 표시와 출력이 어긋나지 않게 한다.
+ *
+ * ⚠️ **지금 층에 보이는 결함 전부를 대상으로, 상태·조사구분 필터 없이(전부 포함) 센다**
+ * (D-비차단 가정, 2026-09-04) — 그래야 화면에 그려진 결함마다 빠짐없이 번호가 붙는다.
+ * 실제 출력(Export 화면)에서 "보수완료 제외" 등 필터를 걸면, 그때 나온 진짜 출력번호가
+ * 캔버스에서 보던 번호와 달라질 수 있다 — 필터 설정에 따른 정상적인 차이다.
+ *
+ * `defects` 는 `defectsOfDrawing()` 로 **지금 도면 하나**로 이미 좁혀진 목록이어야 한다 —
+ * 아니면 다른 층 결함까지 세어 번호가 어긋난다(호출부 세 곳 모두 이미 그렇게 넘긴다).
+ *
+ * ⚠️ 렌더(`CanvasView`)·히트 판정(`ReduceContext.displayNumbers`)·자동정렬(`alignLabels`)이
+ * **전부 이 함수 하나만** 쓴다 — 두 벌로 만들면 반드시 어긋난다(검수 심각2 전례).
+ */
+export function displayNumbersOf(
+  defects: readonly Defect[],
+  floorCode: string | null,
+): Record<string, string> {
+  if (defects.length === 0) return {};
+  const floorId = defects[0]!.floorId;
+  const result = assignNumbers(defects as readonly NumberingDefect[], {
+    floorIds: [floorId],
+    mode: 'PER_FLOOR',
+    surveyKinds: null,
+    includeRepaired: true,
+    includePrevPending: true,
+    includeIncomplete: true,
+  });
   const out: Record<string, string> = {};
-  for (const d of defects) out[d.id] = String(d.seq);
+  for (const [id, v] of Object.entries(result.byDefect)) out[id] = formatDefectNo(v.no, floorCode);
   return out;
 }
 
@@ -323,6 +372,7 @@ function reduceApp(state: AppState, action: Action): AppState {
           ...state,
           floorId: action.floorId,
           labelScale: action.labelScale,
+          floorCode: action.floorCode,
           menu: null,
           confirm: null,
         },
@@ -466,7 +516,7 @@ function runInput(state: AppState, ev: InputEvent): AppState {
     defects: drawingDefects,
     // 히트 영역이 **그려진 풍선과 같아지도록** 번호를 넘긴다 (검수 심각2).
     // 화면 렌더(`CanvasView`)와 같은 소스를 쓴다 — 두 벌로 만들면 반드시 어긋난다
-    displayNumbers: displayNumbersOf(drawingDefects),
+    displayNumbers: displayNumbersOf(drawingDefects, state.floorCode),
     memos: memosOfDrawing(state.memos, drawingId),
     // C-2 — 화면과 **같은 소스**. 하드코딩된 34 를 쓰면 히트 영역이 보이는 풍선과 어긋난다
     globalStyle: globalStyleForLabelScale(state.labelScale),
@@ -642,7 +692,7 @@ function alignLabels(state: AppState): AppState {
 
   const global = globalStyleForLabelScale(state.labelScale);
   // 화면 렌더와 **같은 소스**로 번호를 넘긴다 — 넓어진 풍선만큼 자동 배치가 더 밀린다
-  const numbers = displayNumbersOf(onDrawing);
+  const numbers = displayNumbersOf(onDrawing, state.floorCode);
   // 정규화 → **이미지 px**. 가로·세로 중 어느 쪽이 가까운지 정규화 좌표로 재면
   // 종횡비 때문에 틀린다 — 가로로 긴 도면은 같은 정규화 거리라도 실제로는 가로가 더 멀다
   const before = targets.map((d) => {

@@ -154,12 +154,16 @@ export function defectListModel(
 }
 
 /**
- * ⭐ `params` 는 **선택이 아니다** — `doc.includeNonPrimaryPhotos`(§2-8)·`doc.hidePhotoNumber`(F-4)를
- *    넘기지 않으면 옵션을 켜도 사진첩이 안 바뀐다. 넘겨받은 것은 `ExportRun.params` 이므로
+ * ⭐ `params` 는 **선택이 아니다** — `doc.includeNonPrimaryPhotos`(§2-8)를 넘기지 않으면
+ *    옵션을 켜도 사진첩이 안 바뀐다. 넘겨받은 것은 `ExportRun.params` 이므로
  *    **재출력 때도 같은 옵션이 그대로 재현된다.**
  *
- * ⚠️ 두 옵션 모두 `assignNumbers()`·`ExportRun.mapping` 을 건드리지 않는다 (불변식 #2).
- *    부번은 배치 단계의 파생값이고, 숨김은 표시만 뺀 것이다.
+ * ⚠️ 이 옵션은 `assignNumbers()`·`ExportRun.mapping` 을 건드리지 않는다 (불변식 #2) — 부번은
+ *    배치 단계의 파생값이다.
+ *
+ * `doc.hidePhotoNumber`(F-4)는 더 이상 쓰지 않는다 — 2026-09-04 양식 개정으로 캡션의
+ * 사진번호 자체가 없어졌다(결함번호로 대체). 저장 스키마(`ExportParams.hidePhotoNumber`)는
+ * 옛 이력 재현을 위해 그대로 두되, 여기서는 읽지 않는다.
  */
 export function photoBookModel(
   src: ExportSource,
@@ -170,14 +174,15 @@ export function photoBookModel(
     rows: plan.rows,
     defects: src.bundle.defects,
     photosByDefect: groupPhotosByDefect(src.bundle.photos),
-    // 사진첩 캡션 2행의 `위치` 는 손상결함표 `위치` 열과 **같은 규칙**이다 (K17)
+    // 사진첩 캡션의 `위치` 는 손상결함표 `위치` 열과 **같은 규칙**이다 (K17)
     locations: buildLocations({
       defects: src.bundle.defects,
       floors: src.bundle.floors,
       buildings: src.bundle.buildings,
     }),
+    // D19 — 좌측 번호 칸도 손상결함표·조사위치도와 같은 접두어를 쓴다(2026-09-04)
+    floorCodes: floorCodesFor(src, params),
     includeNonPrimary: params.doc.includeNonPrimaryPhotos === true,
-    hidePhotoNumber: params.doc.hidePhotoNumber === true,
   });
 }
 

@@ -13,8 +13,11 @@ export type SizeInput = {
   sizeMode: SizeMode;
   widthMm: number | null;
   lengthMm: number | null;
-  /** AREA 모드의 직접 입력값 */
+  /** AREA 모드의 직접 입력값(예전 레코드에만 남은 값 — D31) */
   areaM2: number | null;
+  /** AREA 모드의 가로·세로 보조 입력(D31). 둘 다 있으면 이게 진실이다 */
+  areaWMm: number | null;
+  areaHMm: number | null;
   countEa: number | null;
 };
 
@@ -43,8 +46,12 @@ export function effectiveAreaM2(a: SizeInput): number | null {
 
 /**
  * 손상결함표 4열. **개소는 어디에도 곱하지 않는다.**
- * `sizeMode === 'AREA'` 면 폭·길이는 **0** 으로 낸다(실측 누수흔적 행 `0 / 0 / 0.5`).
- * 가로×세로로 계산해 넣은 경우도 저장 시점에 `areaM2` 로 합쳐지므로 마찬가지로 0 이다(Q19 · F4).
+ *
+ * `sizeMode === 'AREA'` 면:
+ *   · 가로·세로 보조값(`areaWMm`/`areaHMm`, D31 `RECT` 출처)이 있으면 **그 값을 폭·길이 열에 그대로 낸다**
+ *     — 면적도 거기서 다시 계산한다(`displayAreaM2` 와 같은 원칙: 계산이 저장값보다 이긴다).
+ *     2026-09-04 사용자 신고(Q79)로 뒤집었다 — 예전엔(Q19) 여기서 무조건 0 이었다.
+ *   · 가로·세로가 없는 **예전 직접입력분**(`LEGACY_DIRECT`)은 보여줄 폭·길이가 없으므로 여전히 0.
  */
 export function outputSize(a: SizeInput): {
   widthMm: number;
@@ -54,6 +61,9 @@ export function outputSize(a: SizeInput): {
 } {
   const countEa = a.countEa ?? 1;
   if (a.sizeMode === 'AREA') {
+    if (a.areaWMm !== null && a.areaHMm !== null && a.areaWMm > 0 && a.areaHMm > 0) {
+      return { widthMm: a.areaWMm, lengthMm: a.areaHMm, areaM2: areaFromMm(a.areaWMm, a.areaHMm), countEa };
+    }
     return { widthMm: 0, lengthMm: 0, areaM2: a.areaM2 ?? 0, countEa };
   }
   const widthMm = a.widthMm ?? 0;

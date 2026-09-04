@@ -146,26 +146,48 @@
   margin-right: 2mm;
 }
 
-/* ── 사진첩 (2열 × 3행) ─────────────────────────────────────────────────── */
-.pv-photos {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6mm 6mm;
-}
-
-/* 마지막 페이지가 6 으로 안 나눠떨어져도 **칸 크기를 유지한다** (§3-6) */
-.pv-cell {
-  break-inside: avoid;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 84mm;
-}
-
-.pv-cell__frame {
+/* ── 사진첩 (2열 × 3행) — 2026-09-04 양식 개정, 참고 PDF 재현 ────────────────── */
+.pv-pb {
   width: 100%;
-  height: 68mm;
-  border: 0.3mm solid #666;
+  height: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.pv-pb td {
+  border: 0.3mm solid #1a1a1a;
+}
+
+.pv-pb-head {
+  background: #d9d9d9;
+  color: #1a1a1a;
+  font-weight: 700;
+  font-size: 11pt;
+  text-align: center;
+  padding: 2.5mm;
+}
+
+/* 좌측 결함번호 칸 — 사진번호 대신 층접두어 결함번호를 쓴다(2026-09-04) */
+.pv-pb-no {
+  width: 13%;
+  background: #d9d9d9;
+  color: #1a1a1a;
+  text-align: center;
+  vertical-align: middle;
+  font-weight: 700;
+  font-size: 10pt;
+}
+
+.pv-pb-cell {
+  width: 37%;
+  height: 84mm;
+  vertical-align: top;
+  padding: 0;
+}
+
+.pv-pb-frame {
+  height: 62mm;
+  border-bottom: 0.3mm solid #1a1a1a;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -173,19 +195,20 @@
   background: #fff;
 }
 
-.pv-cell__frame img {
+.pv-pb-frame img {
   display: block;
 }
 
-.pv-cell__caption {
-  margin-top: 1.5mm;
-  text-align: center;
+.pv-pb-cap {
+  padding: 1.2mm 2mm;
   font-size: 8.5pt;
-  line-height: 1.35;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
-.pv-cell__caption b {
-  font-weight: 700;
+/* 표 안이라도 행 하나가 페이지 경계에서 잘리지 않게 */
+.pv-pb tr {
+  break-inside: avoid;
 }
 
 /* ── 조사위치도 ─────────────────────────────────────────────────────────── */
