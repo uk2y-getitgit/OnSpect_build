@@ -177,3 +177,24 @@
 
 **16건 판정: 전부 구현 완료 + 실사용 2라운드 반영(D35~D37) + code-reviewer 검수 조건부 통과.**
 타입검사 3워크스페이스 0오류 · 단위테스트 **823개 통과**(canvas-core 470 · project-core 353) · 프로덕션 빌드 통과.
+
+---
+
+# 라운드: Phase 5 트랙1 재착수 — 개인 로그인 + 동기화 (2026-09-04)
+
+요청 원문: "로그인, 동기화 기능구현. 우선 실사용테스트를 위한 개인아이디만 구성하고
+테스트 후 정식 서버 구현예정이야." 확정: D39·D40(Q75).
+
+**범위:** 개인 계정 1개 로그인(이메일+비번, Supabase 표준) + 프로젝트 단위 [동기화] 버튼(push/pull).
+**범위 밖(다음 "정식 서버" 라운드):** 팀원 발급 API, 팀 관리 화면, 합성 이메일(아이디 로그인).
+
+| # | 작업 | 담당 | 상태 |
+|---|---|---|---|
+| L0 | 차단질문(로그인 방식·service_role 상태) 확정 → D39·D40 | 리더 | ✅ 완료 |
+| L1 | Supabase 클라이언트 배선 — `@supabase/supabase-js` 추가, IndexedDB(meta KV) 기반 커스텀 세션 저장소, `autoRefreshToken:false`(오프라인 규칙 §3-4) | builder | ⬜ |
+| L2 | 로그인 화면 + 오프라인 로그인 규칙(세션 있으면 건너뜀, 토큰 만료돼도 앱은 정상 동작) | builder | ⬜ |
+| L3 | 동기화 대상 정의 + push(로컬→서버) — Project/Building/Floor/Drawing/Defect/Memo/Photo, blob(render+thumb 전부, source는 정책대로) | builder | ⬜ |
+| L4 | pull(서버→로컬) + LWW 병합(D23, updatedAt null=미동기화) | builder | ⬜ |
+| L5 | [동기화] 버튼 UI(프로젝트별) + 진행률·결과·충돌 안내 | builder | ⬜ |
+| L6 | 코드 검수 — RLS 의존 코드·인증 흐름 경계면 집중 | code-reviewer | ⬜ |
+| LZ | 통합 판정 — 타입·테스트·빌드 | 리더 | ⬜ |
