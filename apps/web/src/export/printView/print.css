@@ -179,8 +179,14 @@
   table-layout: fixed;
 }
 
+/*
+ * 2026-09-04 — **모든 테두리선을 `1px`로 통일**(사용자 신고: 인쇄하면 선 굵기가 안 고르다).
+ * `0.3mm` ≈ 1.13px — 정수가 아니라 표의 `border-collapse` 로 합쳐지는 선과 독립된 선
+ * (`.pv-pb-frame` 의 구분선)의 반올림 방식이 달라 굵기가 미묘하게 어긋난다. 아래
+ * `.pv-pb-frame` 의 `border-bottom` 도 반드시 같은 `1px` 를 쓴다.
+ */
 .pv-pb td {
-  border: 0.3mm solid #1a1a1a;
+  border: 1px solid #1a1a1a;
 }
 
 /* 머리말 — `{용역명} - {동이름}`(동이 하나뿐일 때만, `photoBookHeaderText`). 높이를 명시적으로
@@ -213,19 +219,29 @@
  * 이 값을 바꾸면 `.pv-pb-frame`/`.pv-pb-cap` 도 같이 맞춰야 캡션이 다시 넘치거나
  * 빈 공간이 남는다.
  */
+/*
+ * 2026-09-04 — **세로 배치(flex-column)로 바꿨다.** 캡션(`.pv-pb-cap`)이 `flex:1`로
+ * 남는 공간을 전부 갖고, 그 안에서 `align-items:center`로 글이 1줄이든 2줄이든
+ * **세로 가운데 정렬**된다(사용자 신고: 1줄/2줄일 때 위치가 안 맞았다).
+ *
+ * ⚠️ **사진을 감싸는 테두리는 만들지 않는다** — 사용자가 명시적으로 반려했다.
+ *    `.pv-pb-frame` 은 여전히 `border-bottom` 하나뿐이다(구분선). 사방 테두리로
+ *    되돌리지 말 것.
+ */
 .pv-pb-cell {
   height: 68mm;
   vertical-align: top;
   padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* 3차 수정 — 사진 칸 안쪽에 여백(margin)만 준다. 2026-09-04 4차 — 사진 둘레 테두리는
-   사용자 신고로 뺐다(참고 양식에 없던 불필요한 선). 사진·캡션 구분선(border-bottom)만
-   유지한다 — 3차 이전과 같은 모양이다 */
+/* 사진 칸 안쪽에 여백(margin)만 준다. 사진·캡션 구분선(border-bottom)만 유지한다 —
+   사방 테두리는 사용자가 반려했으므로 만들지 않는다(위 주석 참고) */
 .pv-pb-frame {
   height: 52mm;
   margin: 2mm;
-  border-bottom: 0.3mm solid #1a1a1a;
+  border-bottom: 1px solid #1a1a1a;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -237,13 +253,19 @@
   display: block;
 }
 
-/* 3차 수정 — 가운데 정렬 + 줄바꿈은 띄어쓰기 단위로(`.pv-root` 의 word-break:keep-all 을
-   그대로 따른다 — 여기서 `overflow-wrap:anywhere` 를 걸면 글자 중간이 잘려 그 규칙이 깨진다) */
+/* 가운데 정렬(가로) + 줄바꿈은 띄어쓰기 단위로(`.pv-root` 의 word-break:keep-all 을
+   그대로 따른다 — 여기서 `overflow-wrap:anywhere` 를 걸면 글자 중간이 잘려 그 규칙이 깨진다).
+   세로 가운데 정렬도 함께 — `.pv-pb-cell` 의 flex 자식으로 `flex:1` + `align-items:center` */
 .pv-pb-cap {
-  padding: 1mm 2mm 2mm;
+  flex: 1;
+  min-height: 0;
+  padding: 0 2mm;
   font-size: 8.5pt;
   line-height: 1.3;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 표 안이라도 행 하나가 페이지 경계에서 잘리지 않게 */
