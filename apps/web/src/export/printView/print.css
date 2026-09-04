@@ -244,6 +244,18 @@
   flex-direction: column;
 }
 
+/*
+ * ⚠️⚠️⚠️ 임시 디버그 — 확인 끝나면 지운다 (2026-09-04) ⚠️⚠️⚠️
+ * 목업(화면)과 실제 PDF가 자꾸 어긋나 보여서, 진짜 인쇄 결과물에 각 영역 경계를
+ * 색으로 표시했다. `outline` 은 레이아웃 크기에 영향을 안 준다 — 지금 치수를
+ * 하나도 안 바꾸고 경계만 보여준다.
+ *   빨강 점선 = 결함정보 칸(<td> 전체, 68mm) · 파랑 점선 = 사진 프레임 영역 ·
+ *   초록 점선 = 캡션(결함정보 텍스트) 영역
+ */
+.pv-pb-cell { outline: 1.5px dashed #d0342c; outline-offset: -1px; }
+.pv-pb-frame { outline: 1.5px dashed #2d6cdf; outline-offset: -1px; }
+.pv-pb-cap { outline: 1.5px dashed #2d8a66; outline-offset: -1px; }
+
 /* 사진 칸 안쪽에 여백(margin)만 준다. 사진·캡션 구분선(border-bottom)만 유지한다 —
    사방 테두리는 사용자가 반려했으므로 만들지 않는다(위 주석 참고) */
 .pv-pb-frame {
