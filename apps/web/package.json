@@ -12,6 +12,7 @@
   "dependencies": {
     "@onspect/canvas-core": "*",
     "@onspect/project-core": "*",
+    "@supabase/supabase-js": "^2.115.0",
     "fflate": "^0.8.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

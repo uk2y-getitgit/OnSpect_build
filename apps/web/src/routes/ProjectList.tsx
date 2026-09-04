@@ -19,6 +19,7 @@ import { estimateStorage } from '../data/idb/db';
 import { exportProjectToZip, importProjectFromZip } from '../data/projectTransfer';
 import { seedSampleProject, SAMPLE_SUMMARY } from '../data/sampleProject';
 import { navigate } from '../router';
+import { SyncButton } from './SyncButton';
 import { BusyButton, EmptyState } from '../ui/Form';
 import { MoreMenu } from '../ui/Menu';
 import { useToast } from '../ui/ToastHost';
@@ -304,6 +305,9 @@ export function ProjectList() {
                     </span>
                   </span>
                 </button>
+
+                {/* Phase 5 — 프로젝트별 수동 동기화. **누를 때만** 통신한다(§3-7 규칙 0) */}
+                <SyncButton projectId={s.project.id} projectName={name} />
 
                 <MoreMenu
                   label={`${name} 추가 작업`}

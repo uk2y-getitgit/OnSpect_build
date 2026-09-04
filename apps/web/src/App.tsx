@@ -5,6 +5,7 @@
  * **모든 화면에 걸치는 것**(저장 실패 배너 · 전역 토스트)만 다룬다.
  */
 import { AppDataProvider, useAppData } from './data/appData';
+import { SessionProvider, useSession } from './data/session';
 import { deleteDatabase } from './data/idb/db';
 import { useServiceWorker } from './pwa/useServiceWorker';
 import { useRoute } from './router';
@@ -15,6 +16,7 @@ import { Export } from './routes/Export';
 import { ProjectForm } from './routes/ProjectForm';
 import { ProjectList } from './routes/ProjectList';
 import { ProjectSetup } from './routes/ProjectSetup';
+import { Login } from './routes/Login';
 import { Settings } from './routes/Settings';
 import { ToastHost } from './ui/ToastHost';
 import { useState } from 'react';
@@ -25,9 +27,11 @@ import { useTheme } from './shell/useTheme';
 export default function App() {
   return (
     <AppDataProvider>
-      <ToastHost>
-        <Shell />
-      </ToastHost>
+      <SessionProvider>
+        <ToastHost>
+          <Shell />
+        </ToastHost>
+      </SessionProvider>
     </AppDataProvider>
   );
 }
@@ -41,6 +45,8 @@ function Shell() {
   const { theme, setTheme } = useTheme();
   // 서비스워커 등록(P2)과 새 버전 감지(P4). 등록 실패는 앱을 막지 않는다
   const { updateAvailable, applying, applyUpdate } = useServiceWorker();
+  // 로그인 게이트 (Phase 5 §3-4). **네트워크를 타지 않는다** — meta KV 1건 읽기가 전부다
+  const session = useSession();
 
   // 인쇄 뷰는 **앱 셸 밖**이다 (§4-9) — 배너·초기화 버튼이 인쇄물에 섞이면 안 된다
   if (route.name === 'EXPORT_PRINT') {
@@ -48,6 +54,14 @@ function Shell() {
       <PrintRoute projectId={route.projectId} runId={route.runId} kind={route.kind} />
     );
   }
+
+  /*
+   * 세션이 **아예 없을 때만** 로그인 화면이다 (§3-4). 토큰이 만료돼도 여기 오지 않는다 —
+   * 결함 입력·사진·캔버스·출력은 전부 로컬이라 토큰이 필요 없고, 막히는 것은 [동기화] 하나뿐이다.
+   * `DISABLED`(= `.env.local` 없음)면 게이트를 걸지 않는다 — 이 앱은 로그인 없이도 동작한다.
+   */
+  if (session.status === 'LOADING') return <div className="shell" />;
+  if (session.status === 'SIGNED_OUT') return <Login />;
 
   return (
     <div className="shell">
@@ -114,6 +128,11 @@ function Shell() {
 
       {route.name === 'LIST' && (
         <div className="shell__corner">
+          {/*
+            D26 — **로그아웃 버튼을 만들지 않는다.** 1기기 = 1사용자이고, 계정 전환은
+            바로 옆 `[로컬 데이터 초기화]` 로 한다. 지금 누구인지만 보여준다.
+          */}
+          {session.user && <span className="shell__account">{session.user.email}</span>}
           {tablet && (
             <button
               type="button"
