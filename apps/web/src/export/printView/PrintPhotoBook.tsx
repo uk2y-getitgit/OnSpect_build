@@ -100,15 +100,20 @@ function PhotoCells({ cell, image }: { cell: PhotoBookCell; image: PhotoBookImag
     <>
       <td className="pv-pb-no">{cell.defectNo}</td>
       <td className="pv-pb-cell">
-        <div className="pv-pb-frame">
-          {image ? (
-            // 인쇄 전에 `decode()` 를 기다린다 — 안 기다리면 빈 칸이 인쇄된다 (§4-9)
-            <img src={image.url} alt={cell.caption} style={frameStyle(cell, image)} />
-          ) : (
-            <span className="pv-status">사진을 불러오지 못했습니다</span>
-          )}
+        {/* 세로 가운데 정렬용 flex 컨테이너는 <td> 가 아니라 이 안쪽 div 에 건다 —
+            <td> 자체에 display:flex 를 걸면 표-셀 레이아웃과 상호작용이 브라우저마다
+            달라 행 높이가 의도한 68mm 보다 줄어들고 사진이 잘렸다(2026-09-04 사용자 신고) */}
+        <div className="pv-pb-inner">
+          <div className="pv-pb-frame">
+            {image ? (
+              // 인쇄 전에 `decode()` 를 기다린다 — 안 기다리면 빈 칸이 인쇄된다 (§4-9)
+              <img src={image.url} alt={cell.caption} style={frameStyle(cell, image)} />
+            ) : (
+              <span className="pv-status">사진을 불러오지 못했습니다</span>
+            )}
+          </div>
+          <div className="pv-pb-cap">{cell.caption}</div>
         </div>
-        <div className="pv-pb-cap">{cell.caption}</div>
       </td>
     </>
   );
@@ -120,8 +125,10 @@ function EmptyCells() {
     <>
       <td className="pv-pb-no" />
       <td className="pv-pb-cell">
-        <div className="pv-pb-frame" />
-        <div className="pv-pb-cap" />
+        <div className="pv-pb-inner">
+          <div className="pv-pb-frame" />
+          <div className="pv-pb-cap" />
+        </div>
       </td>
     </>
   );
