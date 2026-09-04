@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { formatDateTime, formatRelative } from '@onspect/project-core';
+import { useAppData } from '../data/appData';
 import { useSession } from '../data/session';
 import {
   clearConflicts,
@@ -25,6 +26,7 @@ import { BusyButton, Modal } from '../ui/Form';
 
 export function SyncButton({ projectId, projectName }: { projectId: string; projectName: string }) {
   const { status } = useSession();
+  const { reload } = useAppData();
   const [state, setState] = useState<SyncState | null>(null);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
@@ -53,8 +55,12 @@ export function SyncButton({ projectId, projectName }: { projectId: string; proj
       setBusy(false);
       setStage('');
       setState(await readSyncState(projectId));
+      // `sync.ts` 는 `repo`/`appData` 를 거치지 않고 IndexedDB 에 직접 쓴다. 이걸 부르지 않으면
+      // `50건 반영` 이라고 표시되는데 목록의 `도면 n장 · 결함 n건` 은 그대로라
+      // 사용자는 동기화가 실패했다고 오해한다(검수 보통4).
+      reload();
     }
-  }, [busy, projectId]);
+  }, [busy, projectId, reload]);
 
   const openConflicts = useCallback(async () => {
     setViewing(await readConflicts(projectId));

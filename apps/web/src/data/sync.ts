@@ -36,14 +36,24 @@ import {
   type DeletionEntry,
   type DeletionKind,
 } from '@onspect/project-core';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getBlobIn, releaseBlobIn, revokeUrl, type BlobRecord } from './idb/blobs.js';
 import { getAllByIndex, openDb, reqAsPromise, STORE, txDone, type StoreName } from './idb/db.js';
+import { unrecordDeletions } from './idb/deletionLog.js';
 import { getSupabase } from './supabaseClient.js';
 
 // ── 상수 · 타입 ────────────────────────────────────────────────────────────
 
 export const SYNC_STATE_KEY_PREFIX = 'sync:';
 export const SYNC_CONFLICT_KEY_PREFIX = 'syncConflict:';
+/**
+ * 이 프로젝트 경로(`{teamId}/{projectId}/{key}`)로 **업로드를 마친** Blob 키 목록.
+ * 서버 `blobs` 의 PK 가 `key` 전역이라(스키마 동결) 프로젝트별 업로드 여부를 서버만으로는
+ * 알 수 없다 — 회차 승계(`repo.retainBlobIn`)로 두 용역이 같은 키를 공유하면 오판정한다(검수 심각3).
+ * 그래서 **성공한 업로드만** 로컬에 기록해 재업로드를 막는다. 실패한 키는 기록되지 않으므로
+ * 다음 동기화에서 자동으로 다시 시도된다(검수 심각2).
+ */
+export const SYNC_BLOB_KEY_PREFIX = 'syncBlob:';
 /** 진 쪽 레코드 보관 상한 (§3-7) */
 export const CONFLICT_KEEP = 50;
 
@@ -142,6 +152,37 @@ export function syncStateKey(projectId: string): string {
 
 export function syncConflictKey(projectId: string): string {
   return `${SYNC_CONFLICT_KEY_PREFIX}${projectId}`;
+}
+
+export function syncBlobKey(projectId: string): string {
+  return `${SYNC_BLOB_KEY_PREFIX}${projectId}`;
+}
+
+/** 이 용역 경로로 업로드를 마친 Blob 키 (위 접두어 주석 참조) */
+async function readUploadedBlobKeys(db: IDBDatabase, projectId: string): Promise<Set<string>> {
+  const tx = db.transaction(STORE.meta, 'readonly');
+  const row = await reqAsPromise<MetaRow | undefined>(
+    tx.objectStore(STORE.meta).get(syncBlobKey(projectId)),
+  );
+  const v = row?.value;
+  if (!Array.isArray(v)) return new Set();
+  return new Set(v.filter((k): k is string => typeof k === 'string'));
+}
+
+/** **성공한 업로드만** 넣는다 — 실패한 키가 여기 들어가면 영영 재시도되지 않는다 */
+async function addUploadedBlobKeys(
+  db: IDBDatabase,
+  projectId: string,
+  added: readonly string[],
+): Promise<void> {
+  if (added.length === 0) return;
+  const tx = db.transaction(STORE.meta, 'readwrite');
+  const store = tx.objectStore(STORE.meta);
+  const row = await reqAsPromise<MetaRow | undefined>(store.get(syncBlobKey(projectId)));
+  const prev = Array.isArray(row?.value) ? (row.value as string[]) : [];
+  const next = [...new Set([...prev, ...added])];
+  store.put({ key: syncBlobKey(projectId), value: next } satisfies MetaRow);
+  await txDone(tx);
 }
 
 function isSyncState(v: unknown): v is SyncState {
@@ -365,6 +406,31 @@ async function putLocalProject(db: IDBDatabase, project: Project): Promise<void>
   await txDone(tx);
 }
 
+/** 소프트 삭제된 것까지 **전부**. "서버에만 있는 용역" 판정의 기준이라 걸러내면 안 된다 */
+async function readLocalProjectIds(db: IDBDatabase): Promise<Set<string>> {
+  const tx = db.transaction(STORE.projects, 'readonly');
+  const keys = await reqAsPromise<IDBValidKey[]>(tx.objectStore(STORE.projects).getAllKeys());
+  return new Set(keys.filter((k): k is string => typeof k === 'string'));
+}
+
+/**
+ * pull 로 **되살아난** 레코드를 삭제 기록에서 뺀다 (검수 심각4).
+ *
+ * 안 빼면 `deleted:{projectId}` 에 id 가 영원히 남아, 이후 push 가 그 레코드를 계속 건너뛴다 —
+ * 그 기기에서 아무리 고쳐도 서버에 안 올라간다. 로그에서 **빼는** 방향이라 되먹임은 없다.
+ * (Ctrl+Z 되살리기 경로 `repo.ts:131` 이 쓰는 것과 같은 함수다)
+ */
+async function forgetDeletions(
+  db: IDBDatabase,
+  projectId: string,
+  ids: readonly string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const tx = db.transaction(STORE.meta, 'readwrite');
+  await unrecordDeletions(tx, projectId, ids);
+  await txDone(tx);
+}
+
 /**
  * D23 — `updatedAt === null` 인 옛 결함에 **첫 동기화 시각**을 부여하고 로컬에도 기록한다.
  * 로컬에 써 두지 않으면 매번 다시 "미동기화"로 잡히고 영원히 LWW 에서 진다.
@@ -390,6 +456,118 @@ async function stampNullUpdatedAt(
 // ── 본체 ───────────────────────────────────────────────────────────────────
 
 /**
+ * 세션과 팀 소속을 확인하고 `teamId` 를 돌려준다.
+ * **여기서만 네트워크 세션 갱신을 허용한다**(§3-4) — 앱 시작 경로는 이 함수를 부르지 않는다.
+ * 호출처는 `[동기화]` · `[서버에서 받기]` 버튼 클릭 두 곳뿐이다.
+ */
+async function resolveTeamId(sb: SupabaseClient): Promise<string> {
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) throw new SyncError('다시 로그인해야 동기화됩니다');
+
+  const memberRes = await sb.from('team_members').select('team_id').limit(1).maybeSingle();
+  if (memberRes.error) throw new SyncError(`팀 정보를 읽지 못했습니다 — ${memberRes.error.message}`);
+  const teamId = (memberRes.data as { team_id?: string } | null)?.team_id;
+  if (!teamId) throw new SyncError('이 계정이 아직 팀에 등록되지 않았습니다');
+  return teamId;
+}
+
+/** `[서버에서 받기]` 목록의 한 줄 — 서버에는 있고 **이 기기에는 없는** 용역 (D42) */
+export type RemoteProject = {
+  id: string;
+  updatedAt: number;
+  /** 서버가 보관한 `Project` 레코드 통째. 목록 표시용이자 그대로 로컬에 심는 값이다 */
+  project: Project;
+};
+
+type ServerProjectRow = {
+  id: string;
+  updated_at: number;
+  deleted_at: number | null;
+  payload: Project | null;
+};
+
+/**
+ * D42 — 서버(내 팀)의 용역 중 **로컬에 없는 id** 만 고른다.
+ *
+ * ⭐ 네트워크는 `[서버에서 받기]` 를 **누른 순간에만** 열린다(§3-7 규칙 0).
+ *    마운트 시 자동 조회를 붙이지 마라.
+ * 팀 범위 필터는 RLS(`my_team_id()`)가 강제한다 — 클라이언트가 `team_id` 를 믿고 거르지 않는다.
+ */
+export async function listRemoteProjects(): Promise<RemoteProject[]> {
+  const sb = getSupabase();
+  if (!sb) throw new SyncError('서버 연결 정보가 설정되지 않았습니다');
+  const opened = await openDb();
+  if (!opened.ok) throw new SyncError(`로컬 저장소를 열 수 없습니다 — ${opened.message}`);
+
+  const teamId = await resolveTeamId(sb); // 팀 미소속이면 여기서 명확한 문구로 끝난다
+  const localIds = await readLocalProjectIds(opened.db);
+
+  const out: RemoteProject[] = [];
+  for (let from = 0; ; ) {
+    // 팀 격리의 정본은 RLS 다. `team_id` 필터는 그 위에 한 겹 더 두는 방어다
+    const res = await sb
+      .from('projects')
+      .select('id,updated_at,deleted_at,payload')
+      .eq('team_id', teamId)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    const rows = must(res, '서버 용역 목록을 읽지 못했습니다') as ServerProjectRow[];
+    for (const r of rows) {
+      if (r.deleted_at !== null) continue; // 서버에서 지운 용역은 권하지 않는다
+      if (localIds.has(r.id)) continue; // 이미 있으면 그 행의 `[동기화]` 가 담당한다
+      if (!r.payload || typeof r.payload !== 'object') continue;
+      out.push({ id: r.id, updatedAt: r.updated_at, project: { ...r.payload, id: r.id } });
+    }
+    // 서버가 요청한 만큼 주지 않아도(`db-max-rows`) 진행하도록 받은 수만큼 전진한다
+    if (rows.length === 0 || rows.length < PAGE) break;
+    from += rows.length;
+  }
+  return out;
+}
+
+/**
+ * D42 — 서버에만 있는 용역을 **서버 id 그대로** 이 기기에 심는다.
+ *
+ * ⛔ `projectTransfer.ts`(D38 파일 가져오기)와 **완전히 다른 경로**다. 저쪽은 id 를 전부
+ *    새로 발급해 서버와 무관한 별개 용역을 만든다 — 그래서 두 기기 병합이 원리적으로
+ *    성립하지 않았다(검수 심각1). 여기서는 id 를 한 글자도 바꾸지 않는다.
+ *
+ * 하는 일은 `projects` 1행을 로컬에 쓰는 것뿐이고, **나머지는 평범한 `syncProject`** 다 —
+ * 로컬이 텅 빈 상태의 pull 이라 기존 엔진이 그대로 전부(동·층·도면·결함·사진·메모 + Blob)를 당긴다.
+ */
+export async function adoptRemoteProject(
+  projectId: string,
+  onStage?: (label: string) => void,
+): Promise<SyncOutcome> {
+  const sb = getSupabase();
+  if (!sb) throw new SyncError('서버 연결 정보가 설정되지 않았습니다');
+  const opened = await openDb();
+  if (!opened.ok) throw new SyncError(`로컬 저장소를 열 수 없습니다 — ${opened.message}`);
+
+  onStage?.('로그인 확인 중…');
+  const teamId = await resolveTeamId(sb);
+
+  const localIds = await readLocalProjectIds(opened.db);
+  if (!localIds.has(projectId)) {
+    onStage?.('용역 정보 받는 중…');
+    const res = await sb
+      .from('projects')
+      .select('id,updated_at,deleted_at,payload')
+      .eq('team_id', teamId)
+      .eq('id', projectId)
+      .maybeSingle();
+    if (res.error) throw new SyncError(`용역 정보를 읽지 못했습니다 — ${res.error.message}`);
+    const row = res.data as ServerProjectRow | null;
+    if (!row?.payload) throw new SyncError('서버에 이 용역이 없습니다');
+    if (row.deleted_at !== null) throw new SyncError('서버에서 삭제된 용역입니다');
+    // 서버 id 그대로. `deletedAt` 만 정리한다(서버 tombstone 판정은 `deleted_at` 컬럼이 정본)
+    await putLocalProject(opened.db, { ...row.payload, id: projectId, deletedAt: null });
+  }
+
+  return syncProject(projectId, onStage);
+}
+
+/**
  * `[동기화]` 버튼 **클릭에서만** 불린다 (§3-7 규칙 0).
  *
  * 5단계. 어느 단계에서 끊겨도 로컬 데이터는 손상되지 않는다:
@@ -411,14 +589,7 @@ export async function syncProject(
 
   // ── 0. 세션 · 팀 ────────────────────────────────────────────────────────
   stage('로그인 확인 중…');
-  // 여기서만 네트워크 갱신을 허용한다(§3-4) — 앱 시작 경로는 이 함수를 부르지 않는다
-  const { data: sessionData } = await sb.auth.getSession();
-  if (!sessionData.session) throw new SyncError('다시 로그인해야 동기화됩니다');
-
-  const memberRes = await sb.from('team_members').select('team_id').limit(1).maybeSingle();
-  if (memberRes.error) throw new SyncError(`팀 정보를 읽지 못했습니다 — ${memberRes.error.message}`);
-  const teamId = (memberRes.data as { team_id?: string } | null)?.team_id;
-  if (!teamId) throw new SyncError('이 계정이 아직 팀에 등록되지 않았습니다');
+  const teamId = await resolveTeamId(sb);
 
   const state = await readSyncState(projectId);
   const local = await readLocal(db, projectId);
@@ -432,11 +603,11 @@ export async function syncProject(
   let deletedRemote = 0;
   let blobsUploaded = 0;
   let blobsDownloaded = 0;
+  let maxServerUpdatedAt = state.cursor;
 
   // ── 1. 서버 색인 (payload 없이) ──────────────────────────────────────────
   stage('서버 목록 확인 중…');
   const serverIndex = new Map<string, ServerIndexRow>();
-  let maxServerUpdatedAt = state.cursor;
   for (let from = 0; ; from += PAGE) {
     const res = await sb
       .from('records')
@@ -488,24 +659,28 @@ export async function syncProject(
     );
     if (up.error) throw new SyncError(`용역 정보를 올리지 못했습니다 — ${up.error.message}`);
     if (localProject !== local.project) await putLocalProject(db, localProject);
-  } else if (serverProject) {
-    // 서버가 이겼다 — 레코드 통째로 받는다(필드 병합 금지)
-    if (serverProject.updated_at !== localProject.updatedAt) {
-      conflicts.push({
-        at: now,
-        kind: 'PROJECT',
-        id: projectId,
-        localUpdatedAt: localProject.updatedAt,
-        serverUpdatedAt: serverProject.updated_at,
-        local: localProject,
-      });
-    }
+  } else if (serverProject && !sameRevision(localProject, projectServerSide)) {
+    // 서버가 이겼다 — 레코드 통째로 받는다(필드 병합 금지).
+    // ⭐ `sameRevision` 검사가 여기 있어야 한다(검수 보통1). 없으면 로컬·서버가 완전히 같아도
+    //    매번 `1건 반영` 으로 잡혀 `변경 사항이 없습니다` 가 영영 안 나온다 —
+    //    레코드 쪽(3. PULL)은 이미 같은 검사를 한다. 규칙이 프로젝트에만 빠져 있었다.
+    conflicts.push({
+      at: now,
+      kind: 'PROJECT',
+      id: projectId,
+      localUpdatedAt: localProject.updatedAt,
+      serverUpdatedAt: serverProject.updated_at,
+      local: localProject,
+    });
     await putLocalProject(db, serverProject.payload);
     pulled += 1;
   }
 
   // 2-b. 올릴 레코드 고르기 — 서버에 없거나, 로컬이 LWW 로 이긴 것
-  const deletedIds = new Set(local.deletions.map((d) => d.id));
+  //
+  // `kind:id` 로 맞춘다 — 로그 항목이 `kind` 를 갖고 있는데 id 만 보면 종류가 다른 동명 레코드를
+  // 잘못 건너뛴다(검수 심각4 부수). 되살아난 id 는 pull 뒤에 `forgetDeletions` 가 여기서 뺀다.
+  const deletedIds = new Set(local.deletions.map((d) => `${d.kind}:${d.id}`));
   const toPush = new Map<SyncKind, LocalRecord[]>();
   const nullStamped = new Map<SyncKind, string[]>();
 
@@ -514,7 +689,7 @@ export async function syncProject(
     const stamped: string[] = [];
     for (const rec of local.byKind.get(kind) ?? []) {
       const row = asSyncRow(rec);
-      if (deletedIds.has(row.id)) continue; // 삭제 기록이 있는 id 는 삭제 경로가 처리한다
+      if (deletedIds.has(`${kind}:${row.id}`)) continue; // 삭제 기록이 있으면 삭제 경로가 처리한다
       const server = serverIndex.get(`${kind}:${row.id}`);
       if (server && !localWins(row, side(server))) {
         // 로컬이 졌다 → pull 단계가 서버 값을 덮어쓴다. 진 쪽을 남긴다
@@ -544,18 +719,42 @@ export async function syncProject(
 
   const pushCount = [...toPush.values()].reduce((n, l) => n + l.length, 0);
 
-  // 2-c. Blob 업로드 — 서버에 없는 key 만. render + thumb 뿐이다
+  // ⭐ 충돌은 **여기서 바로 보관한다**(검수 보통2). 승패는 2-a·2-b 에서 전부 확정됐고 뒤에서
+  //    더 추가되지 않는다. 마지막 단계에 미뤄 두면, 뒤이은 Blob 업로드나 PULL 이 예외로 끊길 때
+  //    이미 덮인 레코드의 "진 쪽 원본"이 통째로 사라진다 — §3-7 "조용히 덮는 것이 최악이다" 위반.
+  await appendConflicts(db, projectId, conflicts);
+
+  // 2-c. Blob 업로드 — render + thumb 뿐이다(`sourceBlobKey` 는 오가지 않는다)
+  //
+  // ⭐ 대상을 **이번에 올릴 레코드가 아니라 이 용역의 모든 로컬 레코드**에서 모은다(검수 심각2).
+  //    `toPush` 에서만 모으면, 업로드가 한 번 실패한 파일은 다음 동기화에서 그 레코드가
+  //    `sameRevision` 이라 후보에서 빠져 **영영 재시도되지 않는다** — 서버에는 존재하지 않는
+  //    파일을 가리키는 레코드가 남고, 다른 기기는 그 도면을 영원히 못 받는다.
+  //    레코드 revision 판정과 파일 업로드 성공 여부는 별개다.
   const wantedKeys = new Set<string>();
-  for (const [kind, list] of toPush) {
-    for (const rec of list) for (const k of syncedBlobKeys(kind, rec)) wantedKeys.add(k);
+  for (const kind of ['DRAWING', 'PHOTO'] as const) {
+    for (const rec of local.byKind.get(kind) ?? []) {
+      const row = asSyncRow(rec);
+      if (deletedIds.has(`${kind}:${row.id}`)) continue; // 지운 것의 파일은 올리지 않는다
+      for (const k of syncedBlobKeys(kind, rec)) wantedKeys.add(k);
+    }
   }
   if (wantedKeys.size > 0) {
     stage('사진·도면 올리는 중…');
-    const known = new Set<string>();
-    for (const ids of chunk([...wantedKeys], ID_CHUNK)) {
-      const res = await sb.from('blobs').select('key').in('key', ids);
-      for (const r of must(res, '파일 목록을 읽지 못했습니다') as { key: string }[]) known.add(r.key);
+    // ⭐ 존재 확인은 **이 용역 경로 기준**이다(검수 심각3). 서버 `blobs` 는 `key` 가 전역 PK 인데
+    //    Storage 경로는 `{teamId}/{projectId}/{key}` 라 프로젝트마다 다르다. 회차 승계
+    //    (`repo.retainBlobIn`)로 두 용역이 같은 키를 공유하면, `key` 만 보고 "이미 있음" 으로
+    //    건너뛴 쪽 경로에는 파일이 영영 안 올라간다.
+    const known = await readUploadedBlobKeys(db, projectId);
+    const confirmed: string[] = [];
+    for (const ids of chunk([...wantedKeys].filter((k) => !known.has(k)), ID_CHUNK)) {
+      const res = await sb.from('blobs').select('key').eq('project_id', projectId).in('key', ids);
+      for (const r of must(res, '파일 목록을 읽지 못했습니다') as { key: string }[]) {
+        known.add(r.key);
+        confirmed.push(r.key); // 다음 동기화부터는 이 조회조차 건너뛴다
+      }
     }
+    await addUploadedBlobKeys(db, projectId, confirmed);
     const missing = [...wantedKeys].filter((k) => !known.has(k));
     const uploadedMeta: { key: string; project_id: string; byte_size: number; content_type: string; uploaded_at: number }[] = [];
     for (const key of missing) {
@@ -570,6 +769,7 @@ export async function syncProject(
         .from(BUCKET)
         .upload(blobPath(teamId, projectId, key), blob, { contentType, upsert: true });
       if (up.error) {
+        // ⛔ 여기서 `known` 에 넣지 마라 — 실패한 키는 다음 동기화에서 **다시 시도돼야 한다**
         problems.push(`파일 업로드 실패 — ${up.error.message}`);
         continue;
       }
@@ -582,11 +782,16 @@ export async function syncProject(
       });
       blobsUploaded += 1;
     }
+    const recorded: string[] = [];
     for (const rows of chunk(uploadedMeta, UPSERT_CHUNK)) {
-      // `blobs` 에는 update 정책이 없다 — `ignoreDuplicates` 로 `on conflict do nothing` 을 쓴다
+      // `blobs` 에는 update 정책이 없다 — `ignoreDuplicates` 로 `on conflict do nothing` 을 쓴다.
+      // 회차 승계로 다른 용역이 같은 key 를 이미 잡고 있으면 이 upsert 는 조용히 무시되지만,
+      // **Storage 업로드는 위에서 이 용역 경로로 이미 마쳤다** — 그것이 정본이다.
       const res = await sb.from('blobs').upsert(rows, { onConflict: 'key', ignoreDuplicates: true });
       if (res.error) problems.push(`파일 정보를 기록하지 못했습니다 — ${res.error.message}`);
+      else recorded.push(...rows.map((r) => r.key));
     }
+    await addUploadedBlobKeys(db, projectId, recorded);
   }
 
   // 2-d. 레코드 upsert
@@ -679,6 +884,8 @@ export async function syncProject(
 
   const pullCount = [...wantPayload.values()].reduce((n, l) => n + l.length, 0);
   const pulledRecords: { kind: SyncKind; payload: unknown }[] = [];
+  /** pull 로 **되살아난** id — 삭제 기록에서 빼야 한다(검수 심각4) */
+  const revivedIds: string[] = [];
 
   if (pullCount > 0) {
     stage(`받는 중… (${pullCount}건)`);
@@ -696,6 +903,7 @@ export async function syncProject(
             // §3-7 — 레코드 단위 커밋. 1건이 실패해도 나머지는 남는다
             await applyPulledRecord(db, kind, r.payload);
             pulledRecords.push({ kind, payload: r.payload });
+            if (deletedIds.has(`${kind}:${r.id}`)) revivedIds.push(r.id);
             pulled += 1;
           } catch (e) {
             problems.push(`${kind} ${r.id} 를 저장하지 못했습니다 — ${describe(e)}`);
@@ -703,6 +911,13 @@ export async function syncProject(
         }
       }
     }
+  }
+
+  // 로컬에 정상 복원됐으면 삭제 기록에서 뺀다 — 안 빼면 이후 push 가 그 레코드를 영구히 건너뛴다
+  try {
+    await forgetDeletions(db, projectId, revivedIds);
+  } catch (e) {
+    problems.push(`삭제 기록을 정리하지 못했습니다 — ${describe(e)}`);
   }
 
   for (const { kind, id } of toDeleteLocal) {
@@ -737,8 +952,6 @@ export async function syncProject(
   }
 
   // ── 5. 상태 기록 ────────────────────────────────────────────────────────
-  await appendConflicts(db, projectId, conflicts);
-
   const result: SyncOutcome['result'] = problems.length > 0 ? 'PARTIAL' : 'OK';
   const changed = pushed + pulled + deletedLocal + deletedRemote;
   const message =

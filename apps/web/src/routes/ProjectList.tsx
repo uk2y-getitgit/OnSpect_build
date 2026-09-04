@@ -19,6 +19,7 @@ import { estimateStorage } from '../data/idb/db';
 import { exportProjectToZip, importProjectFromZip } from '../data/projectTransfer';
 import { seedSampleProject, SAMPLE_SUMMARY } from '../data/sampleProject';
 import { navigate } from '../router';
+import { RemoteProjectsButton } from './RemoteProjects';
 import { SyncButton } from './SyncButton';
 import { BusyButton, EmptyState } from '../ui/Form';
 import { MoreMenu } from '../ui/Menu';
@@ -237,6 +238,8 @@ export function ProjectList() {
           >
             파일에서 가져오기
           </BusyButton>
+          {/* D42 — 서버 id 그대로 받는다. 위 [파일에서 가져오기](새 id 발급)와 전혀 다른 경로다 */}
+          <RemoteProjectsButton />
           <button type="button" className="btn btn--primary" onClick={() => navigate({ name: 'NEW' })}>
             용역 만들기
           </button>
@@ -255,6 +258,8 @@ export function ProjectList() {
               <BusyButton busy={seeding} className="btn" onClick={() => void makeSample()}>
                 샘플 용역 만들기
               </BusyButton>
+              {/* 새 기기의 첫 화면이 바로 여기다 — 서버에 있는 용역을 여기서 바로 받게 한다(D42) */}
+              <RemoteProjectsButton />
             </>
           }
         />

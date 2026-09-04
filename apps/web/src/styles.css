@@ -1968,6 +1968,41 @@ kbd {
   color: var(--text-dim);
 }
 
+/* [서버에서 받기] 목록 — 서버에만 있는 용역 (D42) */
+.rlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rlist__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.rlist__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.rlist__time {
+  flex: 0 0 auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* 우하단 계정 표시 — 로그아웃 버튼은 만들지 않는다(D26) */
 .shell__account {
   color: var(--text-muted);
