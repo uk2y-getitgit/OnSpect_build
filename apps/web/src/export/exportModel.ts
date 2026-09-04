@@ -174,16 +174,39 @@ export function photoBookModel(
     rows: plan.rows,
     defects: src.bundle.defects,
     photosByDefect: groupPhotosByDefect(src.bundle.photos),
-    // 사진첩 캡션의 `위치` 는 손상결함표 `위치` 열과 **같은 규칙**이다 (K17)
+    // 사진첩 캡션의 `위치` 는 손상결함표 `위치` 열과 같은 함수를 쓰되, **동 이름은 뺀다**
+    // (2026-09-04 사용자 요청 — 동 이름은 이제 머리말(`photoBookHeaderText`)에만 있다).
+    // `buildings: []` 를 넘기면 `buildLocations` 의 "동이 2개 이상이면 동 이름을 붙인다"
+    // 분기가 항상 꺼진다 — 별도 함수를 만들지 않고 기존 함수를 그대로 재사용한다
     locations: buildLocations({
       defects: src.bundle.defects,
       floors: src.bundle.floors,
-      buildings: src.bundle.buildings,
+      buildings: [],
     }),
     // D19 — 좌측 번호 칸도 손상결함표·조사위치도와 같은 접두어를 쓴다(2026-09-04)
     floorCodes: floorCodesFor(src, params),
     includeNonPrimary: params.doc.includeNonPrimaryPhotos === true,
   });
+}
+
+/**
+ * 사진첩 머리말 — `{용역명}` 또는 `{용역명} - {동이름}` (2026-09-04 사용자 요청).
+ *
+ * 이 출력에 실제로 포함된 결함들이 걸쳐 있는 동을 모아, **동이 정확히 하나면** 그 이름을 붙인다.
+ * 동이 둘 이상 섞여 있으면(여러 동을 한 번에 골라 출력한 경우) 어느 동을 대표로 붙일지
+ * 애매해지므로 **용역명만** 낸다 — 틀린 동 이름을 붙이는 것보다 안전하다(비차단 가정).
+ */
+export function photoBookHeaderText(src: ExportSource, plan: ExportPlan): string {
+  const floorById = new Map(src.bundle.floors.map((f) => [f.id, f]));
+  const buildingById = new Map(src.bundle.buildings.map((b) => [b.id, b]));
+  const names = new Set<string>();
+  for (const r of plan.rows) {
+    const floor = floorById.get(r.floorId);
+    const name = floor ? buildingById.get(floor.buildingId)?.name.trim() : '';
+    if (name) names.add(name);
+  }
+  const projectName = src.bundle.project.name;
+  return names.size === 1 ? `${projectName} - ${[...names][0]}` : projectName;
 }
 
 // ── 층 ─────────────────────────────────────────────────────────────────────

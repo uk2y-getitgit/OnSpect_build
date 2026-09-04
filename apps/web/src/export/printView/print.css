@@ -147,7 +147,7 @@
 }
 
 /*
- * ── 사진첩 (2열 × 3행) — 2026-09-04 양식 개정, 참고 PDF 재현 ────────────────────
+ * ── 사진첩 (2열 × 3행) — 2026-09-04 양식 개정 + 3차 수정(여백·가운데정렬), 참고 PDF 재현 ──
  *
  * ⚠️ 열 너비는 **`<colgroup>`(PrintPhotoBook.tsx)이 못박는다** — 여기 %는 그 값과
  *    반드시 같아야 한다. 헤더 행이 `colspan=4`라 `table-layout:fixed`가 행만 보고는
@@ -155,8 +155,10 @@
  *    임의로 배분해 사진이 자기 칸보다 커져 옆 칸을 침범한다(2026-09-04 사용자 신고).
  *
  * 치수 근거 — 인쇄 폭 186mm(A4 세로 여백 12mm×2) ÷ 2쌍 = 93mm/쌍.
- *   번호 칸 15mm(8%) · 사진 칸 78mm(42%) = 93mm. 사진 프레임 최대폭(`FRAME_W_MM`)도
- *   반드시 78mm — 칸보다 크면 다시 넘친다.
+ *   번호 칸 15mm(8%) · 사진 칸 78mm(42%) = 93mm.
+ *   사진 칸 안에 2mm 여백을 두므로(3차 수정) 프레임 자체는 74mm — `PrintPhotoBook.tsx` 의
+ *   `FRAME_W_MM`/`FRAME_H_MM` 과 반드시 같이 맞춘다. 안 맞으면 사진이 여백을 뚫고 다시 넘친다
+ *   (지난 라운드와 같은 사고 유형).
  */
 .pv-pb {
   width: 100%;
@@ -168,8 +170,9 @@
   border: 0.3mm solid #1a1a1a;
 }
 
-/* 머리말(용역명) — 높이를 명시적으로 못박는다. 안 그러면 표 전체를 페이지 높이에 맞추려는
-   과정에서 남는 공간을 이 행이 떠안아 쓸데없이 높아진다(2026-09-04 사용자 신고) */
+/* 머리말 — `{용역명} - {동이름}`(동이 하나뿐일 때만, `photoBookHeaderText`). 높이를 명시적으로
+   못박는다. 안 그러면 표 전체를 페이지 높이에 맞추려는 과정에서 남는 공간을 이 행이 떠안아
+   쓸데없이 높아진다(2026-09-04 사용자 신고) */
 .pv-pb-head {
   height: 8mm;
   background: #d9d9d9;
@@ -196,9 +199,12 @@
   padding: 0;
 }
 
+/* 3차 수정 — 사진 칸 안쪽에 여백(margin)을 줘서 사진이 칸에 꽉 차 보이지 않게 한다.
+   자체 테두리를 두르므로(참고 양식처럼) 아래쪽에 별도 구분선이 필요 없다 */
 .pv-pb-frame {
-  height: 62mm;
-  border-bottom: 0.3mm solid #1a1a1a;
+  height: 52mm;
+  margin: 2mm;
+  border: 0.3mm solid #1a1a1a;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -210,11 +216,13 @@
   display: block;
 }
 
+/* 3차 수정 — 가운데 정렬 + 줄바꿈은 띄어쓰기 단위로(`.pv-root` 의 word-break:keep-all 을
+   그대로 따른다 — 여기서 `overflow-wrap:anywhere` 를 걸면 글자 중간이 잘려 그 규칙이 깨진다) */
 .pv-pb-cap {
-  padding: 1.2mm 2mm;
+  padding: 1mm 2mm 2mm;
   font-size: 8.5pt;
   line-height: 1.3;
-  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 /* 표 안이라도 행 하나가 페이지 경계에서 잘리지 않게 */

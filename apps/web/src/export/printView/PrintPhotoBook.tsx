@@ -12,24 +12,28 @@
  * ⭐ **자르기·주석은 어댑터(`photoBookImages.ts`)가 미리 구워서 준다.** 여기서 다시 그리지 않는다 —
  *    화면(미리보기)과 출력이 `composePhoto` 한 함수를 공유하게 하려는 것이 그 구조의 목적이다.
  *    구워진 이미지(`baked`)는 **회전까지 포함**돼 있으므로 CSS `rotate` 를 또 걸면 두 번 돈다.
+ *
+ * 2026-09-04 3차 수정 — 사진 칸에 여백을 줬다(`.pv-pb-frame` 의 `margin`). 프레임 최대 크기가
+ * 그만큼 줄어드므로 `FRAME_W_MM`/`FRAME_H_MM` 도 같이 줄였다 — `print.css` 의 주석과 반드시
+ * 같이 맞춰야 한다(안 그러면 사진이 다시 여백을 뚫고 넘친다, 지난 라운드와 같은 사고).
  */
 import type { PhotoBookCell, PhotoBookPage } from '@onspect/project-core';
 import type { PhotoBookImage } from '../photoBookImages';
 
 /** `print.css` 의 `.pv-pb-frame` 과 같은 값 — 회전 시 가로/세로를 맞바꾼다 */
-const FRAME_W_MM = 78;
-const FRAME_H_MM = 60;
+const FRAME_W_MM = 74;
+const FRAME_H_MM = 52;
 
 export function PrintPhotoBook({
   pages,
   images,
-  projectName,
+  headerText,
 }: {
   pages: readonly PhotoBookPage[];
   /** `cell.key` → 이미지. 어댑터가 만든다 (코어는 URL 을 모른다) */
   images: Readonly<Record<string, PhotoBookImage>>;
-  /** 머리말 한 줄 — 참고 양식의 "2026년 상반기 정기안전점검" 자리 */
-  projectName: string;
+  /** 머리말 한 줄 — `{용역명}` 또는 `{용역명} - {동이름}` (2026-09-04, `photoBookHeaderText`) */
+  headerText: string;
 }) {
   if (pages.length === 0) {
     return (
@@ -59,7 +63,7 @@ export function PrintPhotoBook({
             <tbody>
               <tr>
                 <td className="pv-pb-head" colSpan={4}>
-                  {projectName}
+                  {headerText}
                 </td>
               </tr>
               {rowsOf(p.cells).map((row, i) => (
