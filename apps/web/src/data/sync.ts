@@ -280,10 +280,16 @@ function blobPath(teamId: string, projectId: string, key: string): string {
   return `${teamId}/${projectId}/${key}`;
 }
 
-async function hasBlob(db: IDBDatabase, key: string): Promise<boolean> {
+/**
+ * 로컬에 이미 있는 Blob 키 전체. **트랜잭션 1회**다.
+ *
+ * 다운로드 후보를 전수 스캔하도록 바꾸면서(검수 보통B) 키마다 `get` 을 날리면 동기화 1회에
+ * 사진 수만큼 트랜잭션이 열린다. 키 목록만 한 번 읽어 메모리에서 거른다 — 값(Blob)은 안 읽는다.
+ */
+async function readLocalBlobKeys(db: IDBDatabase): Promise<Set<string>> {
   const tx = db.transaction(STORE.blobs, 'readonly');
-  const rec = await reqAsPromise<BlobRecord | undefined>(tx.objectStore(STORE.blobs).get(key));
-  return Boolean(rec);
+  const keys = await reqAsPromise<IDBValidKey[]>(tx.objectStore(STORE.blobs).getAllKeys());
+  return new Set(keys.map((k) => String(k)));
 }
 
 async function readBlob(db: IDBDatabase, key: string): Promise<Blob | null> {
@@ -719,11 +725,6 @@ export async function syncProject(
 
   const pushCount = [...toPush.values()].reduce((n, l) => n + l.length, 0);
 
-  // ⭐ 충돌은 **여기서 바로 보관한다**(검수 보통2). 승패는 2-a·2-b 에서 전부 확정됐고 뒤에서
-  //    더 추가되지 않는다. 마지막 단계에 미뤄 두면, 뒤이은 Blob 업로드나 PULL 이 예외로 끊길 때
-  //    이미 덮인 레코드의 "진 쪽 원본"이 통째로 사라진다 — §3-7 "조용히 덮는 것이 최악이다" 위반.
-  await appendConflicts(db, projectId, conflicts);
-
   // 2-c. Blob 업로드 — render + thumb 뿐이다(`sourceBlobKey` 는 오가지 않는다)
   //
   // ⭐ 대상을 **이번에 올릴 레코드가 아니라 이 용역의 모든 로컬 레코드**에서 모은다(검수 심각2).
@@ -848,6 +849,15 @@ export async function syncProject(
     }
   }
 
+  // ⭐ 충돌은 **PUSH 를 다 마치고, 실제로 덮이기 직전에** 보관한다(검수 보통2·보통A).
+  //    승패 자체는 2-a·2-b 에서 확정됐고 뒤에서 더 추가되지 않지만, 로컬 값이 실제로 덮이는 것은
+  //    아래 3.PULL 이다. 2-b 직후에 기록하면 그 사이의 Blob 업로드·레코드 upsert 가 예외로 끊길 때
+  //    **아무것도 안 덮였는데 "상대 값으로 덮였습니다" 가 뜨고**, 재시도할 때마다 같은 충돌이
+  //    중복 append 되어 CONFLICT_KEEP 상한을 갉아먹는다.
+  //    반대로 이보다 더 뒤(PULL 이후)로 미루면 PULL 중 예외 때 "진 쪽 원본"이 통째로 사라진다 —
+  //    §3-7 "조용히 덮는 것이 최악이다" 위반. 그래서 정확히 이 자리다.
+  await appendConflicts(db, projectId, conflicts);
+
   // ── 3. PULL — 서버가 이긴 것만 payload 를 받는다 ─────────────────────────
   const localIndex = new Map<string, SyncRow>();
   for (const kind of KINDS) {
@@ -928,15 +938,28 @@ export async function syncProject(
     }
   }
 
-  // ── 4. Blob 다운로드 — 받은 레코드가 가리키는데 로컬에 없는 것 ───────────
-  const needKeys = new Set<string>();
+  // ── 4. Blob 다운로드 — 이 용역이 참조하는데 로컬에 없는 것 ───────────────
+  //
+  // ⭐ 후보를 **이번에 pull 한 레코드만이 아니라 이 용역이 참조하는 전체 키**에서 모은다
+  //    (검수 보통B — 심각2 업로드 결함의 정확한 거울상).
+  //    `pulledRecords` 에서만 모으면, 다운로드가 한 번 실패한 파일은 다음 동기화에서 그 레코드가
+  //    `sameRevision` 이라 pull 대상이 아니고 → 다운로드 후보에도 안 들어가 **영영 재시도되지
+  //    않는다.** 그 기기에서 그 도면·사진은 영구히 빈 화면이 되고, 보고는 `변경 사항이 없습니다`다.
+  //    업로드 쪽과 같은 패턴으로 전수 스캔하고, **로컬에 이미 있는 것은 자연히 건너뛴다** —
+  //    새 상태 저장이 필요 없다. 로컬 Blob 존재 여부가 곧 진실이다.
+  //    `wantedKeys`(2-c 의 pull 이전 로컬 스캔) ∪ `pulledRecords`(이번에 새로 들어온 것) 이면
+  //    현재 로컬이 참조하는 키 전체를 덮는다 — 추가 네트워크 없이 메모리 합집합 1회다.
+  const candidateKeys = new Set<string>(wantedKeys);
   for (const { kind, payload } of pulledRecords) {
-    for (const k of syncedBlobKeys(kind, payload)) needKeys.add(k);
+    for (const k of syncedBlobKeys(kind, payload)) candidateKeys.add(k);
   }
-  if (needKeys.size > 0) {
+  // 정상 상태에서는 여기서 전부 걸러져 `needKeys` 가 비고, 아래 블록 자체를 건너뛴다
+  // (진행 문구도 안 뜨고 네트워크 요청도 0건이다).
+  const localBlobKeys = candidateKeys.size > 0 ? await readLocalBlobKeys(db) : new Set<string>();
+  const needKeys = [...candidateKeys].filter((k) => !localBlobKeys.has(k));
+  if (needKeys.length > 0) {
     stage('사진·도면 받는 중…');
     for (const key of needKeys) {
-      if (await hasBlob(db, key)) continue;
       const res = await sb.storage.from(BUCKET).download(blobPath(teamId, projectId, key));
       if (res.error || !res.data) {
         problems.push(`파일 ${key} 를 받지 못했습니다`);

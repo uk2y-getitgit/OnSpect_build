@@ -18,11 +18,13 @@ import { useAppData } from '../data/appData';
 import { estimateStorage } from '../data/idb/db';
 import { exportProjectToZip, importProjectFromZip } from '../data/projectTransfer';
 import { seedSampleProject, SAMPLE_SUMMARY } from '../data/sampleProject';
+import { readSyncState } from '../data/sync';
 import { navigate } from '../router';
 import { RemoteProjectsButton } from './RemoteProjects';
 import { SyncButton } from './SyncButton';
 import { BusyButton, EmptyState } from '../ui/Form';
 import { MoreMenu } from '../ui/Menu';
+import { ConfirmDialog } from '../ui/Overlays';
 import { useToast } from '../ui/ToastHost';
 
 /**
@@ -83,7 +85,13 @@ export function ProjectList() {
     [storage, guard],
   );
 
-  const removeProject = useCallback(
+  /**
+   * D43 — 동기화된 적 있는 용역은 **삭제가 다른 기기까지 전파된다.**
+   * 로컬 전용 용역은 지금까지대로 즉시 삭제 + `되돌리기` 토스트(확인 창을 새로 끼워 넣지 않는다).
+   */
+  const [syncedDelete, setSyncedDelete] = useState<ProjectSummary | null>(null);
+
+  const doRemoveProject = useCallback(
     async (s: ProjectSummary) => {
       if (storage.phase !== 'READY') return;
       const name = projectDisplayName(s.project);
@@ -100,6 +108,23 @@ export function ProjectList() {
       });
     },
     [storage, guard, reload, toast],
+  );
+
+  const removeProject = useCallback(
+    async (s: ProjectSummary) => {
+      if (storage.phase !== 'READY') return;
+      // "동기화된 적 있음" 의 신호는 `meta` KV `sync:{projectId}` 의 존재다.
+      // 성공(`writeSyncState`)이든 실패(`recordSyncFailure`)든 한 번이라도 동기화를 시도했으면
+      // `lastSyncedAt` 이 찍힌다 — 실패한 회차도 그 전에 용역 행은 이미 서버에 올라갔을 수 있으므로
+      // **넓게 잡는 쪽이 맞다.** 안내가 한 번 더 뜨는 것은 무해하고, 안 뜨는 것이 사고다.
+      const state = await readSyncState(s.project.id);
+      if (state.lastSyncedAt > 0) {
+        setSyncedDelete(s);
+        return;
+      }
+      await doRemoveProject(s);
+    },
+    [storage, doRemoveProject],
   );
 
   const makeSample = useCallback(async () => {
@@ -346,6 +371,34 @@ export function ProjectList() {
       </p>
 
       <StorageNote space={space} />
+
+      {/* D43 — 동기화된 용역 삭제는 팀 전체에 전파된다. 지우기 전에 그 사실을 알린다 */}
+      {syncedDelete && (
+        <ConfirmDialog
+          title="동기화된 용역입니다"
+          body={
+            <>
+              <p>
+                <b className="quote">{projectDisplayName(syncedDelete.project)}</b> 은(는) 서버와
+                동기화된 용역입니다.
+              </p>
+              <p>
+                지운 뒤 동기화하면 <b>다른 기기에서도 사라집니다.</b>
+              </p>
+              <p className="muted">
+                이 기기에서는 삭제 직후 <b>되돌리기</b>로 복구할 수 있습니다.
+              </p>
+            </>
+          }
+          confirmLabel="삭제"
+          onConfirm={() => {
+            const s = syncedDelete;
+            setSyncedDelete(null);
+            void doRemoveProject(s);
+          }}
+          onCancel={() => setSyncedDelete(null)}
+        />
+      )}
     </div>
   );
 }
