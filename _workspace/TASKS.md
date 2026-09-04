@@ -191,10 +191,14 @@
 | # | 작업 | 담당 | 상태 |
 |---|---|---|---|
 | L0 | 차단질문(로그인 방식·service_role 상태) 확정 → D39·D40 | 리더 | ✅ 완료 |
-| L1 | Supabase 클라이언트 배선 — `@supabase/supabase-js` 추가, IndexedDB(meta KV) 기반 커스텀 세션 저장소, `autoRefreshToken:false`(오프라인 규칙 §3-4) | builder | ⬜ |
-| L2 | 로그인 화면 + 오프라인 로그인 규칙(세션 있으면 건너뜀, 토큰 만료돼도 앱은 정상 동작) | builder | ⬜ |
-| L3 | 동기화 대상 정의 + push(로컬→서버) — Project/Building/Floor/Drawing/Defect/Memo/Photo, blob(render+thumb 전부, source는 정책대로) | builder | ⬜ |
-| L4 | pull(서버→로컬) + LWW 병합(D23, updatedAt null=미동기화) | builder | ⬜ |
-| L5 | [동기화] 버튼 UI(프로젝트별) + 진행률·결과·충돌 안내 | builder | ⬜ |
-| L6 | 코드 검수 — RLS 의존 코드·인증 흐름 경계면 집중 | code-reviewer | ⬜ |
-| LZ | 통합 판정 — 타입·테스트·빌드 | 리더 | ⬜ |
+| L1 | Supabase 클라이언트 배선 — `@supabase/supabase-js` 추가, IndexedDB(meta KV) 기반 커스텀 세션 저장소, `autoRefreshToken:false`(오프라인 규칙 §3-4) | builder | ✅ 커밋 `8cc2f64` |
+| L2 | 로그인 화면 + 오프라인 로그인 규칙(세션 있으면 건너뜀, 토큰 만료돼도 앱은 정상 동작) | builder | ✅ 커밋 `8cc2f64` — 게이트가 `meta` KV 직접 읽기(U74, getSession 우회) |
+| L3 | 동기화 대상 정의 + push(로컬→서버) — Project/Building/Floor/Drawing/Defect/Memo/Photo, blob(render+thumb 전부, source는 정책대로) | builder | ✅ 커밋 `8cc2f64`·`0ed9428`·`02e03b6` |
+| L4 | pull(서버→로컬) + LWW 병합(D23, updatedAt null=미동기화) | builder | ✅ 커밋 `8cc2f64`·`0ed9428`·`02e03b6` · `project-core/lww.ts` 정본화 |
+| L5 | [동기화] 버튼 UI(프로젝트별) + 진행률·결과·충돌 안내 | builder | ✅ 커밋 `8cc2f64` · `[서버에서 받기]`(D42) 추가 — `0ed9428` |
+| L6 | 코드 검수 — RLS 의존 코드·인증 흐름 경계면 집중 | code-reviewer | ✅ `72_code-reviewer_findings_Phase5_PersonalLoginSync.md` 조건부통과(심각4) → 수정(`0ed9428`) → 재검수 `74_...` 조건부통과(보통3) → 수정(`02e03b6`) |
+| LZ | 통합 판정 — 타입·테스트·빌드 | 리더 | ✅ 타입0오류(3워크스페이스)·테스트377(canvas+project, lww 7건 포함)·빌드통과(`02e03b6`) |
+
+**16건 판정: L1~L5 구현 완료 + code-reviewer 2라운드(심각4·보통3 전부 해결, D42·D43 반영) + 통합 판정 통과.**
+실사용 검증(Supabase 계정 시딩·실제 로그인·두 기기 병합)은 사용자 몫 — `73_builder_log_...md`·
+`02e03b6` 커밋 메시지의 확인 체크리스트 참고.

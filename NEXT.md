@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-04 (사진첩 양식 반복 수정 — 실사용 검수로 최종 정착)
+마지막 갱신: 2026-09-05 (개인 로그인+동기화 코드 완료 — 실사용 검증 대기)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -39,6 +39,36 @@ npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(�
 
 테스트 **830개**(canvas-core 477 · project-core 353) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
+
+### 2026-09-05 — 개인 로그인 + 동기화 (Phase 5 트랙1, 개인 테스트 단계) — 코드 완료, 실사용 검증 대기
+
+D39: "우선 실사용테스트를 위한 개인아이디만 구성" — 팀원 발급 API·팀 관리 화면·합성 이메일 로그인은
+**범위 밖**(다음 "정식 서버" 라운드). 이번엔 이메일+비밀번호(Supabase 표준) + 프로젝트별 `[동기화]`
+버튼(push/pull)만. **서버리스 함수 0개** — 클라이언트가 publishable 키 + 사용자 JWT + RLS로 직접
+Supabase를 호출한다(`service_role` 키는 코드 어디에도 없다, D40).
+
+- `apps/web/src/data/supabaseClient.ts` — `meta` KV(`sbSession:auth`) 세션 저장소, `autoRefreshToken:false`
+- `apps/web/src/data/session.tsx`·`routes/Login.tsx` — 세션 없을 때만 로그인 게이트.
+  ⚠️ **게이트 판정은 `supabase.auth.getSession()`을 쓰지 않는다** — 설치된 `auth-js` 2.115가 만료된
+  토큰에 대해 `autoRefreshToken` 값과 무관하게 네트워크 갱신을 부르는 것을 소스로 확인해서,
+  `meta` KV를 직접 읽는 로컬 전용 판정으로 바꿨다(U74). 앱 시작 경로에 Supabase 인스턴스조차 안 생긴다
+- `apps/web/src/data/sync.ts`(~800줄) — push/pull, 삭제 전파(D25), Blob 업/다운로드(render+thumb만,
+  `sourceBlobKey` 제외), `[서버에서 받기]`(D42 — 새 기기가 서버 id 그대로 프로젝트를 처음 심는 경로.
+  기존 `[파일로 내보내기/가져오기]`는 id를 새로 발급해 두 기기 병합 시험 자체가 안 됐던 문제의 해법)
+- `packages/project-core/src/lww.ts` — LWW 판정 정본 1개, push 가드와 pull 적용이 반드시 같은
+  함수를 쓴다(핑퐁 방지, 단위테스트 7건)
+- `records.server_seq`가 UPDATE 때 안 오르는 서버 스키마 결함(Q76·D41) — 서버는 안 건드리고
+  클라이언트에서 색인 대조로 우회(정확성 완전, 개인 규모에 충분)
+- 새 IndexedDB 스토어 0개, `DB_VERSION` 1 그대로. 자동 동기화 없음(`[동기화]` 클릭에서만 네트워크)
+
+**진행:** builder 구현 → code-reviewer 검수(심각4) → 수정 → 재검수(보통3) → 수정.
+**통합 판정:** 타입 3워크스페이스 0오류 · 테스트 **377개**(canvas-core+project-core, `lww.test.ts` 7건
+포함) · 프로덕션 빌드 통과. 커밋 `8cc2f64`→`0ed9428`→`02e03b6`.
+
+⚠️ **실사용 미검증 — 사전 준비 필요.** Supabase 대시보드에서 계정 1개 생성 후
+`teams`/`team_members` 행을 SQL Editor로 수동 삽입해야 `[동기화]`가 동작한다(RLS의 `my_team_id()`가
+그 행 없이는 null). 정확한 SQL과 7단계 확인 체크리스트는
+`_workspace/71_builder_log_Phase5_PersonalLoginSync.md`·`_workspace/73_builder_log_Phase5_SyncFixes.md`.
 
 ### 2026-09-04 — 사진첩 양식 반복 수정 (실사용 PDF 검수로 최종 정착, 리더 직접)
 
