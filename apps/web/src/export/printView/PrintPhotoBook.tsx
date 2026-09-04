@@ -43,6 +43,19 @@ export function PrintPhotoBook({
       {pages.map((p) => (
         <div className="pv-page" key={p.index}>
           <table className="pv-pb">
+            {/*
+              ⚠️ 열 너비를 여기서 못박는다 — 헤더 행이 colspan=4라 `table-layout:fixed`가
+              행만 보고는 열 너비를 못 정해서, 이게 없으면 브라우저가 임의로 배분해 사진이
+              자기 칸보다 커져 옆 칸을 침범한다(2026-09-04 사용자 신고). 값은 print.css의
+              `.pv-pb-no`/`.pv-pb-cell` 주석과 반드시 같아야 한다(186mm 인쇄폭 ÷ 2쌍 기준
+              번호 15mm(8%) · 사진 78mm(42%) = 93mm/쌍) — `FRAME_W_MM` 도 78mm로 맞춘다.
+            */}
+            <colgroup>
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '42%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '42%' }} />
+            </colgroup>
             <tbody>
               <tr>
                 <td className="pv-pb-head" colSpan={4}>

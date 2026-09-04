@@ -146,10 +146,20 @@
   margin-right: 2mm;
 }
 
-/* ── 사진첩 (2열 × 3행) — 2026-09-04 양식 개정, 참고 PDF 재현 ────────────────── */
+/*
+ * ── 사진첩 (2열 × 3행) — 2026-09-04 양식 개정, 참고 PDF 재현 ────────────────────
+ *
+ * ⚠️ 열 너비는 **`<colgroup>`(PrintPhotoBook.tsx)이 못박는다** — 여기 %는 그 값과
+ *    반드시 같아야 한다. 헤더 행이 `colspan=4`라 `table-layout:fixed`가 행만 보고는
+ *    열 너비를 못 정하는 경우가 있어, `<colgroup>`으로 명시하지 않으면 브라우저가
+ *    임의로 배분해 사진이 자기 칸보다 커져 옆 칸을 침범한다(2026-09-04 사용자 신고).
+ *
+ * 치수 근거 — 인쇄 폭 186mm(A4 세로 여백 12mm×2) ÷ 2쌍 = 93mm/쌍.
+ *   번호 칸 15mm(8%) · 사진 칸 78mm(42%) = 93mm. 사진 프레임 최대폭(`FRAME_W_MM`)도
+ *   반드시 78mm — 칸보다 크면 다시 넘친다.
+ */
 .pv-pb {
   width: 100%;
-  height: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -158,18 +168,20 @@
   border: 0.3mm solid #1a1a1a;
 }
 
+/* 머리말(용역명) — 높이를 명시적으로 못박는다. 안 그러면 표 전체를 페이지 높이에 맞추려는
+   과정에서 남는 공간을 이 행이 떠안아 쓸데없이 높아진다(2026-09-04 사용자 신고) */
 .pv-pb-head {
+  height: 8mm;
   background: #d9d9d9;
   color: #1a1a1a;
   font-weight: 700;
   font-size: 11pt;
   text-align: center;
-  padding: 2.5mm;
+  padding: 0;
 }
 
-/* 좌측 결함번호 칸 — 사진번호 대신 층접두어 결함번호를 쓴다(2026-09-04) */
+/* 좌측 결함번호 칸 — 사진번호 대신 층접두어 결함번호를 쓴다(2026-09-04). 너비는 colgroup */
 .pv-pb-no {
-  width: 13%;
   background: #d9d9d9;
   color: #1a1a1a;
   text-align: center;
@@ -179,7 +191,6 @@
 }
 
 .pv-pb-cell {
-  width: 37%;
   height: 84mm;
   vertical-align: top;
   padding: 0;
