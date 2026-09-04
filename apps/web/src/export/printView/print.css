@@ -244,13 +244,17 @@
   flex-direction: column;
 }
 
-/* 사진 칸 안쪽에 여백(margin)만 준다. 사진·캡션 구분선(border-bottom)만 유지한다 —
-   사방 테두리는 사용자가 반려했으므로 만들지 않는다(위 주석 참고) */
+/*
+ * 사진 칸 안쪽에 여백(margin)만 준다. 구분선은 여기(프레임 쪽)가 아니라
+ * `.pv-pb-cap` 의 `border-top` 으로 옮겼다(2026-09-04, 디버그 outline 확인 후 사용자 요청)
+ * — 프레임은 여백(2mm) 때문에 칸 폭보다 좁아서, 여기 선을 그으면 칸 양옆 테두리에
+ * 안 닿고 짧게 끊겨 보였다. 캡션은 칸 전체 폭을 쓰므로 선이 양쪽 끝까지 닿는다.
+ * 사방 테두리는 사용자가 반려했으므로 만들지 않는다.
+ */
 .pv-pb-frame {
   height: 52mm;
   flex-shrink: 0;
   margin: 2mm;
-  border-bottom: 1px solid #1a1a1a;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -264,10 +268,12 @@
 
 /* 가운데 정렬(가로) + 줄바꿈은 띄어쓰기 단위로(`.pv-root` 의 word-break:keep-all 을
    그대로 따른다 — 여기서 `overflow-wrap:anywhere` 를 걸면 글자 중간이 잘려 그 규칙이 깨진다).
-   세로 가운데 정렬도 함께 — `.pv-pb-cell` 의 flex 자식으로 `flex:1` + `align-items:center` */
+   세로 가운데 정렬도 함께 — `.pv-pb-cell` 의 flex 자식으로 `flex:1` + `align-items:center`.
+   `border-top` 이 사진-캡션 구분선이다 — 칸 전체 폭이라 양쪽 테두리까지 닿는다 */
 .pv-pb-cap {
   flex: 1;
   min-height: 0;
+  border-top: 1px solid #1a1a1a;
   padding: 0 2mm;
   font-size: 8.5pt;
   line-height: 1.3;
