@@ -55,6 +55,34 @@
 plan-reviewer 를 부르지 않고, 팀도 만들지 않는다. builder 1명이면 된다.
 주변을 정리하거나 리팩터하지 않는다 — 눈에 띈 다른 문제는 고치지 말고 보고에 적는다.
 
+---
+
+## 메타스킬: task-observer (전역 설치, OnSpect 전용 아님)
+
+`task-observer`("One Skill to Rule Them All")는 `~/.claude/skills/task-observer/` 에 **전역 설치**돼
+모든 프로젝트에서 공통으로 동작한다. 세션 중 반복되는 작업 패턴·사용자의 수정/지적·기존 스킬의
+공백을 관찰해 스킬 개선안을 쌓아가는 메타스킬 — OnSpect 고유 하네스가 아니다.
+
+**활성화:** 세션의 첫 툴콜 전, 그리고 계획을 세우기 전에 `task-observer` 스킬을 불러
+Session Start Protocol(저장소 확인 · 관찰 로그 frontmatter 스캔 · 리뷰 트리거)까지 실행한다.
+스킬 파일만 로드하고 프로토콜을 안 돌리면 활성화된 게 아니다.
+작업을 마칠 때마다 이번 세션에 기록된 관찰(observation)을 한 줄로 보고한다
+("id·제목 목록" 또는 "기록 없음 — 이유").
+
+**작업공간(전역 고정, 프로젝트별로 새로 만들지 않는다):**
+```
+C:/Users/samsung/.claude/skill-observations/observation-log/       (관찰 로그)
+C:/Users/samsung/.claude/skill-observations/cross-cutting-principles.md
+C:/Users/samsung/.claude/skill-updates/                             (검토 대기 스테이징)
+C:/Users/samsung/.claude/skill-updates/PENDING.md
+```
+전역 설치된 스킬이므로 로그는 프로젝트마다 새로 만들지 말고 위 경로 하나로만 고정한다.
+현재 `cwd` 나 OnSpect 프로젝트 폴더 하위로 경로를 다시 계산하지 않는다.
+
+> **주의(비차단 가정):** 이 스킬은 "모든 세션·모든 툴콜 전에 트리거"되도록 설계돼 있어,
+> 위 하네스의 "단순 질문·문서 열람은 직접 응답 가능" 규칙과 매 세션 겹쳐서 발동할 수 있다.
+> 실제로 과도하게 자주 끼어들면 조정이 필요 — 그런 경우 `_workspace/ASSUMPTIONS.md` 에 기록.
+
 **변경 이력:**
 
 | 날짜 | 변경 내용 | 대상 | 사유 |
@@ -66,3 +94,4 @@ plan-reviewer 를 부르지 않고, 팀도 만들지 않는다. builder 1명이�
 | 2026-08-22 | Serena 프로젝트 등록 · 심볼 단위 탐색 규칙 | CLAUDE.md | 전체 파일 읽기가 예산을 가장 빨리 소모. 심볼 단위 접근으로 전환 |
 | 2026-08-22 | **qa-inspector 폐지** (4명 → 3명), 경계면 교차 비교를 code-reviewer로 이관 | agents/ · skills/onspect-qa 삭제 · onspect-code-review | 웹 실행 검증이 과도하게 느리고 비쌈. 실행 검증은 사용자가 담당 |
 | 2026-08-22 | `onspect-fix` 신설 — 사용자 신고 오류만 좁게 수정 | skills/onspect-fix · builder.md · orchestrator Phase 0-A | 오류 신고 시 전체 워크플로우를 타지 않고 1명으로 처리 |
+| 2026-09-05 | `task-observer` 메타스킬 전역 설치 + 활성화 문구 추가 | `~/.claude/skills/task-observer/` · CLAUDE.md | 사용자 요청 — 세션 전반의 스킬 개선 관찰을 상시화 |

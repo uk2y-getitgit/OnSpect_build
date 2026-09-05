@@ -21,6 +21,14 @@ Thumbs.db
 .env.local
 *.log
 
+# 도구 상태 (headroom 등 세션 전용 마커/락)
+.claude/.headroom_wrap_*.json
+.claude/.headroom_wrap_*.lock
+
+# 임시 스크린샷·계정 메모 (재생성 가능 / 민감정보)
+key오류.png
+테스트계정 정보.txt
+
 # 외부·현장 자료 — 공개 저장소에 올리지 않는다
 # (실제 현장 도면·사진, 경쟁사 화면 캡처, 타인 저장소)
 샘플도면/
