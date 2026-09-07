@@ -5116,3 +5116,54 @@ select.input { cursor: pointer; }
   font-size: 12.5px;
   line-height: 1.6;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+ * D47 — 전차 사진 조회 (읽기 전용 · 참조 공유, 복제 없음) · 2026-09-08
+ * ══════════════════════════════════════════════════════════════════════ */
+/* 금차 사진 섹션과 **눈으로 구분돼야 한다** — 전회차 결함색(남색) 계열의 왼쪽 띠 */
+.photos--prev {
+  margin-top: 12px;
+  padding-top: 10px;
+  padding-left: 8px;
+  border-left: 3px solid var(--defect-prev);
+}
+
+.photos--prev .photoTile { cursor: default; }
+
+/* "보기 전용" 은 제목 옆에 작게 — 이 섹션에 편집 버튼이 없는 이유를 한눈에 말해 준다 */
+.photos__ro {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* ── 전차 사진 크게보기 ───────────────────────────────────────────────── */
+.prevphoto__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  max-height: 68vh;
+  padding: 8px;
+  background: #1b1d21;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.prevphoto__img {
+  max-width: 100%;
+  max-height: 66vh;
+  object-fit: contain;
+}
+
+.prevphoto__ph {
+  margin: 0;
+  color: #b9bcc2;
+  font-size: 12.5px;
+}

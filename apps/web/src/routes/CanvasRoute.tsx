@@ -81,6 +81,7 @@ import { useLastView } from '../data/useLastView';
 import { usePhotos } from '../data/usePhotos';
 import { revokeProjectUrls } from '../data/idb/blobs';
 import { PhotoSection } from '../ui/photos/PhotoSection';
+import { PrevPhotoSection } from '../ui/photos/PrevPhotoSection';
 import {
   appReducer,
   defectsOfDrawing,
@@ -1469,6 +1470,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             saving={state.writes.seq > 0}
             photoSlot={
               selected ? (
+                <>
                 <PhotoSection
                   defectId={selected.id}
                   photos={selectedPhotos}
@@ -1492,6 +1494,15 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
                   onCropChange={photoOps.setCrop}
                   onAnnotationsChange={photoOps.setAnnotations}
                 />
+                {/* D47 — 전차 사진은 **참조 조회**다. 이 용역에 복제해 넣지 않는다.
+                    원본 용역이 이 기기에 없으면 스스로 사라진다(에러 없음) */}
+                <PrevPhotoSection
+                  defectId={selected.id}
+                  prevDefectId={selected.prevDefectId}
+                  urls={photoOps.urls}
+                  ensureUrls={photoOps.ensureUrls}
+                />
+                </>
               ) : null
             }
             onAttrsChange={(attrs) => {
