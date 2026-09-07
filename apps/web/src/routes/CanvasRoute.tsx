@@ -71,6 +71,7 @@ import { DrawingScaleDialog } from './DrawingScaleDialog';
 import {
   applyDrawingScale,
   drawingScaleAppliedMessage,
+  rebakeScaledRender,
   SCALE_NEEDS_A4_MESSAGE,
 } from '../data/drawingScale';
 import { transformAll } from '../data/renormalize';
@@ -851,7 +852,18 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       const skipped = res.skipped;
       void (async () => {
         if (storage.phase === 'READY') {
-          for (const d of saved) await guard(() => storage.repo.putDrawing(d));
+          const repo = storage.repo;
+          for (const d of saved) {
+            await guard(() => repo.putDrawing(d));
+            // 2026-09-07 — 저장된 렌더 래스터도 새 배율로 다시 굽는다.
+            // 원본(`sourceBlobKey`)은 동기화되지 않으므로(Q60), 이걸 안 하면 다른 기기에는
+            // **옛 배율 도면 + 새 배율 좌표**가 도착해 표기가 통째로 어긋난다
+            const rebaked = await guard(() => rebakeScaledRender(repo, d));
+            if (rebaked) {
+              releaseComposite(rebaked.id);
+              setDrawings((prev) => prev.map((x) => (x.id === rebaked.id ? rebaked : x)));
+            }
+          }
         }
         setScaleBusy(false);
         scaleSnapshot.current = null;

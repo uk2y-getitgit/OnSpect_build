@@ -20,7 +20,7 @@
  */
 import { a4Transform, clampScale, type Drawing, type ImgLayout } from '@onspect/project-core';
 import type { NormTransform } from '@onspect/canvas-core';
-import { scaledImgLayout } from './imageIngest';
+import { composeA4, scaledImgLayout } from './imageIngest';
 
 /**
  * `imgLayout` 이 없는 옛 도면(A4 정규화 전 등록)에 대한 거부 문구.
@@ -68,6 +68,37 @@ export function applyDrawingScale(dw: Drawing, raw: number, now = Date.now()): D
     transform: layoutTransform(dw.imgLayout, layout),
     drawing: { ...dw, imgScale: next, imgLayout: layout, updatedAt: now },
   };
+}
+
+/**
+ * 저장된 렌더 래스터를 **지금 배율로 다시 구워** 갈아 끼운다.
+ *
+ * ## 2026-09-07 — 동기화하면 도면은 100%, 결함만 125% 로 보이던 버그
+ *
+ * 배율이 1 이 아닌 도면은 화면에 **원본(`sourceBlobKey`)을 다시 합성해서** 보여준다
+ * (`canvas/drawingComposite.ts`). 그런데 원본은 **동기화되지 않는다**(Q60, `sync.ts::syncedBlobKeys`).
+ * 그래서 다른 기기에는 합성할 재료가 없고, `renderBlobKey` 에 저장된 **옛 배율(100%) 래스터**로
+ * 되돌아간다. 좌표는 동기화되어 새 배치(125%)를 가리키므로 도면과 표기가 서로 다른 기준이 된다.
+ *
+ * 배율을 적용할 때마다 **저장 래스터 자체를 새 배율로 다시 구워** 두면, 합성할 수 있는 기기든
+ * (원본 있음) 없는 기기든 같은 그림을 본다. 100% 로 되돌릴 때도 반드시 다시 굽는다 —
+ * 그때는 `needsCompose` 가 false 라 저장 래스터가 **그대로 화면에 나오기** 때문이다.
+ *
+ * 원본이 없는 기기(동기화로 받기만 한 도면)에서는 `null` 을 돌려주고 조용히 넘어간다 —
+ * 저장 래스터를 갱신할 방법이 없다. 그 기기에서 배율을 바꾸면 예전과 같은 어긋남이 남는다
+ * (알려진 한계, 로그 참조).
+ */
+export async function rebakeScaledRender(
+  store: {
+    readBlob(key: string): Promise<Blob | null>;
+    replaceRenderBlob(d: Drawing, renderBlob: Blob): Promise<Drawing>;
+  },
+  dw: Drawing,
+): Promise<Drawing | null> {
+  const source = await store.readBlob(dw.sourceBlobKey);
+  if (!source) return null;
+  const { renderBlob } = await composeA4(source, clampScale(dw.imgScale ?? 1));
+  return store.replaceRenderBlob(dw, renderBlob);
 }
 
 /** 적용 완료 토스트 문구 — 두 진입점이 같은 말을 하도록 */

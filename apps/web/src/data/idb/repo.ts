@@ -45,6 +45,7 @@ import {
 } from './db.js';
 import {
   getBlobIn,
+  newBlobKey,
   objectUrlFor,
   putBlobIn,
   releaseBlobIn,
@@ -451,6 +452,37 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     }
 
     await txDone(tx);
+  }
+
+  /**
+   * 도면의 **화면용 A4 래스터를 새로 구운 것으로 갈아 끼운다** (2026-09-07 · 동기화 어긋남 수정).
+   *
+   * ⭐ 왜 필요한가: `sourceBlobKey`(업로드 원본)는 **동기화되지 않는다**(Q60).
+   *    다른 기기가 받는 것은 `renderBlobKey` 래스터뿐이다. 배율(`imgScale`)을 바꾸면
+   *    결함 좌표는 새 배치로 옮겨져 동기화되는데 래스터를 그대로 두면, 저쪽에는
+   *    **옛 배율 도면 + 새 배율 좌표**가 도착해 표기가 통째로 어긋난다.
+   *
+   * ⚠️ **반드시 새 키**로 넣는다. 같은 키에 내용만 바꾸면 서버는 "이미 올린 키"로 보고
+   *    (`readUploadedBlobKeys`) 재업로드를 건너뛴다 — 다른 기기는 영원히 옛 그림을 본다.
+   *
+   * Blob 과 도면 레코드를 **한 트랜잭션**에서 커밋한다 (§2-9-d) — 레코드가 가리키는
+   * 파일이 없는 순간이 한 번도 없어야 한다.
+   */
+  async replaceRenderBlob(drawing: Drawing, renderBlob: Blob): Promise<Drawing> {
+    const prevKey = drawing.renderBlobKey;
+    const stamped = this.stamp({ ...drawing, renderBlobKey: newBlobKey() });
+    const tx = this.db.transaction([STORE.drawings, STORE.blobs], 'readwrite');
+    const blobs = tx.objectStore(STORE.blobs);
+    await putBlobIn(blobs, stamped.renderBlobKey, renderBlob);
+    // 무손실 통과 업로드는 `renderBlobKey === sourceBlobKey` 일 수 있다 —
+    // 그때 참조를 줄이면 **원본이 지워져** 다시는 합성할 수 없게 된다
+    if (prevKey !== stamped.sourceBlobKey && prevKey !== stamped.thumbBlobKey) {
+      await releaseBlobIn(blobs, prevKey);
+      revokeUrl(prevKey);
+    }
+    tx.objectStore(STORE.drawings).put(stamped);
+    await txDone(tx);
+    return stamped;
   }
 
   /**

@@ -55,6 +55,7 @@ import {
 import {
   applyDrawingScale,
   drawingScaleAppliedMessage,
+  rebakeScaledRender,
   SCALE_NEEDS_A4_MESSAGE,
 } from '../data/drawingScale';
 
@@ -363,6 +364,8 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
       // 좌표가 달라진다. 저장은 `writeRenormalize`(도면+결함+메모 한 트랜잭션)를 재사용한다
       const moved = transformAll(dw.id, r.transform, defects, memos);
       void (async () => {
+        // 2026-09-07 — 저장 래스터를 새 배율로 다시 구운 결과(있으면 그것)를 화면에도 반영한다
+        let next = updated;
         if (storage.phase === 'READY') {
           const repo = storage.repo;
           const ok = await guard(async () => {
@@ -373,10 +376,18 @@ export function ProjectSetup({ projectId }: { projectId: string }) {
             setScaleBusy(false);
             return;
           }
+          // 원본(`sourceBlobKey`)은 동기화되지 않으므로(Q60), 저장 래스터를 갱신하지 않으면
+          // 다른 기기에는 **옛 배율 도면 + 새 배율 좌표**가 도착해 표기가 어긋난다
+          const rebaked = await guard(() => rebakeScaledRender(repo, updated));
+          if (rebaked) {
+            next = rebaked;
+            // 되돌리기 스냅샷은 갈아 끼우기 전 래스터 키를 들고 있다 — 그 파일은 방금 지워졌다
+            setRenormUndo((u) => (u && u.drawing.id === dw.id ? null : u));
+          }
         }
         setScaleBusy(false);
         releaseComposite(dw.id); // 캔버스가 새 배율로 다시 합성하도록
-        setDrawings((cur) => cur.map((x) => (x.id === dw.id ? updated : x)));
+        setDrawings((cur) => cur.map((x) => (x.id === dw.id ? next : x)));
         const dmap = new Map(moved.defects.map((d) => [d.id, d]));
         const mmap = new Map(moved.memos.map((m) => [m.id, m]));
         setDefects((cur) => cur.map((d) => dmap.get(d.id) ?? d));
