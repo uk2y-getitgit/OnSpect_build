@@ -60,6 +60,14 @@ export type PhotoBookCell = {
 
 export type PhotoBookPage = {
   index: number;
+  /**
+   * D45 B-5 — 이 페이지에 실린 사진들의 동 이름. 없거나 빈 이름이면 `null`.
+   *
+   * ⭐ **한 페이지는 항상 한 동이다.** 배치가 동 경계에서 페이지를 끊으므로(아래 `buildPhotoBook`)
+   *    이 값이 그 페이지 전체를 정확히 대표한다 — 머리말(`photoBookPageHeader`)이 이것을 쓴다.
+   *    저장되는 값이 아니라 **런타임 파생값**이다(P2 · `ExportRun` 스키마 무변경).
+   */
+  buildingName: string | null;
   /** `cells.length ≤ 6`. 마지막 페이지가 6 으로 안 나눠떨어져도 **칸 크기는 유지한다** */
   cells: PhotoBookCell[];
 };
@@ -77,6 +85,15 @@ export type PhotoBookInput = {
    * 손상결함표(`DamageTableInput.floorCodes`)와 같은 규칙 — 2026-09-04 사진첩 양식 개정으로 신설
    */
   floorCodes?: Readonly<Record<string, string | null>>;
+  /**
+   * D45 B-5 — 층 id → **동 이름**. 넘기면 동이 바뀌는 지점에서 페이지를 끊고,
+   * 각 페이지의 `buildingName` 이 채워져 머리말이 `{용역명} - {동이름}` 이 된다.
+   *
+   * ⭐ **안 넘기면 지금까지와 완전히 같다** — 모든 페이지의 `buildingName` 이 `null` 이고
+   *    분할도 6칸 규칙 하나뿐이다(P1).
+   * ⭐ 빈 문자열·공백뿐인 이름은 **없는 것으로 친다**(P4 · `buildLocations` 와 같은 처리).
+   */
+  buildingNames?: Readonly<Record<string, string>>;
   /** 기본 6 */
   perPage?: number;
   /**
@@ -92,13 +109,23 @@ export type PhotoBookInput = {
  *
  * `includeNonPrimary` 를 켜면 한 결함이 여러 칸을 차지한다 —
  * **결함번호·사진번호(정수)는 그대로**이고 부번만 늘어난다 (§2-8).
+ *
+ * D45 B-5 — `buildingNames` 를 넘기면 **동이 바뀌는 지점에서 페이지를 끊는다.**
+ * 선택이 아니라 강제다: 한 페이지에 두 동의 사진이 섞이면 그 페이지 머리말이 거짓말이 된다.
+ * 끊긴 페이지가 6칸을 못 채우면 **지금 규칙 그대로** 빈 칸을 테두리만 그린다(인쇄 뷰의 몫).
  */
 export function buildPhotoBook(input: PhotoBookInput): PhotoBookPage[] {
   const perPage = Math.max(1, input.perPage ?? PHOTO_BOOK_PER_PAGE);
   const defectById = new Map(input.defects.map((d) => [d.id, d]));
   const includeNonPrimary = input.includeNonPrimary === true;
+  const buildingOf = (floorId: string): string | null => {
+    const n = (input.buildingNames?.[floorId] ?? '').trim();
+    return n === '' ? null : n;
+  };
 
   const cells: PhotoBookCell[] = [];
+  /** `cells` 와 같은 길이·같은 순서. 페이지를 끊을 지점을 정하는 데만 쓴다 */
+  const cellBuildings: (string | null)[] = [];
   for (const r of input.rows) {
     if (r.photoNo === null) continue; // 대표사진 없음 — 사진첩에서 빠진다
     const d = defectById.get(r.defectId);
@@ -124,7 +151,9 @@ export function buildPhotoBook(input: PhotoBookInput): PhotoBookPage[] {
       }
     }
 
+    const building = buildingOf(r.floorId);
     for (const { photo, subNo } of picked) {
+      cellBuildings.push(building);
       cells.push({
         key: `${r.defectId}:${photo.id}`,
         defectId: r.defectId,
@@ -142,11 +171,33 @@ export function buildPhotoBook(input: PhotoBookInput): PhotoBookPage[] {
     }
   }
 
+  // 페이지 분할 — ① 6칸이 찼거나 ② **동이 바뀌면** 새 페이지를 연다.
+  // `buildingNames` 를 안 넘긴 경우 모든 값이 `null` 이라 ②가 절대 걸리지 않는다 → 옛 동작 그대로.
   const pages: PhotoBookPage[] = [];
-  for (let i = 0; i < cells.length; i += perPage) {
-    pages.push({ index: pages.length, cells: cells.slice(i, i + perPage) });
+  let cur: PhotoBookPage | null = null;
+  for (let i = 0; i < cells.length; i += 1) {
+    const building = cellBuildings[i] ?? null;
+    if (cur === null || cur.cells.length >= perPage || cur.buildingName !== building) {
+      cur = { index: pages.length, buildingName: building, cells: [] };
+      pages.push(cur);
+    }
+    cur.cells.push(cells[i]!);
   }
   return pages;
+}
+
+/**
+ * 사진첩 **페이지 머리말** 한 줄 — `{용역명}` 또는 `{용역명} - {동이름}` (2026-09-04 양식 · D45 B-5).
+ *
+ * ⭐ 문서 전체가 아니라 **페이지마다** 계산한다. 동이 바뀌면 페이지가 끊기므로(`buildPhotoBook`)
+ *    각 페이지의 머리말은 그 페이지 사진들의 동을 정확히 가리킨다.
+ *
+ * 동이 1개인 용역(또는 한 동만 골라 뽑은 경우)은 모든 페이지의 `buildingName` 이 같으므로
+ * **예전 산출물과 한 글자도 달라지지 않는다**(P1). 이름이 빈 동은 `null` 로 들어와 용역명만 난다(P4).
+ */
+export function photoBookPageHeader(projectName: string, buildingName: string | null): string {
+  const b = (buildingName ?? '').trim();
+  return b === '' ? projectName : `${projectName} - ${b}`;
 }
 
 /**

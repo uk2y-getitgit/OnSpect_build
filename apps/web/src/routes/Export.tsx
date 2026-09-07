@@ -32,6 +32,8 @@ import { downloadSequential } from '../export/download';
 import {
   describeDefect,
   exportFloors,
+  floorCodeClashes,
+  floorCodesFor,
   floorNameMap,
   planExport,
   planFromRun,
@@ -151,6 +153,21 @@ export function Export({ projectId }: { projectId: string }) {
   // ⭐ 파라미터가 바뀔 때마다 다시 계산한다 — 순수 함수라 비용이 없다
   const plan = useMemo(
     () => (source ? planExport(source, params) : null),
+    [source, params],
+  );
+
+  /**
+   * D45 B-7 · D49 — **층 접두어가 두 동에서 겹치는가.** 겹치면 `1F-01` 이 결함 두 개를 가리킨다.
+   *
+   * ⭐ **경고만 한다.** 출력을 막지 않고(D3), 앱이 접두어를 대신 고치지도 않는다(D49 · D20) —
+   *    접두어를 몰래 바꾸면 이미 낸 보고서와 번호가 달라진다.
+   * 조건 판정(`층별 1번부터`일 때만)은 `floorCodesFor` 안에 이미 있다 — 여기서 다시 세지 않는다.
+   */
+  const codeClashes = useMemo(
+    () =>
+      source
+        ? floorCodeClashes(source.bundle, params.floorIds, floorCodesFor(source, params))
+        : [],
     [source, params],
   );
 
@@ -400,8 +417,30 @@ export function Export({ projectId }: { projectId: string }) {
           />
         </section>
 
-        {(incomplete.length > 0 || noPhoto.length > 0) && (
+        {(incomplete.length > 0 || noPhoto.length > 0 || codeClashes.length > 0) && (
           <section className="panel xp-section xp-warnings">
+            {codeClashes.length > 0 && (
+              <p className="notice notice--warn">
+                층 접두어 <b>{codeClashes.map((c) => c.code).join(' · ')}</b> 가 서로 다른 동에서
+                겹칩니다 — <b>{`${codeClashes[0]!.code}-01`}</b> 이 결함 두 개를 가리키게 됩니다.
+                출력은 그대로 됩니다 — 필요하면 [용역 구성 → 층]에서 접두어를 동마다 다르게
+                고쳐 주세요(앱이 대신 바꾸지 않습니다).
+                <button
+                  type="button"
+                  className="btn btn--small btn--ghost"
+                  onClick={() =>
+                    setDialog({
+                      title: `접두어가 겹치는 층 ${codeClashes.length}건`,
+                      items: codeClashes.map(
+                        (c) => `${c.code} — ${c.floorLabels.join(' · ')}`,
+                      ),
+                    })
+                  }
+                >
+                  목록 보기
+                </button>
+              </p>
+            )}
             {incomplete.length > 0 && (
               <p className="notice notice--warn">
                 미완성 결함 <b>{incomplete.length}건</b>이 포함됩니다 — 부재나 결함유형이

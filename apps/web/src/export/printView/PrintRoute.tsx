@@ -29,7 +29,6 @@ import {
   displayNumbersOf,
   floorCodesFor,
   locationMapFloors,
-  photoBookHeaderText,
   photoBookModel,
   planFromRun,
   type ExportSource,
@@ -205,12 +204,6 @@ export function PrintRoute({
     return damageTableModel(data.source, planFromRun(data.source, data.run), data.run.params);
   }, [data, kind]);
 
-  /** 사진첩 머리말 — `{용역명}` 또는 `{용역명} - {동이름}`(동이 하나뿐일 때만, 2026-09-04) */
-  const bookHeaderText = useMemo(() => {
-    if (!data || kind !== 'PHOTO_BOOK') return '';
-    return photoBookHeaderText(data.source, planFromRun(data.source, data.run));
-  }, [data, kind]);
-
 
   // 렌더가 끝나고 **모든 이미지가 디코드되면** 인쇄 버튼을 연다.
   // ⭐ 여기서 `window.print()` 를 부르지 않는다 (F-2 · 스펙 §2-3) — 이 화면은 **미리보기**다.
@@ -267,10 +260,12 @@ export function PrintRoute({
       )}
       {data && kind === 'DEFECT_LIST' && listModel && <PrintDefectList model={listModel} />}
       {data && kind === 'PHOTO_BOOK' && (
+        // D45 B-5 — 머리말은 **페이지마다** 만든다(`photoBookPageHeader`). 문서 전체 한 줄이 아니다:
+        // 동이 바뀌면 `buildPhotoBook` 이 페이지를 끊고 그 페이지의 동 이름을 실어 보낸다
         <PrintPhotoBook
           pages={data.bookPages}
           images={data.photoImages?.byCell ?? {}}
-          headerText={bookHeaderText}
+          projectName={data.source.bundle.project.name}
         />
       )}
       {data && kind === 'LOCATION_MAP' && <PrintLocationMap pages={data.maps} />}

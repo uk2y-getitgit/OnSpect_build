@@ -185,28 +185,32 @@ export function photoBookModel(
     }),
     // D19 — 좌측 번호 칸도 손상결함표·조사위치도와 같은 접두어를 쓴다(2026-09-04)
     floorCodes: floorCodesFor(src, params),
+    // D45 B-5 — 동이 바뀌는 지점에서 페이지를 끊고, 페이지마다 머리말에 동 이름을 쓴다
+    buildingNames: photoBookBuildingNames(src),
     includeNonPrimary: params.doc.includeNonPrimaryPhotos === true,
   });
 }
 
 /**
- * 사진첩 머리말 — `{용역명}` 또는 `{용역명} - {동이름}` (2026-09-04 사용자 요청).
+ * D45 B-5 — 사진첩에 넘길 **층 id → 동 이름** 맵.
  *
- * 이 출력에 실제로 포함된 결함들이 걸쳐 있는 동을 모아, **동이 정확히 하나면** 그 이름을 붙인다.
- * 동이 둘 이상 섞여 있으면(여러 동을 한 번에 골라 출력한 경우) 어느 동을 대표로 붙일지
- * 애매해지므로 **용역명만** 낸다 — 틀린 동 이름을 붙이는 것보다 안전하다(비차단 가정).
+ * ⚠️ 예전에는 여기 대신 `photoBookHeaderText(src, plan)` 가 문서 전체에 머리말 한 줄을 만들면서
+ *    *"동이 둘 이상이면 어느 동을 대표로 붙일지 애매하므로 용역명만 낸다"* 는 **비차단 가정**을
+ *    두고 동 이름을 버렸다. **D45/D48 이 그 가정을 명시적으로 뒤집었다** — 이제 동이 여럿이면
+ *    페이지를 동 경계에서 끊고 페이지마다 그 동의 이름을 낸다. 옛 가정으로 되돌리지 말 것.
+ *
+ * - **동을 걸러내지 않는다**(`buildings.length >= 2` 게이트 없음). 동이 1개면 모든 층이 같은
+ *   이름이라 페이지가 더 끊기지 않고 머리말도 예전과 같은 `{용역명} - {동이름}` 이다(P1).
+ * - 이름이 빈 동은 넣지 않는다 — 코어가 `null` 로 보고 용역명만 낸다(P4).
  */
-export function photoBookHeaderText(src: ExportSource, plan: ExportPlan): string {
-  const floorById = new Map(src.bundle.floors.map((f) => [f.id, f]));
-  const buildingById = new Map(src.bundle.buildings.map((b) => [b.id, b]));
-  const names = new Set<string>();
-  for (const r of plan.rows) {
-    const floor = floorById.get(r.floorId);
-    const name = floor ? buildingById.get(floor.buildingId)?.name.trim() : '';
-    if (name) names.add(name);
+function photoBookBuildingNames(src: ExportSource): Record<string, string> {
+  const nameOf = new Map(src.bundle.buildings.map((b) => [b.id, b.name.trim()]));
+  const out: Record<string, string> = {};
+  for (const f of src.bundle.floors) {
+    const n = nameOf.get(f.buildingId) ?? '';
+    if (n !== '') out[f.id] = n;
   }
-  const projectName = src.bundle.project.name;
-  return names.size === 1 ? `${projectName} - ${[...names][0]}` : projectName;
+  return out;
 }
 
 // ── 층 ─────────────────────────────────────────────────────────────────────
@@ -305,6 +309,55 @@ export function runBuildingLabel(
     .map((b) => b.name.trim())
     .filter((n) => n !== '');
   return names.length === 0 ? null : names.join('·');
+}
+
+/**
+ * D45 B-7 · D49 — **층 접두어가 두 동에서 겹치는 것**을 찾는다.
+ *
+ * `층별 1번부터`(`PER_FLOOR`)에서 A동 1층과 B동 1층이 둘 다 접두어 `1F` 를 쓰면
+ * **`1F-01` 이 결함 두 개를 가리킨다.** 결함번호는 손상결함표↔사진첩↔조사위치도를 잇는
+ * 유일한 열쇠라 대조가 불가능해진다.
+ *
+ * ⭐ **앱이 접두어를 고치지 않는다**(D49-A). 접두어는 D20 에서 사용자가 직접 입력하는 값으로
+ *    못박혔고, 앱이 몰래 바꾸면 **이미 낸 보고서와 번호가 달라진다.** 알리기만 한다.
+ * ⭐ **출력을 막지도 않는다**(D3 — 자동 제외·차단은 채택하지 않는다).
+ *
+ * - `floorCodes` 는 `floorCodesFor()` 결과를 그대로 넣는다. 번호모드가 `PER_FLOOR` 가 아니면
+ *   그 함수가 `{}` 를 주므로 **경고 자체가 생기지 않는다** — 조건 판정이 한 곳에만 있다.
+ * - **같은 동 안의 중복은 세지 않는다.** 동을 건너뛴 겹침만 이번 변경이 표준 사용법으로
+ *   만든 문제이고, 동이 1개인 용역은 화면이 예전과 한 글자도 안 달라진다(P1).
+ */
+export type FloorCodeClash = {
+  /** 겹친 접두어 — `1F` */
+  code: string;
+  /** 그 접두어를 쓰는 층들 — `A동 1층`. 동 순위 → 층 `sortOrder` 순(층칩과 같은 기준) */
+  floorLabels: string[];
+};
+
+export function floorCodeClashes(
+  bundle: ProjectBundle,
+  floorIds: readonly string[],
+  floorCodes: Readonly<Record<string, string | null>>,
+): FloorCodeClash[] {
+  const picked = new Set(floorIds);
+  const groups = new Map<string, { buildingIds: Set<string>; labels: string[] }>();
+  // `exportFloors` 순서를 그대로 쓴다 — 목록의 나열 순서가 층칩·출력 순서와 어긋나지 않는다
+  for (const f of exportFloors(bundle)) {
+    if (!picked.has(f.id)) continue;
+    const code = (floorCodes[f.id] ?? '').trim();
+    if (code === '') continue;
+    const g = groups.get(code) ?? { buildingIds: new Set<string>(), labels: [] };
+    g.buildingIds.add(f.buildingId);
+    const bn = f.buildingName.trim();
+    g.labels.push(bn === '' ? f.name : `${bn} ${f.name}`);
+    groups.set(code, g);
+  }
+  const out: FloorCodeClash[] = [];
+  for (const [code, g] of groups) {
+    if (g.buildingIds.size < 2) continue; // 동을 건너뛴 겹침만 경고한다
+    out.push({ code, floorLabels: g.labels });
+  }
+  return out;
 }
 
 /** 결함 id → 화면에 보여줄 짧은 설명 — `[목록 보기]` 가 쓴다 */

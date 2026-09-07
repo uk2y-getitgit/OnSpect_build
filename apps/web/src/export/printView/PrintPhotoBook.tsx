@@ -5,6 +5,9 @@
  * · 순서는 `buildPhotoBook()` 이 정한 그대로다 — **사진번호 오름차순이 이미 보장돼 있다**.
  * · 마지막 페이지가 6 으로 안 나눠떨어져도 **칸 크기를 유지한다**
  *   (사진만 커지면 보고서가 들쭉날쭉해진다) — 빈 칸은 내용 없이 테두리만 그린다.
+ * · D45 B-5 — **동이 바뀌면 페이지가 끊긴다**(코어 `buildPhotoBook` 이 이미 끊어서 준다).
+ *   그래서 동 경계 앞 페이지도 6칸을 못 채울 수 있고, 그때 빈 칸 규칙은 위와 **똑같다**.
+ *   머리말은 페이지마다 그 동 이름으로 찍는다 — 여기서 판정하지 않는다.
  *
  * ⭐ React key 는 `cell.key`(= `defectId:photoId`) 다. `defectId` 를 쓰면
  *    `대표 외 사진 포함` 을 켜는 순간 한 결함에 칸이 여러 개가 되어 **키가 중복된다**(§2-8).
@@ -17,7 +20,7 @@
  * 그만큼 줄어드므로 `FRAME_W_MM`/`FRAME_H_MM` 도 같이 줄였다 — `print.css` 의 주석과 반드시
  * 같이 맞춰야 한다(안 그러면 사진이 다시 여백을 뚫고 넘친다, 지난 라운드와 같은 사고).
  */
-import type { PhotoBookCell, PhotoBookPage } from '@onspect/project-core';
+import { photoBookPageHeader, type PhotoBookCell, type PhotoBookPage } from '@onspect/project-core';
 import type { PhotoBookImage } from '../photoBookImages';
 
 /** `print.css` 의 `.pv-pb-frame` 과 같은 값 — 회전 시 가로/세로를 맞바꾼다 */
@@ -27,13 +30,16 @@ const FRAME_H_MM = 52;
 export function PrintPhotoBook({
   pages,
   images,
-  headerText,
+  projectName,
 }: {
   pages: readonly PhotoBookPage[];
   /** `cell.key` → 이미지. 어댑터가 만든다 (코어는 URL 을 모른다) */
   images: Readonly<Record<string, PhotoBookImage>>;
-  /** 머리말 한 줄 — `{용역명}` 또는 `{용역명} - {동이름}` (2026-09-04, `photoBookHeaderText`) */
-  headerText: string;
+  /**
+   * 머리말의 앞부분. 실제 문구는 **페이지마다** `photoBookPageHeader(projectName, page.buildingName)`
+   * 로 만든다 — `{용역명}` 또는 `{용역명} - {동이름}` (2026-09-04 양식 · D45 B-5).
+   */
+  projectName: string;
 }) {
   if (pages.length === 0) {
     return (
@@ -63,7 +69,7 @@ export function PrintPhotoBook({
             <tbody>
               <tr>
                 <td className="pv-pb-head" colSpan={4}>
-                  {headerText}
+                  {photoBookPageHeader(projectName, p.buildingName)}
                 </td>
               </tr>
               {rowsOf(p.cells).map((row, i) => (

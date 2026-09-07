@@ -8,6 +8,8 @@
  *   · **좌측 번호 칸은 결함번호(층접두어 포함)다** — 사진번호("사진 12")를 대체했다
  *   · 캡션은 **한 줄**: `위치 부재명 결함유형 (가로x세로)` — 크기 없으면 괄호 생략
  *   · **부번은 파생값이다** (§2-8) — `includeNonPrimary` 를 켜도 배치 순서(`row.no`)는 안 흔들린다
+ *   · **동이 바뀌면 페이지가 끊긴다** (D45 B-5 · D48) — 한 페이지에 두 동의 사진이 섞이면
+ *     그 페이지 머리말이 거짓말이 된다. `buildingNames` 를 안 넘기면 옛 동작 그대로다(P1)
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,6 +17,7 @@ import {
   buildPhotoBook,
   groupPhotosByDefect,
   photoBookCaption,
+  photoBookPageHeader,
   type NumberingRow,
   type Photo,
   type PhotoBookDefect,
@@ -185,6 +188,116 @@ describe('좌측 번호 칸 — 결함번호(층접두어) (2026-09-04)', () => 
     });
     expect(pages[0]!.cells.map((c) => c.defectNo)).toEqual(['1F-01', '1F-01']);
     expect(pages[0]!.cells.map((c) => c.subNo)).toEqual([null, 1]);
+  });
+});
+
+describe('동 경계 페이지 분리 · 페이지 머리말 (D45 B-5 · D48)', () => {
+  /** 층 id 를 갖는 row — 동 판정이 `floorId` 로 이뤄지는 것을 확인한다 */
+  function rowOn(defectId: string, floorId: string, no: number): NumberingRow {
+    return { defectId, floorId, no, photoNo: no };
+  }
+
+  function bookOf(
+    ids: readonly { id: string; floorId: string }[],
+    buildingNames?: Record<string, string>,
+  ) {
+    return buildPhotoBook({
+      rows: ids.map((x, i) => rowOn(x.id, x.floorId, i + 1)),
+      defects: ids.map((x) => def(x.id)),
+      photosByDefect: groupPhotosByDefect(ids.map((x) => photo(`ph-${x.id}`, x.id))),
+      locations: {},
+      ...(buildingNames ? { buildingNames } : {}),
+    });
+  }
+
+  it('buildingNames 를 안 넘기면 예전과 완전히 같다 — 6칸 규칙만, buildingName 은 전부 null', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => ({ id, floorId: 'f1' }));
+    const pages = bookOf(ids);
+    expect(pages).toHaveLength(2);
+    expect(pages.map((p) => p.cells.length)).toEqual([6, 1]);
+    expect(pages.map((p) => p.buildingName)).toEqual([null, null]);
+  });
+
+  it('동이 1개면 페이지가 더 끊기지 않는다 — 머리말만 `{용역명} - {동}`(P1)', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => ({ id, floorId: 'f1' }));
+    const pages = bookOf(ids, { f1: 'A동' });
+    expect(pages.map((p) => p.cells.length)).toEqual([6, 1]);
+    expect(pages.map((p) => p.buildingName)).toEqual(['A동', 'A동']);
+    expect(photoBookPageHeader('○○아파트 정밀안전점검', pages[0]!.buildingName)).toBe(
+      '○○아파트 정밀안전점검 - A동',
+    );
+  });
+
+  it('동이 바뀌면 6칸을 못 채워도 새 페이지에서 시작한다 — 한 페이지에 두 동이 안 섞인다', () => {
+    const pages = bookOf(
+      [
+        { id: 'a1', floorId: 'fA' },
+        { id: 'a2', floorId: 'fA' },
+        { id: 'b1', floorId: 'fB' },
+        { id: 'b2', floorId: 'fB' },
+      ],
+      { fA: 'A동', fB: 'B동' },
+    );
+    expect(pages).toHaveLength(2);
+    expect(pages[0]!.buildingName).toBe('A동');
+    expect(pages[0]!.cells.map((c) => c.defectId)).toEqual(['a1', 'a2']);
+    expect(pages[1]!.buildingName).toBe('B동');
+    expect(pages[1]!.cells.map((c) => c.defectId)).toEqual(['b1', 'b2']);
+    // `index` 는 0부터 연속이어야 한다 — React key 이자 페이지 번호다
+    expect(pages.map((p) => p.index)).toEqual([0, 1]);
+  });
+
+  it('한 동이 6칸을 넘으면 그 안에서 다시 6칸마다 끊긴다', () => {
+    const ids = [
+      ...['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'].map((id) => ({ id, floorId: 'fA' })),
+      { id: 'b1', floorId: 'fB' },
+    ];
+    const pages = bookOf(ids, { fA: 'A동', fB: 'B동' });
+    expect(pages.map((p) => p.cells.length)).toEqual([6, 1, 1]);
+    expect(pages.map((p) => p.buildingName)).toEqual(['A동', 'A동', 'B동']);
+  });
+
+  it('이름이 빈 동은 없는 것으로 친다 — buildingName null · 머리말은 용역명만 (P4)', () => {
+    const pages = bookOf(
+      [
+        { id: 'a1', floorId: 'fA' },
+        { id: 'x1', floorId: 'fX' },
+      ],
+      { fA: 'A동', fX: '   ' },
+    );
+    expect(pages.map((p) => p.buildingName)).toEqual(['A동', null]);
+    expect(photoBookPageHeader('○○용역', pages[1]!.buildingName)).toBe('○○용역');
+  });
+
+  it('같은 동으로 돌아오면 다시 붙지 않는다 — 출력 순서를 바꾸지 않는다', () => {
+    const pages = bookOf(
+      [
+        { id: 'a1', floorId: 'fA' },
+        { id: 'b1', floorId: 'fB' },
+        { id: 'a2', floorId: 'fA' },
+      ],
+      { fA: 'A동', fB: 'B동' },
+    );
+    expect(pages.map((p) => p.buildingName)).toEqual(['A동', 'B동', 'A동']);
+    expect(pages.map((p) => p.cells.map((c) => c.defectId))).toEqual([['a1'], ['b1'], ['a2']]);
+  });
+
+  it('대표 외 사진을 켜도 같은 결함의 칸들은 한 페이지 안에서 같은 동을 따른다', () => {
+    const pages = buildPhotoBook({
+      rows: [rowOn('a', 'fA', 1), rowOn('b', 'fB', 2)],
+      defects: [def('a'), def('b')],
+      photosByDefect: groupPhotosByDefect([
+        photo('p1', 'a', { isPrimary: true, sortOrder: 10 }),
+        photo('p2', 'a', { isPrimary: false, sortOrder: 20 }),
+        photo('p3', 'b', { isPrimary: true, sortOrder: 10 }),
+      ]),
+      locations: {},
+      buildingNames: { fA: 'A동', fB: 'B동' },
+      includeNonPrimary: true,
+    });
+    expect(pages.map((p) => p.buildingName)).toEqual(['A동', 'B동']);
+    expect(pages[0]!.cells.map((c) => c.renderBlobKey)).toEqual(['render-p1', 'render-p2']);
+    expect(pages[1]!.cells.map((c) => c.renderBlobKey)).toEqual(['render-p3']);
   });
 });
 
