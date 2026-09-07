@@ -147,6 +147,12 @@ export type DamageRow = {
 export type DamageSection = {
   floorId: string;
   floorName: string;
+  /**
+   * D45 B-4 — 이 섹션이 속한 동. **런타임 모델이다 — 저장하지 않는다**(P2).
+   * 동이 1개거나 이름이 비었으면 `buildingName` 은 `''` 이고 `title` 이 예전과 같다(P1·P4).
+   */
+  buildingId: string;
+  buildingName: string;
   /** 섹션 머리 행에 인쇄할 문자열 */
   title: string;
   rows: DamageRow[];
@@ -285,6 +291,13 @@ export function buildDamageTable(input: DamageTableInput): DamageTableModel {
 
   const defectById = new Map(input.defects.map((d) => [d.id, d]));
   const floorById = new Map(input.floors.map((f) => [f.id, f]));
+  /**
+   * D45 B-4 — 섹션 제목의 동 이름. **판정 기준은 `buildLocations` 와 똑같다**
+   * (`input.buildings.length >= 2` · 이름 `trim()`). 두 곳이 갈리면
+   * `위치` 열엔 동이 붙는데 섹션 제목엔 안 붙는 상태가 생긴다.
+   */
+  const multiBuilding = input.buildings.length >= 2;
+  const buildingNameById = new Map(input.buildings.map((b) => [b.id, b.name.trim()]));
   const memberById = new Map(input.members.map((m) => [m.id, m]));
   const causeById = new Map(input.causes.map((c) => [c.id, c]));
   const locations = buildLocations(input);
@@ -303,9 +316,23 @@ export function buildDamageTable(input: DamageTableInput): DamageTableModel {
     const d = defectById.get(r.defectId);
     if (!d) continue; // 재다운로드 중 지워진 결함 — 건너뛴다
 
+    // `floorId` 는 동을 건너 유일하다 — 동이 바뀌면 층도 반드시 바뀌므로 추가 분기가 필요 없다
     if (!current || current.floorId !== r.floorId) {
-      const floorName = floorById.get(r.floorId)?.name ?? '';
-      current = { floorId: r.floorId, floorName, title: `■ ${floorName}`, rows: [] };
+      const floor = floorById.get(r.floorId);
+      const floorName = floor?.name ?? '';
+      const buildingId = floor?.buildingId ?? '';
+      const buildingName = multiBuilding ? (buildingNameById.get(buildingId) ?? '') : '';
+      current = {
+        floorId: r.floorId,
+        floorName,
+        buildingId,
+        buildingName,
+        // D45 B-4 — 동이 2개 이상이면 `■ A동 1층`. 1개면 `■ 1층` 그대로다(P1).
+        // 엑셀(`damageTableFile`)·인쇄 뷰(`PrintDamageTable`)는 이 문자열을 그대로 쓰므로
+        // 조립을 여기 한 곳에서만 바꾸면 둘 다 따라온다
+        title: buildingName === '' ? `■ ${floorName}` : `■ ${buildingName} ${floorName}`,
+        rows: [],
+      };
       sections.push(current);
     }
 

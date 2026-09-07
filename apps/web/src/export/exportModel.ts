@@ -259,6 +259,54 @@ export function floorNameMap(bundle: ProjectBundle): Map<string, string> {
   return new Map(bundle.floors.map((f) => [f.id, f.name]));
 }
 
+/**
+ * D45 B-3 — 조사위치도에 넘길 층 목록. **동 이름은 여기서 한 번만 판정한다.**
+ *
+ * 호출부가 둘이다(`produce.ts` 다운로드 · `PrintRoute.tsx` 인쇄 뷰). 각자 판정하면
+ * 다운로드 파일명에는 동이 붙는데 인쇄 뷰 `alt` 에는 안 붙는 상태가 생긴다.
+ *
+ * - **동이 1개면 전부 `null`** — 파일명·경고 문구가 지금과 한 글자도 안 달라진다(P1).
+ * - 이름이 빈 동은 없는 것처럼 취급한다(P4).
+ */
+export function locationMapFloors(
+  bundle: ProjectBundle,
+): { id: string; name: string; buildingName: string | null }[] {
+  const multi = bundle.buildings.length >= 2;
+  const nameOf = new Map(bundle.buildings.map((b) => [b.id, b.name.trim()]));
+  return bundle.floors.map((f) => {
+    const bn = multi ? (nameOf.get(f.buildingId) ?? '') : '';
+    return { id: f.id, name: f.name, buildingName: bn === '' ? null : bn };
+  });
+}
+
+/**
+ * D45 B-6 — 이력 한 줄에 붙일 동 표기 (`A동` · `A동·B동`). 동이 1개면 `null` 이라
+ * 이력 줄이 지금과 한 글자도 안 달라진다(P1).
+ *
+ * ⚠️ **`ExportRun` 스키마를 바꾸지 않는다**(P2). 이력에 저장된 층 목록에서 파생한다 —
+ *    동 이름을 나중에 고치면 이 요약도 따라 바뀌지만, 그건 **화면 요약**이지 재현되는
+ *    산출물 내용이 아니다(층 이름과 정확히 같은 성질 · D19 와 일관).
+ *
+ * 나열 순서는 동 순위(`sortByOrder`)를 따른다 — 층칩·출력 순서와 같은 기준이다.
+ */
+export function runBuildingLabel(
+  bundle: ProjectBundle,
+  floorIds: readonly string[],
+): string | null {
+  if (bundle.buildings.length < 2) return null;
+  const buildingOf = new Map(bundle.floors.map((f) => [f.id, f.buildingId]));
+  const used = new Set<string>();
+  for (const id of floorIds) {
+    const b = buildingOf.get(id);
+    if (b !== undefined) used.add(b);
+  }
+  const names = sortByOrder(bundle.buildings)
+    .filter((b) => used.has(b.id))
+    .map((b) => b.name.trim())
+    .filter((n) => n !== '');
+  return names.length === 0 ? null : names.join('·');
+}
+
 /** 결함 id → 화면에 보여줄 짧은 설명 — `[목록 보기]` 가 쓴다 */
 export function describeDefect(d: Defect, floorName: string): string {
   const parts = [floorName, d.memberName ?? '', d.defectTypeName ?? ''].filter(

@@ -43,6 +43,11 @@ const MAX_CANVAS_EDGE = 8192;
 export type LocationMapPage = {
   floorId: string;
   floorName: string;
+  /**
+   * D45 B-3 — 동이 2개 이상인 용역에서만 값이 있다. 동이 1개면 `null` 이라
+   * 파일명·`alt` 가 지금과 한 글자도 안 달라진다(P1). **런타임 모델이다 — 저장하지 않는다.**
+   */
+  buildingName: string | null;
   drawingId: string;
   blob: Blob;
   /** objectURL — 인쇄 뷰의 `<img>` 가 쓴다. 다 쓰면 `releaseLocationMaps()` 로 해제한다 */
@@ -70,7 +75,11 @@ export type LocationMapInput = {
   drawings: readonly Drawing[];
   defects: readonly Defect[];
   memos: readonly Memo[];
-  floors: readonly { id: string; name: string }[];
+  /**
+   * D45 B-3 — `buildingName` 은 **동이 2개 이상일 때만** 채운다(`exportModel.locationMapFloors`).
+   * 두 동에 모두 `1층` 이 있으면 파일명·경고가 구분되지 않으므로 여기서 받아 표기에 섞는다.
+   */
+  floors: readonly { id: string; name: string; buildingName?: string | null }[];
   /** 출력 순서 그대로의 층 목록 (`params.floorIds`) */
   floorIds: readonly string[];
   /** 결함 id → 출력 결함번호. `ExportRun.mapping` 에서 만든다 */
@@ -88,17 +97,22 @@ export async function renderLocationMaps(input: LocationMapInput): Promise<Locat
   const pages: LocationMapPage[] = [];
   const warnings: LocationMapWarning[] = [];
   const floorName = new Map(input.floors.map((f) => [f.id, f.name]));
+  const buildingName = new Map(input.floors.map((f) => [f.id, f.buildingName ?? null]));
   const byFloor = groupDrawingsByFloor(input.drawings);
 
   for (const floorId of input.floorIds) {
     const name = floorName.get(floorId) ?? '';
+    const bName = buildingName.get(floorId) ?? null;
+    // D45 B-3 — 두 동에 모두 `1층` 이 있으면 경고만 봐서는 어느 동인지 알 수 없다.
+    // 동이 1개면 `bName` 이 null 이라 예전 문구 그대로다(P1)
+    const label = locationMapLabel(name, bName);
     const drawing = byFloor.get(floorId);
     if (!drawing) {
       warnings.push({
         floorId,
         floorName: name,
         kind: 'NO_DRAWING',
-        detail: `${name} — 도면이 없어 조사위치도를 만들 수 없습니다`,
+        detail: `${label} — 도면이 없어 조사위치도를 만들 수 없습니다`,
       });
       continue;
     }
@@ -111,12 +125,19 @@ export async function renderLocationMaps(input: LocationMapInput): Promise<Locat
         floorId,
         floorName: name,
         kind: 'IMAGE_FAILED',
-        detail: `${name} — 도면 이미지를 불러오지 못했습니다 (${e instanceof Error ? e.message : String(e)})`,
+        detail: `${label} — 도면 이미지를 불러오지 못했습니다 (${e instanceof Error ? e.message : String(e)})`,
       });
       continue;
     }
 
-    const page = await renderOne({ input, drawing, image, floorId, floorName: name });
+    const page = await renderOne({
+      input,
+      drawing,
+      image,
+      floorId,
+      floorName: name,
+      buildingName: bName,
+    });
     if (!page) continue;
     pages.push(page);
     if (page.clipped.length > 0) {
@@ -124,12 +145,34 @@ export async function renderLocationMaps(input: LocationMapInput): Promise<Locat
         floorId,
         floorName: name,
         kind: 'CLIPPED',
-        detail: `${name} — 번호 ${page.clipped.length}개가 도면 밖에 있습니다. 위치를 옮겨 주세요`,
+        detail: `${label} — 번호 ${page.clipped.length}개가 도면 밖에 있습니다. 위치를 옮겨 주세요`,
       });
     }
   }
 
   return { pages, warnings };
+}
+
+/**
+ * D45 B-3 — 화면 표기(경고 문구 · 인쇄 뷰 `alt`)의 층 이름. **동이 1개면 층 이름 그대로다**(P1).
+ * 파일명과 문구가 갈리지 않도록 조립을 여기 한 곳에 둔다.
+ */
+export function locationMapLabel(floorName: string, buildingName: string | null): string {
+  const b = (buildingName ?? '').trim();
+  return b === '' ? floorName : `${b} ${floorName}`;
+}
+
+/**
+ * D45 B-3 — 파일명 접미사. 두 동에 모두 `1층` 이 있으면 **같은 파일명 두 개**가 내려가
+ * 브라우저가 `(1)` 을 붙이는 바람에 어느 동인지 알 수 없었다.
+ * 동이 1개면 접미사가 층 이름뿐이라 예전 파일명과 동일하다.
+ */
+export function locationMapFileSuffix(page: {
+  floorName: string;
+  buildingName: string | null;
+}): string {
+  const b = (page.buildingName ?? '').trim();
+  return b === '' ? page.floorName : `${b}_${page.floorName}`;
 }
 
 /** 인쇄·다운로드가 끝나면 objectURL 을 해제한다. 안 하면 페이지당 수 MB 가 샌다 */
@@ -144,8 +187,9 @@ async function renderOne(a: {
   image: LoadedDrawing;
   floorId: string;
   floorName: string;
+  buildingName: string | null;
 }): Promise<LocationMapPage | null> {
-  const { input, drawing, image, floorId, floorName } = a;
+  const { input, drawing, image, floorId, floorName, buildingName } = a;
   const render = input.params.render;
 
   // 2. 출력용 결함 사본 — **문서는 건드리지 않는다** (K12)
@@ -250,6 +294,7 @@ async function renderOne(a: {
   return {
     floorId,
     floorName,
+    buildingName,
     drawingId: drawing.id,
     blob,
     url: URL.createObjectURL(blob),

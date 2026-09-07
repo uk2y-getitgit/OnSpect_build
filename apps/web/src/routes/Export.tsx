@@ -35,6 +35,7 @@ import {
   floorNameMap,
   planExport,
   planFromRun,
+  runBuildingLabel,
   type ExportSource,
 } from '../export/exportModel';
 import { DAMAGE_REPEAT_ROWS } from '../export/damageTableFile';
@@ -176,6 +177,16 @@ export function Export({ projectId }: { projectId: string }) {
     (r: ExportRun): string[] =>
       source ? planExport(source, r.params).rows.map((x) => x.defectId) : [],
     [source],
+  );
+
+  /**
+   * D45 B-6 — 이력 한 줄의 동 표기. 이력에 저장된 **층 목록에서 파생**한다
+   * (`ExportRun` 스키마 무변경 · P2). 동이 1개면 `null` 이라 줄이 예전과 똑같다.
+   */
+  const buildingLabelFor = useCallback(
+    (r: ExportRun): string | null =>
+      bundle ? runBuildingLabel(bundle, r.floorRanges.map((x) => x.floorId)) : null,
+    [bundle],
   );
 
   // ── 생성 ────────────────────────────────────────────────────────────────
@@ -497,6 +508,7 @@ export function Export({ projectId }: { projectId: string }) {
             runs={runs}
             lastRunId={lastRunId}
             currentIdsFor={currentIdsFor}
+            buildingLabelFor={buildingLabelFor}
             busyRunId={busy && busy !== '생성' ? busy : null}
             onRedownload={(r) => void run(r.id, { existing: r })}
             onPrint={(r, kind) => openPrint(r.id, kind as PrintKind)}

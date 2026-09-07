@@ -215,6 +215,61 @@ describe('표 구조 (§3-4)', () => {
     expect(t.rowCount).toBe(3);
   });
 
+  it('D45 B-4 — 동이 2개 이상이면 섹션 제목이 ■ {동} {층}', () => {
+    const t = buildDamageTable(
+      input({
+        rows: [row('a', 1, null, 'f1'), row('b', 2, null, 'f2')],
+        defects: [def('a'), def('b', { floorId: 'f2' })],
+        floors: [
+          { id: 'f1', name: '1층', buildingId: 'b1' },
+          { id: 'f2', name: '1층', buildingId: 'b2' },
+        ],
+        buildings: [
+          { id: 'b1', name: '본관' },
+          { id: 'b2', name: '별관' },
+        ],
+      }),
+    );
+    // 두 동에 모두 `1층` 이 있어도 제목으로 구분된다 (예전에는 `■ 1층` 이 둘)
+    expect(t.sections.map((s) => s.title)).toEqual(['■ 본관 1층', '■ 별관 1층']);
+    expect(t.sections.map((s) => s.buildingId)).toEqual(['b1', 'b2']);
+    expect(t.sections.map((s) => s.buildingName)).toEqual(['본관', '별관']);
+  });
+
+  it('D45 B-4 — 동이 1개면 제목이 예전 그대로 ■ {층} (P1)', () => {
+    const t = buildDamageTable(input());
+    expect(t.sections[0]!.title).toBe('■ 지하1층');
+    expect(t.sections[0]!.buildingName).toBe('');
+  });
+
+  it('D45 B-4 — 이름이 빈 동은 없는 것처럼 취급한다 (P4)', () => {
+    const t = buildDamageTable(
+      input({
+        buildings: [
+          { id: 'b1', name: '   ' },
+          { id: 'b2', name: '별관' },
+        ],
+      }),
+    );
+    expect(t.sections[0]!.title).toBe('■ 지하1층');
+  });
+
+  it('D45 B-4 — 섹션 제목 판정은 `위치` 열(buildLocations)과 같은 기준이다', () => {
+    // 두 곳이 갈리면 위치 열엔 동이 붙는데 제목엔 안 붙는 상태가 생긴다
+    const two = input({
+      buildings: [
+        { id: 'b1', name: '본관' },
+        { id: 'b2', name: '별관' },
+      ],
+    });
+    expect(buildDamageTable(two).sections[0]!.title).toBe('■ 본관 지하1층');
+    expect(buildLocations(two)['a']).toBe('본관 지하1층');
+
+    const one = input();
+    expect(buildDamageTable(one).sections[0]!.title).toBe('■ 지하1층');
+    expect(buildLocations(one)['a']).toBe('지하1층');
+  });
+
   it('머리말 3행 — 용역명 / 입력한 2행 / <계 속>', () => {
     const t = buildDamageTable(input({ headerLine2: '제3장 상세조사' }));
     expect([t.title, t.headerLine2, t.continued]).toEqual([

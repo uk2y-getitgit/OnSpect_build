@@ -32,6 +32,11 @@ export type RunHistoryProps = {
    * 그러면 사용자가 이 경고를 무시하게 되고, **진짜 결함이 추가됐을 때도 못 본다.**
    */
   currentIdsFor: (run: ExportRun) => readonly string[];
+  /**
+   * D45 B-6 — 이 이력이 **어느 동을 뽑은 것인지** (`A동` · `A동·B동`). 동이 1개면 `null` 이라
+   * 이력 줄이 예전과 똑같다(P1). 조립은 `exportModel.runBuildingLabel` 한 곳뿐이다.
+   */
+  buildingLabelFor: (run: ExportRun) => string | null;
   busyRunId: string | null;
   onRedownload: (run: ExportRun) => void;
   onPrint: (run: ExportRun, kind: ExportArtifactKind) => void;
@@ -52,6 +57,7 @@ export function RunHistory({
   runs,
   lastRunId,
   currentIdsFor,
+  buildingLabelFor,
   busyRunId,
   onRedownload,
   onPrint,
@@ -74,6 +80,8 @@ export function RunHistory({
         const drift = diffExportRun(run, currentIdsFor(run));
         const changed = drift.added.length > 0 || drift.removed.length > 0;
         const busy = busyRunId === run.id;
+        // D45 B-6 — 동이 2개 이상인 용역에서 "이 이력이 어느 동인지" 를 알 수 없었다
+        const buildingLabel = buildingLabelFor(run);
         return (
           <li className="xp-run" key={run.id}>
             <div className="xp-run__main">
@@ -82,6 +90,7 @@ export function RunHistory({
                 <span className="num">{run.defectCount}</span>건 ·{' '}
                 {run.params.mode === 'PER_FLOOR' ? '층별 1번부터' : '전체 이어서'} ·{' '}
                 {run.floorRanges.length}개 층
+                {buildingLabel !== null && <> · {buildingLabel}</>}
               </span>
               {run.artifacts.length > 0 && (
                 <span className="xp-run__kinds">

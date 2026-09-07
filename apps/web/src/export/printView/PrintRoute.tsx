@@ -28,6 +28,7 @@ import {
   defectListModel,
   displayNumbersOf,
   floorCodesFor,
+  locationMapFloors,
   photoBookHeaderText,
   photoBookModel,
   planFromRun,
@@ -155,7 +156,8 @@ export function PrintRoute({
             drawings: bundle.drawings,
             defects: bundle.defects,
             memos: bundle.memos,
-            floors: bundle.floors,
+            // D45 B-3 — 다운로드(`produce.ts`)와 **같은 판정**을 써야 파일명과 인쇄 뷰가 안 갈린다
+            floors: locationMapFloors(bundle),
             floorIds: run.params.floorIds,
             // D19 — `run.params.floorCodes` 스냅샷을 그대로 쓴다. 층 이름을 나중에 고쳐도
             // 이 이력으로 다시 뽑으면 접두어까지 그때 그대로다

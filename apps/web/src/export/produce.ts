@@ -21,10 +21,12 @@ import {
   defectListModel,
   displayNumbersOf,
   floorCodesFor,
+  locationMapFloors,
   type ExportPlan,
   type ExportSource,
 } from './exportModel';
 import {
+  locationMapFileSuffix,
   releaseLocationMaps,
   renderLocationMaps,
   type LocationMapWarning,
@@ -115,7 +117,8 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
       drawings: bundle.drawings,
       defects: bundle.defects,
       memos: bundle.memos,
-      floors: bundle.floors,
+      // D45 B-3 — 동이 2개 이상이면 층에 동 이름이 실려 온다(파일명·경고 구분용)
+      floors: locationMapFloors(bundle),
       floorIds: input.params.floorIds,
       // D19 — 도면 위 번호 풍선도 접두어를 그대로 쓴다(`1F-01`).
       // 스냅샷(`params.floorCodes`)이 있으면 그것이 진실이다 — 재출력 재현성
@@ -135,7 +138,9 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
           kind: 'LOCATION_MAP',
           ext: 'png',
           at: input.at,
-          suffix: page.floorName,
+          // D45 B-3 — 동이 2개 이상이면 `A동_1층`. 안 그러면 두 동의 `1층` 이
+          // **같은 파일명**으로 내려가 브라우저가 `(1)` 을 붙인다(어느 동인지 알 수 없다)
+          suffix: locationMapFileSuffix(page),
         }),
       );
     }
