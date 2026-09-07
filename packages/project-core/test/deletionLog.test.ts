@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendDeletion,
+  appendDeletions,
   deletionLogKey,
   DELETION_LOG_KEY_PREFIX,
   isDeletionEntry,
@@ -134,5 +135,40 @@ describe('삭제 후 되돌리기 왕복 — 실제 흐름 재현', () => {
     log = appendDeletion(log, entry('DEFECT', 'x1', 100));
     log = removeDeletions(log, ['x2']); // 관계없는 되돌리기
     expect(log.some((e) => e.id === 'x1')).toBe(true);
+  });
+});
+
+/**
+ * D46 — 용역을 통째로 갈아엎을 때(가져오기 덮어쓰기) 쓰는 일괄 append.
+ * `appendDeletion` 을 N번 부른 것과 **결과가 같아야** 한다. 다르면 동기화가 어긋난다.
+ */
+describe('appendDeletions (D46)', () => {
+  it('여러 건을 한 번에 더한다 — 한 건씩 더한 것과 결과가 같다', () => {
+    const log = [entry('DEFECT', 'd0')];
+    const add = [entry('DEFECT', 'd1', 5), entry('PHOTO', 'p1', 5)];
+    const batched = appendDeletions(log, add);
+    const oneByOne = add.reduce((acc, e) => appendDeletion(acc, e), log as DeletionEntry[]);
+    expect(batched).toEqual(oneByOne);
+  });
+
+  it('기존 로그의 같은 (kind, id) 는 새 것으로 갈린다', () => {
+    const log = [entry('DEFECT', 'd1', 1), entry('MEMO', 'm1', 1)];
+    const out = appendDeletions(log, [entry('DEFECT', 'd1', 9)]);
+    expect(out).toEqual([entry('MEMO', 'm1', 1), entry('DEFECT', 'd1', 9)]);
+  });
+
+  it('kind 가 다르면 같은 id 라도 별개로 남는다', () => {
+    const out = appendDeletions([], [entry('DEFECT', 'x', 1), entry('PHOTO', 'x', 2)]);
+    expect(out).toHaveLength(2);
+  });
+
+  it('entries 안의 중복은 마지막 것만 남는다', () => {
+    const out = appendDeletions([], [entry('DEFECT', 'd1', 1), entry('DEFECT', 'd1', 7)]);
+    expect(out).toEqual([entry('DEFECT', 'd1', 7)]);
+  });
+
+  it('더할 것이 없으면 원본 배열을 그대로 돌려준다(불필요한 meta 쓰기 방지)', () => {
+    const log = [entry('DEFECT', 'd1')];
+    expect(appendDeletions(log, [])).toBe(log);
   });
 });

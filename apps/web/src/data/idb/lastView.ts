@@ -71,6 +71,16 @@ export async function getLastView(db: IDBDatabase, projectId: string): Promise<L
   return row.value.projectId === projectId ? row.value : null;
 }
 
+/**
+ * 마지막 화면 기억을 버린다 (D46 — 가져오기 덮어쓰기).
+ *
+ * 덮어쓰기는 층·도면 id 를 전부 새로 발급하므로, 남겨 두면 **없는 도면**을 가리키는
+ * 기억이 그대로 살아 있게 된다. 호출한 트랜잭션 스코프에 `STORE.meta` 가 있어야 한다.
+ */
+export function clearLastViewIn(tx: IDBTransaction, projectId: string): void {
+  tx.objectStore(STORE.meta).delete(lastViewKey(projectId));
+}
+
 export async function putLastView(db: IDBDatabase, view: LastView): Promise<void> {
   // 성하지 않은 값은 **저장 자체를 하지 않는다.** 한 번 들어가면 그 용역을 열 때마다 되살아난다
   if (!isLastView(view)) return;

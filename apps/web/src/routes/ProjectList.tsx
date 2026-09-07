@@ -9,6 +9,7 @@ import {
   formatBytes,
   formatDateTime,
   formatRelative,
+  findProjectsWithSameIdentity,
   isoOf,
   matchesQuery,
   projectDisplayName,
@@ -16,13 +17,19 @@ import {
 } from '@onspect/project-core';
 import { useAppData } from '../data/appData';
 import { estimateStorage } from '../data/idb/db';
-import { exportProjectToZip, importProjectFromZip } from '../data/projectTransfer';
+import {
+  exportProjectToZip,
+  importParsedProject,
+  readProjectZip,
+  type ImportMode,
+  type ParsedProjectZip,
+} from '../data/projectTransfer';
 import { seedSampleProject, SAMPLE_SUMMARY } from '../data/sampleProject';
 import { readSyncState } from '../data/sync';
 import { navigate } from '../router';
 import { RemoteProjectsButton } from './RemoteProjects';
 import { SyncButton } from './SyncButton';
-import { BusyButton, EmptyState } from '../ui/Form';
+import { BusyButton, EmptyState, Modal } from '../ui/Form';
 import { MoreMenu } from '../ui/Menu';
 import { ConfirmDialog } from '../ui/Overlays';
 import { useToast } from '../ui/ToastHost';
@@ -166,16 +173,28 @@ export function ProjectList() {
     [storage, exportingId, toast],
   );
 
-  const importFromFile = useCallback(
-    async (file: File) => {
-      if (storage.phase !== 'READY' || importing) return;
+  /**
+   * D46(Q80) — 파일 안 용역이 **이름·연도·반기·종류 전부** 같은 기존 용역과 겹칠 때 뜨는 확인창.
+   * 자동 덮어쓰기는 하지 않는다(이름은 고유 키가 아니다). 사용자가 매번 고른다.
+   */
+  const [dupPrompt, setDupPrompt] = useState<{
+    parsed: ParsedProjectZip;
+    candidates: ProjectSummary[];
+  } | null>(null);
+
+  /** 실제 심기 — 새로 만들기·덮어쓰기 두 경로가 이 하나를 공유한다 */
+  const runImport = useCallback(
+    async (parsed: ParsedProjectZip, mode: ImportMode) => {
+      if (storage.phase !== 'READY') return;
       setImporting(true);
       try {
-        // `guard()`(저장 실패 배너)를 안 쓴다 — "잘못된 파일"은 저장 실패가 아니라
-        // 사용자가 파일을 잘못 골랐다는 뜻이라 토스트로 충분하다
-        const r = await importProjectFromZip(storage.repo, file);
+        const r = await importParsedProject(storage.repo, parsed, mode);
         reload();
-        toast(`'${r.projectName}'을(를) 새 용역으로 가져왔습니다`);
+        toast(
+          mode.kind === 'OVERWRITE'
+            ? `'${r.projectName}'을(를) 파일 내용으로 덮어썼습니다`
+            : `'${r.projectName}'을(를) 새 용역으로 가져왔습니다`,
+        );
         navigate({ name: 'SETUP', projectId: r.projectId });
       } catch (err) {
         toast(err instanceof Error ? err.message : '가져오기에 실패했습니다', { kind: 'warn' });
@@ -183,7 +202,38 @@ export function ProjectList() {
         setImporting(false);
       }
     },
-    [storage, importing, reload, toast],
+    [storage, reload, toast],
+  );
+
+  const importFromFile = useCallback(
+    async (file: File) => {
+      if (storage.phase !== 'READY' || importing) return;
+      setImporting(true);
+      let parsed: ParsedProjectZip;
+      try {
+        // `guard()`(저장 실패 배너)를 안 쓴다 — "잘못된 파일"은 저장 실패가 아니라
+        // 사용자가 파일을 잘못 골랐다는 뜻이라 토스트로 충분하다
+        parsed = await readProjectZip(file);
+      } catch (err) {
+        toast(err instanceof Error ? err.message : '가져오기에 실패했습니다', { kind: 'warn' });
+        setImporting(false);
+        return;
+      }
+      // 휴지통에 든 용역은 후보에서 뺀다 — `listProjectSummaries` 가 이미 걸러 준다.
+      // 지운 용역을 말없이 되살려 덮어쓰는 쪽이 더 놀랍다
+      const candidates = findProjectsWithSameIdentity(
+        summaries ?? [],
+        parsed.project,
+        (s) => s.project,
+      );
+      if (candidates.length === 0) {
+        await runImport(parsed, { kind: 'NEW' });
+        return;
+      }
+      setImporting(false);
+      setDupPrompt({ parsed, candidates });
+    },
+    [storage, importing, summaries, runImport, toast],
   );
 
   if (storage.phase === 'LOADING' || filtered === null) {
@@ -372,6 +422,20 @@ export function ProjectList() {
 
       <StorageNote space={space} />
 
+      {/* D46 — 같은 용역이 이미 있다. 새로 만들지 덮어쓸지 **사용자가** 고른다 */}
+      {dupPrompt && (
+        <ImportDuplicateDialog
+          incomingName={projectDisplayName(dupPrompt.parsed.project)}
+          candidates={dupPrompt.candidates}
+          onCancel={() => setDupPrompt(null)}
+          onChoose={(mode) => {
+            const { parsed } = dupPrompt;
+            setDupPrompt(null);
+            void runImport(parsed, mode);
+          }}
+        />
+      )}
+
       {/* D43 — 동기화된 용역 삭제는 팀 전체에 전파된다. 지우기 전에 그 사실을 알린다 */}
       {syncedDelete && (
         <ConfirmDialog
@@ -407,6 +471,109 @@ export function ProjectList() {
  * 기기 저장 여유 (P5) — 현장에 나가기 **전에** 보여야 의미가 있다.
  * 사진 수백 장이 들어가는 앱이라 "다 찍고 나서 용량 부족"이 최악이다.
  */
+/**
+ * D46(Q80) — 파일 안 용역이 이미 로컬에 있을 때 뜨는 선택창.
+ *
+ * ⚠️ **자동 덮어쓰기는 없다.** 이름은 고유 키가 아니라 이름·연도·반기·종류가 다 같아도
+ *    서로 다른 용역일 수 있다 — 남의 용역을 통째로 날리는 사고를 막으려면 매번 물어야 한다.
+ *
+ * ⚠️ 후보가 **여러 개**일 수 있다(같은 이름의 용역을 두 개 만들 수 있으니까).
+ *    그때는 어느 것을 덮어쓸지 고르게 한다. 기본값은 목록 맨 위(가장 최근 접속)다.
+ *
+ * 스크림 클릭으로는 닫히지 않는다(U32) — 여기서 잘못 눌리면 되돌릴 수 없는 삭제가 걸린다.
+ */
+function countsOf(s: ProjectSummary): string {
+  return `동 ${s.buildingCount} · 층 ${s.floorCount} · 도면 ${s.drawingCount} · 결함 ${s.defectCount}`;
+}
+
+function ImportDuplicateDialog({
+  incomingName,
+  candidates,
+  onCancel,
+  onChoose,
+}: {
+  incomingName: string;
+  candidates: readonly ProjectSummary[];
+  onCancel: () => void;
+  onChoose: (mode: ImportMode) => void;
+}) {
+  const [targetId, setTargetId] = useState(candidates[0]?.project.id ?? '');
+  const target = candidates.find((c) => c.project.id === targetId) ?? candidates[0] ?? null;
+
+  return (
+    <Modal
+      title="같은 용역이 이미 있습니다"
+      subtitle={incomingName}
+      autoFocusFirst={false}
+      onClose={onCancel}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onCancel}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            disabled={target === null}
+            onClick={() => {
+              if (target) onChoose({ kind: 'OVERWRITE', projectId: target.project.id });
+            }}
+          >
+            덮어쓰기
+          </button>
+          <button type="button" className="btn btn--primary" onClick={() => onChoose({ kind: 'NEW' })}>
+            새로 만들기
+          </button>
+        </>
+      }
+    >
+      <p className="impdup__lead">
+        이름 · 연도 · 반기 · 점검종류가 <b>모두 같은</b> 용역이 이 기기에 이미 있습니다.
+      </p>
+
+      {candidates.length === 1 ? (
+        <p className="impdup__one">
+          기존 용역 <b className="quote">{projectDisplayName(candidates[0]!.project)}</b>
+          <span className="impdup__counts">{countsOf(candidates[0]!)}</span>
+        </p>
+      ) : (
+        <fieldset className="impdup__pick">
+          <legend className="impdup__legend">덮어쓸 용역을 고르세요</legend>
+          {candidates.map((c) => (
+            <label key={c.project.id} className="impdup__opt">
+              <input
+                type="radio"
+                name="import-overwrite-target"
+                checked={targetId === c.project.id}
+                onChange={() => setTargetId(c.project.id)}
+              />
+              <span>
+                {projectDisplayName(c.project)}
+                <span className="impdup__counts">{countsOf(c)}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+
+      <ul className="impdup__choices">
+        <li>
+          <b>새로 만들기</b> — 기존 용역은 그대로 두고 <b>별개의 새 용역</b>으로 들여옵니다.
+        </li>
+        <li>
+          <b>덮어쓰기</b> — 기존 용역의 동 · 층 · 도면 · 결함 · 메모 · 사진 · 항목설정을{' '}
+          <b>전부 지우고</b> 파일 내용으로 대체합니다. 용역 자체는 같은 용역으로 남아 서버 동기화가
+          그대로 이어집니다.
+        </li>
+      </ul>
+      <p className="notice notice--warn">
+        덮어쓰기는 <b>되돌릴 수 없습니다.</b> 기존 내용이 필요하면 먼저 <b>[파일로 내보내기]</b>로
+        받아 두세요.
+      </p>
+    </Modal>
+  );
+}
+
 function StorageNote({ space }: { space: { usage: number; quota: number } | null }) {
   // 브라우저가 추정치를 안 주면(사생활 보호 모드 등) 침묵한다. 0GB 라고 거짓말하지 않는다
   if (!space || space.quota <= 0) return null;

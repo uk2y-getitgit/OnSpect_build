@@ -17,6 +17,7 @@
  */
 import {
   appendDeletion,
+  appendDeletions,
   deletionLogKey,
   isDeletionLog,
   removeDeletions,
@@ -54,6 +55,24 @@ export async function recordDeletion(
   const store = tx.objectStore(STORE.meta);
   const log = await readLog(store, projectId);
   writeLog(store, projectId, appendDeletion(log, { kind, id, at, deviceId }));
+}
+
+/**
+ * ⭐ 한 용역의 레코드를 **무더기로** 지울 때 쓰는 정본 (D46 — 가져오기 덮어쓰기).
+ *
+ * `recordDeletion` 을 N번 부르면 `meta` 를 N번 읽고 N번 쓴다. 결함·사진 수백 건을
+ * 한 트랜잭션에서 갈아엎을 때는 그게 그대로 지연이 된다 — 여기는 **읽기 1회 · 쓰기 1회**다.
+ * 한 건씩 지우는 경로(층·도면·사진 삭제)는 지금처럼 `recordDeletion` 을 계속 쓴다.
+ */
+export async function recordDeletions(
+  tx: IDBTransaction,
+  projectId: string,
+  entries: readonly DeletionEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const store = tx.objectStore(STORE.meta);
+  const log = await readLog(store, projectId);
+  writeLog(store, projectId, appendDeletions(log, entries));
 }
 
 /**

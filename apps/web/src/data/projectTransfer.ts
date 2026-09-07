@@ -27,7 +27,7 @@ import type { IdbProjectRepo } from './idb/repo.js';
 const FORMAT_VERSION = 1;
 
 /** 파일에 그대로 실리는 것 — 옛 id 그대로다(가져오기 시점에만 새 id를 발급한다) */
-type TransferManifest = {
+export type TransferManifest = {
   formatVersion: number;
   exportedAt: number;
   project: Project;
@@ -104,13 +104,29 @@ export async function exportProjectToZip(
 export type ImportProjectResult = { projectId: string; projectName: string };
 
 /**
- * zip 파일을 읽어 **항상 새 프로젝트로** 심는다(D38) — 옛 프로젝트가 있어도 절대 덮어쓰지 않는다.
- * id 는 전부 이 함수 안에서 새로 발급한다(같은 파일을 두 번 가져와도 안 부딪힌다).
+ * 읽기만 끝낸 백업 파일 (D46).
+ *
+ * 가져오기를 **두 단계**로 쪼갠 이유: 파일 안 용역이 이미 로컬에 있는지 먼저 보고
+ * "새로 만들기 / 덮어쓰기" 를 물어야 하는데, 그 판정을 하려면 zip 을 이미 열어 둔
+ * 상태여야 한다. 파일을 두 번 읽지 않으려고 열어 둔 결과를 그대로 들고 다닌다.
  */
-export async function importProjectFromZip(
-  repo: IdbProjectRepo,
-  file: Blob,
-): Promise<ImportProjectResult> {
+export type ParsedProjectZip = {
+  /** 파일 안 용역 — **옛 id 그대로**다. 이름·연도·반기·종류 중복 판정에만 쓴다 */
+  project: Project;
+  manifest: TransferManifest;
+  files: ReturnType<typeof unzipSync>;
+};
+
+/**
+ * 가져오기 방식 (D46).
+ * - `NEW` — 지금까지의 동작. id 를 **전부** 새로 발급한다(D38)
+ * - `OVERWRITE` — 기존 용역 하위를 전부 지우고 그 자리에 심는다.
+ *   **`project.id` 만은 기존 것을 그대로 쓴다** — 서버 동기화가 붙어 있으면 같은 용역으로 이어진다
+ */
+export type ImportMode = { kind: 'NEW' } | { kind: 'OVERWRITE'; projectId: string };
+
+/** zip 을 열고 매니페스트만 검증한다. **아무것도 저장하지 않는다** */
+export async function readProjectZip(file: Blob): Promise<ParsedProjectZip> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let files: ReturnType<typeof unzipSync>;
   try {
@@ -131,7 +147,26 @@ export async function importProjectFromZip(
   if (manifest.formatVersion !== FORMAT_VERSION) {
     throw new Error(`지원하지 않는 백업 파일 버전입니다(${manifest.formatVersion})`);
   }
+  if (!manifest.project || typeof manifest.project.id !== 'string') {
+    throw new Error('백업 파일에 용역 정보가 없습니다');
+  }
+  return { project: manifest.project, manifest, files };
+}
 
+/**
+ * 읽어 둔 백업 파일을 실제로 심는다.
+ *
+ * `NEW` 는 id 를 전부 새로 발급한다(D38 그대로 — 같은 파일을 두 번 가져와도 안 부딪힌다).
+ * `OVERWRITE` 는 **project.id 하나만 기존 값으로 고정**하고 나머지(동·층·도면·결함·메모·
+ * 사진·항목설정)는 새 id 를 받는다. 기존 하위 레코드 삭제와 새 레코드 삽입은
+ * `repo.importBundle` 이 **한 트랜잭션**에서 처리한다(반쪽 상태 없음).
+ */
+export async function importParsedProject(
+  repo: IdbProjectRepo,
+  parsed: ParsedProjectZip,
+  mode: ImportMode,
+): Promise<ImportProjectResult> {
+  const { manifest, files } = parsed;
   const bundle = {
     project: manifest.project,
     buildings: manifest.buildings,
@@ -143,9 +178,13 @@ export async function importProjectFromZip(
     itemSettings: manifest.itemSettings,
   };
 
-  // 항상 새 id (D38) — 이 파일을 몇 번을 가져와도 매번 새 프로젝트가 된다
   const idMap = new Map<string, string>();
   for (const oldId of collectTransferIds(bundle)) idMap.set(oldId, newId());
+  if (mode.kind === 'OVERWRITE') {
+    // ⭐ 용역 id 만 기존 것으로 되돌린다. 항목설정 스냅샷 id 는 `projectId` 와 같은 값이라
+    //    (`ensureProjectSettings` 가 projectId 를 키로 쓴다) 같은 map 항목을 함께 타고 들어간다
+    idMap.set(bundle.project.id, mode.projectId);
+  }
   const remapped = remapTransferBundle(bundle, idMap);
 
   // 소프트삭제·최근접속은 "지금 막 들여온 것"에 맞게 덮어쓴다. 나머지(updatedAt·deviceId 등)는
@@ -170,7 +209,19 @@ export async function importProjectFromZip(
     photos: remapped.photos,
     itemSettings: remapped.itemSettings,
     blobs,
+    ...(mode.kind === 'OVERWRITE' ? { replaceProjectId: mode.projectId } : {}),
   });
 
   return { projectId: project.id, projectName: project.name };
+}
+
+/**
+ * zip 파일을 읽어 **항상 새 프로젝트로** 심는다(D38) — 한 번에 하는 편의 함수다.
+ * 중복 확인창(D46)을 거치는 화면은 `readProjectZip` + `importParsedProject` 를 따로 부른다.
+ */
+export async function importProjectFromZip(
+  repo: IdbProjectRepo,
+  file: Blob,
+): Promise<ImportProjectResult> {
+  return importParsedProject(repo, await readProjectZip(file), { kind: 'NEW' });
 }

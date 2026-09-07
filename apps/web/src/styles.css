@@ -5053,3 +5053,66 @@ select.input { cursor: pointer; }
   margin-top: 2px;
   flex: none;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+ * D46 — 파일 가져오기: 같은 용역 감지 확인창 (2026-09-08)
+ * ══════════════════════════════════════════════════════════════════════ */
+.impdup__lead {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.impdup__one {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.impdup__pick {
+  margin: 0 0 12px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.impdup__legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.impdup__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.impdup__opt input { margin-top: 3px; flex: none; }
+
+/* 건수는 줄바꿈해서 흐리게 — 용역명이 길어도 이름이 먼저 읽힌다 */
+.impdup__counts {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.impdup__choices {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}

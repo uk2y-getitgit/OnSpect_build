@@ -10,7 +10,14 @@
  *   6. 번들 밖 id를 "필수" 참조로 쓰면(구성이 깨졌으면) 조용히 넘어가지 않고 던진다
  */
 import { describe, expect, it } from 'vitest';
-import { collectTransferBlobKeys, collectTransferIds, remapTransferBundle } from '../src/projectTransfer.js';
+import {
+  collectTransferBlobKeys,
+  collectTransferIds,
+  findProjectsWithSameIdentity,
+  normalizeProjectIdentityName,
+  remapTransferBundle,
+  sameProjectIdentity,
+} from '../src/projectTransfer.js';
 
 type Project = { id: string; prevProjectId: string | null; name: string };
 type Building = { id: string; projectId: string; name: string };
@@ -275,5 +282,51 @@ describe('collectTransferBlobKeys', () => {
     expect(new Set(keys)).toEqual(
       new Set(['blob-render-1', 'blob-source-1', 'blob-thumb-1', 'blob-photo-render-1', 'blob-photo-source-1']),
     );
+  });
+});
+
+/**
+ * D46(Q80) — 파일 가져오기 시 "같은 용역" 감지.
+ *
+ * 못박는 것:
+ *   1. 이름·연도·반기·종류 **넷 다** 같아야 같은 용역이다. 하나라도 다르면 아니다
+ *   2. 이름 비교는 앞뒤 공백·연속 공백만 흡수한다(그 이상 흡수하면 다른 용역을 같다고 오판한다)
+ *   3. 여러 건이 걸릴 수 있다 — 이름은 고유 키가 아니다
+ */
+describe('sameProjectIdentity / findProjectsWithSameIdentity (D46)', () => {
+  const base = { name: '○○아파트 3차', year: 2026, half: 'H1', kind: 'REGULAR' };
+
+  it('넷이 전부 같으면 같은 용역이다', () => {
+    expect(sameProjectIdentity(base, { ...base })).toBe(true);
+  });
+
+  it('연도·반기·종류가 하나라도 다르면 다른 용역이다', () => {
+    expect(sameProjectIdentity(base, { ...base, year: 2025 })).toBe(false);
+    expect(sameProjectIdentity(base, { ...base, half: 'H2' })).toBe(false);
+    expect(sameProjectIdentity(base, { ...base, kind: 'PRECISE' })).toBe(false);
+  });
+
+  it('이름의 앞뒤 공백·연속 공백은 흡수한다', () => {
+    expect(sameProjectIdentity(base, { ...base, name: '  ○○아파트   3차 ' })).toBe(true);
+    expect(normalizeProjectIdentityName('  가  나  ')).toBe('가 나');
+  });
+
+  it('이름이 한 글자라도 다르면 다른 용역이다 — 자동 덮어쓰기 사고를 막는 선이다', () => {
+    expect(sameProjectIdentity(base, { ...base, name: '○○아파트 4차' })).toBe(false);
+    expect(sameProjectIdentity(base, { ...base, name: '○○아파트3차' })).toBe(false);
+  });
+
+  it('후보는 여러 건 나올 수 있다 — 이름은 고유 키가 아니다', () => {
+    const rows = [
+      { id: 'p1', project: { ...base } },
+      { id: 'p2', project: { ...base, year: 2025 } },
+      { id: 'p3', project: { ...base, name: '○○아파트 3차 ' } },
+    ];
+    const found = findProjectsWithSameIdentity(rows, base, (r) => r.project);
+    expect(found.map((r) => r.id)).toEqual(['p1', 'p3']);
+  });
+
+  it('후보가 없으면 빈 배열이다(그때 호출부가 곧장 새 용역으로 심는다)', () => {
+    expect(findProjectsWithSameIdentity([], base, (r: { name: string; year: number; half: string; kind: string }) => r)).toEqual([]);
   });
 });

@@ -18,6 +18,7 @@ import {
 import type {
   Building,
   CopyStructureResult,
+  DeletionEntry,
   Drawing,
   ExportArtifact,
   ExportRun,
@@ -61,13 +62,14 @@ import {
   pruneExportRuns,
   putExportRun,
 } from './exportRuns.js';
-import { getLastView, putLastView, type LastView } from './lastView.js';
-import { recordDeletion, unrecordDeletions } from './deletionLog.js';
+import { clearLastViewIn, getLastView, putLastView, type LastView } from './lastView.js';
+import { recordDeletion, recordDeletions, unrecordDeletions } from './deletionLog.js';
 import {
   purgePhotoIdsIn,
   purgePhotoRecordsIn,
   purgePhotosOfDefectsIn,
   putPhotoUploadIn,
+  uniquePhotoKeys,
   type PhotoUpload,
 } from './photos.js';
 
@@ -791,6 +793,81 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
   }
 
   /**
+   * D46 — 용역 하나의 **하위 레코드를 전부** 지운다. `Project` 레코드 자신은 안 지운다
+   * (id 를 살려 둬야 서버 동기화가 같은 용역으로 이어진다).
+   *
+   * `purgeFloorIn` 과 같은 규율을 따른다 — Blob 참조 해제 · objectURL 무효화 ·
+   * 삭제 전파 기록(D25). 다만 기록은 **한 번에 모아서** 남긴다(`recordDeletions`):
+   * 건당 `meta` 를 읽고 쓰면 결함 수백 건짜리 용역에서 그대로 지연이 된다.
+   *
+   * 호출한 트랜잭션 스코프에 projects 를 뺀 6종 + `blobs` + `itemSettings` + `meta` 가 있어야 한다.
+   *
+   * ⚠️ 항목설정 스냅샷은 **여기서 안 지운다.** `ItemSettings.id === projectId` 라
+   *    가져온 설정을 `put` 하면 같은 키를 덮어쓴다. 파일에 설정이 없는(옛 파일) 경우에는
+   *    기존 설정이 남는 편이 낫다 — 지워 버리면 `ensureProjectSettings` 가 지금 조직 설정으로
+   *    새 스냅샷을 떠서 불변식 #7(과업 시점 스냅샷)을 어긴다.
+   */
+  private async purgeProjectContentsIn(tx: IDBTransaction, projectId: string): Promise<void> {
+    const bs = tx.objectStore(STORE.buildings);
+    const fs = tx.objectStore(STORE.floors);
+    const ds = tx.objectStore(STORE.drawings);
+    const xs = tx.objectStore(STORE.defects);
+    const ms = tx.objectStore(STORE.memos);
+    const ps = tx.objectStore(STORE.photos);
+    const blobs = tx.objectStore(STORE.blobs);
+
+    const photos = await getAllByIndex<Photo>(ps, 'by_project', projectId);
+    const drawings = await getAllByIndex<Drawing>(ds, 'by_project', projectId);
+    const defects = await getAllByIndex<Defect>(xs, 'by_project', projectId);
+    const memos = await getAllByIndex<Memo>(ms, 'by_project', projectId);
+    const floors = await getAllByIndex<Floor>(fs, 'by_project', projectId);
+    const buildings = await getAllByIndex<Building>(bs, 'by_project', projectId);
+
+    const now = Date.now();
+    const log: DeletionEntry[] = [];
+    const mark = (kind: DeletionEntry['kind'], id: string) =>
+      log.push({ kind, id, at: now, deviceId: this.deviceId });
+
+    // 사진·도면이 잡고 있던 Blob 참조를 먼저 놓는다 — 레코드를 지운 뒤엔 키를 알 길이 없다
+    for (const p of photos) {
+      for (const k of uniquePhotoKeys(p)) {
+        await releaseBlobIn(blobs, k);
+        revokeUrl(k);
+      }
+      ps.delete(p.id);
+      mark('PHOTO', p.id);
+    }
+    for (const d of drawings) {
+      for (const k of uniqueKeys(d)) {
+        await releaseBlobIn(blobs, k);
+        revokeUrl(k);
+      }
+      ds.delete(d.id);
+      mark('DRAWING', d.id);
+    }
+    for (const x of defects) {
+      xs.delete(x.id);
+      mark('DEFECT', x.id);
+    }
+    for (const m of memos) {
+      ms.delete(m.id);
+      mark('MEMO', m.id);
+    }
+    for (const f of floors) {
+      fs.delete(f.id);
+      mark('FLOOR', f.id);
+    }
+    for (const b of buildings) {
+      bs.delete(b.id);
+      mark('BUILDING', b.id);
+    }
+
+    await recordDeletions(tx, projectId, log);
+    // 없어진 도면을 가리키는 마지막 화면 기억을 남기지 않는다
+    clearLastViewIn(tx, projectId);
+  }
+
+  /**
    * 기기 간 프로젝트 이동(D38 · Q74) — **가져오기 실행.**
    *
    * 호출부(`apps/web/src/data/projectTransfer.ts`)가 이미 `remapTransferBundle` 로
@@ -814,6 +891,16 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
     photos: readonly Photo[];
     itemSettings: ItemSettings | null;
     blobs: ReadonlyMap<string, Blob>;
+    /**
+     * D46 — **덮어쓰기.** 이 용역의 기존 하위 레코드를 **같은 트랜잭션에서 먼저 전부 지운다.**
+     *
+     * 호출부가 `project.id` 를 기존 용역 id 로 고정해서(=이 값과 같게) 넘긴다 —
+     * 그래야 서버 동기화가 붙어 있어도 같은 용역으로 계속 이어진다. 나머지 id(동·층·도면·
+     * 결함·메모·사진)는 새로 발급된 상태로 온다.
+     *
+     * 지우기와 넣기가 **한 트랜잭션**이라 반쪽 상태(다 지워지고 안 들어옴)가 생기지 않는다.
+     */
+    replaceProjectId?: string;
   }): Promise<void> {
     const stores = [
       STORE.projects,
@@ -825,8 +912,14 @@ export class IdbProjectRepo implements ProjectRepo<Defect, Memo, Photo> {
       STORE.photos,
       STORE.itemSettings,
       STORE.blobs,
+      // 덮어쓰기가 남기는 삭제 전파 기록·마지막화면 정리(D25 · D46)가 같은 트랜잭션에서 돈다.
+      // 새로 만들기(replaceProjectId 없음)일 때는 열어만 두고 아무것도 안 쓴다
+      STORE.meta,
     ];
     const tx = this.db.transaction(stores, 'readwrite');
+    if (input.replaceProjectId) {
+      await this.purgeProjectContentsIn(tx, input.replaceProjectId);
+    }
     tx.objectStore(STORE.projects).put(input.project);
     const bs = tx.objectStore(STORE.buildings);
     for (const b of input.buildings) bs.put(b);
