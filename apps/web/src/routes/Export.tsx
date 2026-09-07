@@ -568,9 +568,16 @@ function DefectListDialog({
 }
 
 // ── 보조 ───────────────────────────────────────────────────────────────────
-/** 처음 열 때의 층 순서 — 지하→지상 (불변식 #5 의 sortOrder 오름차순) */
+/**
+ * 처음 열 때의 층 순서 — **동 순위 → 층 sortOrder(지하→지상)**.
+ *
+ * ⚠️ `sortOrder` 는 **동 안에서의 순번**이다(A동 1층 = 1, B동 1층 = 1 · 불변식 #5).
+ *    동을 무시하고 `sortOrder` 만으로 정렬하면 `A동 1층 → B동 1층 → A동 2층 …` 처럼
+ *    **동을 오가며 지그재그**가 되어 화면의 칩 순서와 실제 출력 순서가 어긋난다(D45 · B-1).
+ *    층칩 표시 순서를 만드는 `exportFloors()` 를 그대로 재사용해 **한 곳에서만** 정렬한다.
+ */
 function defaultFloorOrder(b: ProjectBundle): string[] {
-  return [...b.floors].sort((x, y) => x.sortOrder - y.sortOrder).map((f) => f.id);
+  return exportFloors(b).map((f) => f.id);
 }
 
 function describeIds(

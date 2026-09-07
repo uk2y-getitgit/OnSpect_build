@@ -71,6 +71,8 @@ import { DrawingScaleDialog } from './DrawingScaleDialog';
 import {
   applyDrawingScale,
   drawingScaleAppliedMessage,
+  drawingsInBuilding,
+  floorBuildingMap,
   rebakeScaledRender,
   SCALE_NEEDS_A4_MESSAGE,
 } from '../data/drawingScale';
@@ -744,11 +746,38 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   /** 미리보기로 합성 캐시를 버린 도면들 — 취소할 때 이것만 되돌리면 된다 */
   const scaleTouched = useRef<Set<string>>(new Set());
 
+  /**
+   * ## 2026-09-08 (D45 A-1) — 일괄 적용 대상은 **이 동의 도면**뿐이다
+   *
+   * 예전에는 `snap.drawings`(용역 전체)가 통째로 대상이라, A동에서 125%를 누르면
+   * B동 도면과 **그 위의 결함·메모 좌표까지** 함께 옮겨졌다(D37). 되돌리려면 동마다 다시
+   * 맞춰야 하는데 좌표 이동은 왕복해도 부동소수 오차가 남는다.
+   *
+   * ⚠️ **스냅샷은 계속 용역 전체를 담는다.** 좁히는 것은 `targets` 뿐이다 —
+   *    스냅샷을 좁히면 `paintScale` 의 되돌리기(체크를 켰다 끄면 다른 도면을 스냅샷으로 복원)가
+   *    깨져 다른 동 도면이 미리보기 상태로 남는다(스펙 A-c).
+   */
+  const floorBuilding = useMemo(() => floorBuildingMap(floors), [floors]);
+  /** 지금 보고 있는 도면이 속한 동. 도면이 없으면 빈 문자열 = 일괄 대상 없음 */
+  const scaleBuildingId = currentDrawing ? (floorBuilding.get(currentDrawing.floorId) ?? '') : '';
+  const scaleBuildingDrawings = useMemo(
+    () => drawingsInBuilding(drawings, floorBuilding, scaleBuildingId),
+    [drawings, floorBuilding, scaleBuildingId],
+  );
+  /**
+   * 체크박스 라벨에 쓸 동 이름. **동이 1개뿐이면 `null`** — 다이얼로그가 지금과 똑같은
+   * `모든 도면에…` 문구를 그대로 쓴다(P1, 스펙 A-b-2). 이름이 빈 문자열이면 없는 것으로 취급(P4).
+   */
+  const scaleBuildingName =
+    buildings.length >= 2 ? (buildings.find((b) => b.id === scaleBuildingId)?.name.trim() || null) : null;
+
   const computeScale = useCallback(
     (raw: number, all: boolean) => {
       const snap = scaleSnapshot.current;
       if (!snap || !currentDrawing) return null;
-      const targets = all ? snap.drawings : snap.drawings.filter((d) => d.id === currentDrawing.id);
+      const targets = all
+        ? drawingsInBuilding(snap.drawings, floorBuilding, scaleBuildingId)
+        : snap.drawings.filter((d) => d.id === currentDrawing.id);
       const nextDrawings: Drawing[] = [];
       const nextDefects: Defect[] = [];
       const nextMemos: Memo[] = [];
@@ -764,7 +793,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       }
       return { nextDrawings, nextDefects, nextMemos, skipped: targets.length - nextDrawings.length };
     },
-    [currentDrawing],
+    [currentDrawing, floorBuilding, scaleBuildingId],
   );
 
   const paintScale = useCallback(
@@ -1630,7 +1659,8 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           drawing={currentDrawing}
           defectCount={defects.length}
           busy={scaleBusy}
-          otherDrawingCount={drawings.filter((d) => d.id !== currentDrawing.id).length}
+          otherDrawingCount={scaleBuildingDrawings.filter((d) => d.id !== currentDrawing.id).length}
+          buildingName={scaleBuildingName}
           onPreview={previewScale}
           onApply={applyScale}
           onClose={() => {

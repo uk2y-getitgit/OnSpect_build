@@ -13,6 +13,7 @@ export * from './types.js';
 export * from './a4.js';
 export * from './displayName.js';
 export * from './floorOrder.js';
+export * from './drawingScope.js';
 export * from './fileNameParse.js';
 export * from './relativeTime.js';
 export * from './validate.js';

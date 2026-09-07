@@ -28,10 +28,31 @@ export function FloorChips({ floors, selected, ranges, onChange }: FloorChipsPro
   };
 
   const selectAll = () => onChange(floors.map((f) => f.id));
-  const downUp = () =>
-    onChange([...floors].sort((a, b) => a.sortOrder - b.sortOrder).map((f) => f.id));
-  const upDown = () =>
-    onChange([...floors].sort((a, b) => b.sortOrder - a.sortOrder).map((f) => f.id));
+
+  /**
+   * ⚠️ `sortOrder` 는 **동 안에서의 순번**이다(불변식 #5 · D45 B-1).
+   *    동을 무시하고 정렬하면 `A동 1층 → B동 1층 → A동 2층 …` 으로 동이 섞인다.
+   *    **동 순위가 1차 키**, `sortOrder` 가 2차 키다. 동 순위는 `floors` 가 이미
+   *    `exportFloors()` 순서(동 순위 → sortOrder)로 들어오므로 **등장 순서**로 얻는다 —
+   *    이 파일은 새 정렬 규칙을 만들지 않는다.
+   */
+  const buildingRank = new Map<string, number>();
+  for (const f of floors) {
+    if (!buildingRank.has(f.buildingId)) buildingRank.set(f.buildingId, buildingRank.size);
+  }
+  const orderedIds = (dir: 1 | -1) =>
+    [...floors]
+      .sort((a, b) => {
+        const ra = buildingRank.get(a.buildingId) ?? 0;
+        const rb = buildingRank.get(b.buildingId) ?? 0;
+        if (ra !== rb) return ra - rb;
+        if (a.sortOrder !== b.sortOrder) return (a.sortOrder - b.sortOrder) * dir;
+        return a.id < b.id ? -dir : a.id > b.id ? dir : 0;
+      })
+      .map((f) => f.id);
+
+  const downUp = () => onChange(orderedIds(1));
+  const upDown = () => onChange(orderedIds(-1));
   const clear = () => onChange([]);
 
   return (

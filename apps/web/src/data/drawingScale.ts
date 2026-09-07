@@ -23,6 +23,16 @@ import type { NormTransform } from '@onspect/canvas-core';
 import { composeA4, scaledImgLayout } from './imageIngest';
 
 /**
+ * D45 A-1 — 일괄 적용 **대상 선정**. 배율 계산과 같은 곳에서 import 되도록 여기서 다시 내보낸다.
+ *
+ * 구현은 `project-core/drawingScope.ts` 에 있다 — `apps/web` 에는 테스트 러너가 없는데
+ * 대상이 한 장이라도 틀리면 다른 동의 결함 좌표가 조용히 밀리기 때문에 반드시 단위 테스트로
+ * 고정해야 한다(`test/drawingScope.test.ts`). 이 파일은 브라우저 API(`composeA4`)를 쓰므로
+ * 여기 두면 테스트에서 import 할 수 없다.
+ */
+export { drawingsInBuilding, floorBuildingMap } from '@onspect/project-core';
+
+/**
  * `imgLayout` 이 없는 옛 도면(A4 정규화 전 등록)에 대한 거부 문구.
  *
  * ⚠️ 여기서 자동으로 A4 정규화를 돌리면 `renormalizeAll` 이 **기존 결함 좌표를 전부 옮긴다.**

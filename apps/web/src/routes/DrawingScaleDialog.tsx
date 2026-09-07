@@ -22,6 +22,7 @@ export function DrawingScaleDialog({
   defectCount,
   busy,
   otherDrawingCount = 0,
+  buildingName = null,
   onPreview,
   onApply,
   onClose,
@@ -30,8 +31,16 @@ export function DrawingScaleDialog({
   /** 이 도면에 이미 찍힌 결함 수 — 안내 문구에 쓴다 */
   defectCount: number;
   busy: boolean;
-  /** 이 도면 말고 배율을 적용할 수 있는 도면 수. 0 이면 [모든 도면] 선택지를 안 그린다 */
+  /**
+   * 이 도면 말고 배율을 적용할 수 있는 도면 수 — **같은 동 안**의 다른 도면 수(D45 A-1).
+   * 0 이면 [모든 도면] 선택지를 안 그린다
+   */
   otherDrawingCount?: number;
+  /**
+   * 동이 2개 이상인 용역에서만 넘어온다(`null`이면 용역에 동이 1개뿐 — P1, 라벨이 예전과 동일).
+   * 있으면 라벨이 `이 동(A동)의 모든 도면…`이 된다
+   */
+  buildingName?: string | null;
   /**
    * 2026-09-03 — **실시간 미리보기.** 슬라이더를 움직일 때마다 캔버스가 바로 바뀐다.
    * 저장은 안 한다. 안 주면 미리보기 없이 [적용] 때만 반영된다.
@@ -131,7 +140,17 @@ export function DrawingScaleDialog({
               }}
             />
             <span>
-              <b>모든 도면</b>에 같은 배율 적용{' '}
+              {buildingName ? (
+                <>
+                  <b>
+                    이 동({buildingName})
+                  </b>
+                  의 모든 도면
+                </>
+              ) : (
+                <b>모든 도면</b>
+              )}
+              에 같은 배율 적용{' '}
               <span className="num">(이 도면 외 {otherDrawingCount}장)</span>
             </span>
           </label>
