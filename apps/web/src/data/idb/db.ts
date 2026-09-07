@@ -208,11 +208,28 @@ export async function countByIndex(
   return reqAsPromise(store.index(indexName).count(key));
 }
 
+/**
+ * 모든 로컬 id 생성기. **반드시 UUID 형식**이어야 한다 —
+ * 이 id 는 동기화 때 서버 `records.id uuid` 컬럼으로 그대로 올라간다.
+ * UUID 가 아니면 push 가 `invalid input syntax for type uuid` 로 통째로 거절된다.
+ *
+ * ⚠️ `crypto.randomUUID` 는 **보안 컨텍스트(https·localhost)에서만** 존재한다.
+ *    현장 태블릿이 LAN IP(http)로 붙는 경우를 대비해 폴백도 UUID v4 형식으로 만든다.
+ */
 export function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const b = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(b);
+  } else {
+    for (let i = 0; i < 16; i += 1) b[i] = Math.floor(Math.random() * 256);
+  }
+  b[6] = (b[6]! & 0x0f) | 0x40; // version 4
+  b[8] = (b[8]! & 0x3f) | 0x80; // variant 10
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 export function describeError(e: unknown): string {

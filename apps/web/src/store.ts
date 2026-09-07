@@ -47,6 +47,9 @@ import {
 } from '@onspect/canvas-core';
 import { assignNumbers, formatDefectNo, type NumberingDefect } from '@onspect/project-core';
 import { globalStyleForLabelScale } from './canvas/labelStyle';
+// 표기 id 는 **서버 uuid 컬럼에 그대로 들어간다**. Building·Floor·Drawing·Project 와
+// 같은 생성기를 쓴다 — 여기만 다른 포맷을 쓰면 push 가 22P02 로 거절된다 (2026-09-07)
+import { newId } from './data/idb/db';
 import type { ToastItem } from './ui/Overlays';
 
 export type Toast = ToastItem;
@@ -150,7 +153,7 @@ export type AppState = {
    * `alignLabels`/화면 렌더 세 곳이 **같은 값**을 봐야 번호가 어긋나지 않는다(검수 심각2 전례).
    */
   floorCode: string | null;
-  idSeed: number;
+  // 2026-09-07 — 표기 id 는 `newId()`(UUID)가 만든다. 단조 카운터 `idSeed` 는 제거됐다
   toastSeed: number;
 };
 
@@ -247,7 +250,6 @@ export function initialAppState(init: {
     hitProfile: null,
     labelScale: 1,
     floorCode: null,
-    idSeed: 1,
     toastSeed: 1,
   };
 }
@@ -508,7 +510,6 @@ function dropStaleSelection(state: AppState): AppState {
 }
 
 function runInput(state: AppState, ev: InputEvent): AppState {
-  let seed = state.idSeed;
   const drawingId = state.canvas.drawing?.id ?? null;
   const drawingDefects = defectsOfDrawing(state.defects, drawingId);
 
@@ -520,10 +521,10 @@ function runInput(state: AppState, ev: InputEvent): AppState {
     memos: memosOfDrawing(state.memos, drawingId),
     // C-2 — 화면과 **같은 소스**. 하드코딩된 34 를 쓰면 히트 영역이 보이는 풍선과 어긋난다
     globalStyle: globalStyleForLabelScale(state.labelScale),
-    makeId: () => {
-      seed += 1;
-      return `n${seed.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-    },
+    // ⚠️ **반드시 UUID**여야 한다. 결함·마크·라벨·메모 id 는 동기화될 때 서버
+    //    `records.id uuid` 로 그대로 올라간다. 예전 `n10-29up` 형태는
+    //    "invalid input syntax for type uuid" 로 push 전체를 실패시켰다 (2026-09-07).
+    makeId: () => newId(),
     // 코어는 시간을 모른다. 어댑터가 넣어 준다 (경계 규칙 1)
     now: () => Date.now(),
     floorId: state.floorId,
@@ -535,7 +536,7 @@ function runInput(state: AppState, ev: InputEvent): AppState {
 
   const r = reduce(state.canvas, ev, ctx);
 
-  let next: AppState = { ...state, canvas: r.state, idSeed: seed };
+  let next: AppState = { ...state, canvas: r.state };
 
   // 1. 커맨드를 문서에 적용하고 Undo 스택에 쌓는다 (로컬 우선 — 서버를 기다리지 않는다)
   for (const c of r.commands) next = applyAndPush(next, c);
