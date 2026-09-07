@@ -927,17 +927,23 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [similarOpen, setSimilarOpen] = useState(false);
 
   /**
-   * 불러오기 후보 — **이 용역 전체**의 결함이다(현재 도면만이 아니다).
-   * 사용자가 "비슷한 유형"을 찾을 때 층을 넘나드는 것이 자연스럽다.
-   * 지금 선택된 결함은 뺀다 — 자기 자신을 불러와도 아무 일도 일어나지 않는다.
+   * 불러오기 후보 — **지금 열려 있는 도면(층)의 결함만** 이다 (2026-09-07 사용자 요청).
+   * 예전에는 용역 전체를 보여줬으나(U26), 실제 현장에서는 같은 층의 직전 결함을 다시
+   * 쓰는 경우가 대부분이고 다른 층 결함이 섞이면 목록이 길어져 고르기 어렵다.
+   *
+   * "같은 층" 판정은 `floorId` 동일로 한다 — 층 1개에 도면 1장(`drawingByFloor`)이고,
+   * 다른 층 필터링 코드(`FloorChips` 등)와 같은 결. 지금 선택된 결함은 뺀다 —
+   * 자기 자신을 불러와도 아무 일도 일어나지 않는다.
    *
    * 정렬은 `seq` 내림차순: 최근에 찍은 것이 위로 온다. 방금 입력한 결함을 다시 쓰는
    * 경우가 압도적으로 많다(D9 가 자동 이어받기였던 이유이기도 하다).
    */
+  const currentFloorId = resolvedFloor?.id ?? null;
   const similarItems = useMemo<SimilarDefectItem[]>(() => {
+    if (!currentFloorId) return [];
     const floorName = new Map(floors.map((f) => [f.id, f.name]));
     return state.defects
-      .filter((d) => d.id !== selected?.id)
+      .filter((d) => d.floorId === currentFloorId && d.id !== selected?.id)
       .map((d) => ({
         id: d.id,
         seq: d.seq,
@@ -947,7 +953,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         status: d.status,
       }))
       .sort((a, b) => b.seq - a.seq);
-  }, [state.defects, selected?.id, floors]);
+  }, [state.defects, selected?.id, floors, currentFloorId]);
 
   // 선택이 사라지면(결함 삭제·선택 해제) 열려 있던 다이얼로그도 닫는다 —
   // 붙일 대상이 없는 채로 떠 있으면 고르는 순간 아무 일도 안 일어난다

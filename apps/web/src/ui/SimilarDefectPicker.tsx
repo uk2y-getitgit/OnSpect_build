@@ -1,8 +1,9 @@
 /**
  * `[유사결함 불러오기]` 다이얼로그 — D18 (파일2-③).
  *
- * 이 용역의 결함 목록을 띄우고, 고른 결함의 **분류·판정 14필드**(`DEFECT_CARRY_FIELDS`)를
- * 지금 선택된 결함으로 가져온다. 규모·개소·메모는 가져오지 않는다.
+ * **지금 열려 있는 도면(층)**의 결함 목록을 띄우고, 고른 결함의 **분류·판정 14필드**
+ * (`DEFECT_CARRY_FIELDS`)를 지금 선택된 결함으로 가져온다. 규모·개소·메모는 가져오지 않는다.
+ * (2026-09-07 — 예전에는 용역 전체를 보여줬다. 후보를 만드는 곳은 `CanvasRoute`)
  *
  * ⚠️ **여기 보이는 번호는 `seq`(입력순번)다. 출력 결함번호가 아니다.**
  *    출력 결함번호는 출력 시점에만 존재한다(불변식 #2). 사용자가 화면에서 보는 번호 —
@@ -32,7 +33,7 @@ const STATUS_LABEL: Record<SimilarDefectItem['status'], string> = {
 };
 
 export type SimilarDefectPickerProps = {
-  /** 이 용역의 결함 목록. 지금 선택된 결함은 호출자가 이미 빼고 넘긴다 */
+  /** 지금 열려 있는 도면(층)의 결함 목록. 지금 선택된 결함은 호출자가 이미 빼고 넘긴다 */
   items: readonly SimilarDefectItem[];
   onPick: (item: SimilarDefectItem) => void;
   onClose: () => void;
@@ -77,7 +78,7 @@ export function SimilarDefectPicker({ items, onPick, onClose }: SimilarDefectPic
         {filtered.length === 0 ? (
           <p className="idf-empty">
             {items.length === 0
-              ? '이 용역에 불러올 다른 결함이 아직 없습니다.'
+              ? '이 도면에 불러올 다른 결함이 아직 없습니다.'
               : '검색 결과가 없습니다.'}
           </p>
         ) : (
