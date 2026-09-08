@@ -25,7 +25,9 @@ export type Route =
    * 눌렀을 때만 열린다 — 자동으로 `window.print()` 를 부르지 않는다 (F-2).
    * PDF 라이브러리를 넣지 않는다 — 한글 폰트 임베딩 문제가 통째로 사라진다(K1 · Q32).
    */
-  | { name: 'EXPORT_PRINT'; projectId: string; runId: string; kind: PrintKind };
+  | { name: 'EXPORT_PRINT'; projectId: string; runId: string; kind: PrintKind }
+  /** #/team — 초대코드 발급/조회(D53·D55). 용역과 무관한 전역 화면이라 `p/:pid` 밖에 둔다 */
+  | { name: 'TEAM' };
 
 /**
  * 인쇄 뷰가 낼 수 있는 산출물.
@@ -52,6 +54,7 @@ export function parseHash(hash: string): Route {
 
   if (seg.length === 0) return { name: 'LIST' };
   if (seg[0] === 'new') return { name: 'NEW' };
+  if (seg[0] === 'team') return { name: 'TEAM' };
 
   if (seg[0] === 'p' && seg[1]) {
     const projectId = decodeURIComponent(seg[1]);
@@ -112,6 +115,8 @@ export function hrefOf(route: Route): string {
       return route.floorId
         ? `#/p/${encodeURIComponent(route.projectId)}/f/${encodeURIComponent(route.floorId)}`
         : `#/p/${encodeURIComponent(route.projectId)}/f`;
+    case 'TEAM':
+      return '#/team';
   }
 }
 

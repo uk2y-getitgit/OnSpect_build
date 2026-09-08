@@ -8,7 +8,7 @@ import { AppDataProvider, useAppData } from './data/appData';
 import { SessionProvider, useSession } from './data/session';
 import { deleteDatabase } from './data/idb/db';
 import { useServiceWorker } from './pwa/useServiceWorker';
-import { useRoute } from './router';
+import { navigate, useRoute } from './router';
 import { PrintRoute } from './export/printView/PrintRoute';
 import { CanvasRoute } from './routes/CanvasRoute';
 import { DrawingUpload } from './routes/DrawingUpload';
@@ -18,6 +18,7 @@ import { ProjectList } from './routes/ProjectList';
 import { ProjectSetup } from './routes/ProjectSetup';
 import { Login } from './routes/Login';
 import { Settings } from './routes/Settings';
+import { TeamRoute } from './routes/TeamRoute';
 import { ToastHost } from './ui/ToastHost';
 import { useState } from 'react';
 import { ConfirmDialog } from './ui/Overlays';
@@ -124,6 +125,7 @@ function Shell() {
         {route.name === 'CANVAS' && (
           <CanvasRoute projectId={route.projectId} floorId={route.floorId} />
         )}
+        {route.name === 'TEAM' && <TeamRoute />}
       </div>
 
       {route.name === 'LIST' && (
@@ -133,6 +135,17 @@ function Shell() {
             바로 옆 `[로컬 데이터 초기화]` 로 한다. 지금 누구인지만 보여준다.
           */}
           {session.user && <span className="shell__account">{session.user.email}</span>}
+          {/* D55 — 팀장이 아니어도 링크는 보이고, 들어가면 화면이 안내한다(RLS 가 진짜 방어선) */}
+          {session.status === 'SIGNED_IN' && (
+            <button
+              type="button"
+              className="shell__theme"
+              title="초대코드 발급/조회"
+              onClick={() => navigate({ name: 'TEAM' })}
+            >
+              팀 관리
+            </button>
+          )}
           {tablet && (
             <button
               type="button"

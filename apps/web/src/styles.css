@@ -2059,7 +2059,24 @@ kbd {
 }
 
 .login__note { color: var(--text-muted); font-size: 11.5px; }
+.login__note--ok { color: var(--ok, var(--accent-ink)); }
 .login__submit { width: 100%; justify-content: center; }
+
+/* ── D53·D55 · 팀 관리(초대코드) ─────────────────────────────────────────── */
+.team-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.team-create__days { width: 90px; }
+
+.team-code__btn {
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
 
 .skel {
   display: block;

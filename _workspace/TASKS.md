@@ -247,3 +247,20 @@ onspect-fix(오류 3건) + 정식 워크플로우(기능요청 2건, D45)로 분
 | S-2 | `sync.ts::hasRemoteChanges` + `SyncButton.tsx` "서버에 새 변경 있음" 배지(읽기전용 1건, 규칙0 주석 갱신) | 리더 직접 | ✅ 커밋 대기 |
 | S-1 | `relativeTime.ts::isStaleSync`(테스트 3건) + 마지막 동기화 1시간+ 색 강조(표시 자체는 기존 구현 재사용) | 리더 직접 | ✅ 커밋 대기 |
 | SZ | S-1~S-3 통합 판정 | 리더 | ✅ 타입3워크스페이스/테스트892(project415+canvas477)/빌드 통과 |
+
+---
+
+# 라운드: 초대코드 가입(B안) 2026-09-08
+
+요청: "우선 현재기준으로 두고 로그인(B초대코드방식)기능 구현 시작해줘." D39(가입 화면 없음)를
+뒤집는 라운드 — 스펙·질문·구현을 리더가 직접 진행(Agent 미스폰 — 전 라운드와 같은 이유).
+
+| # | 작업 | 담당 | 상태 |
+|---|---|---|---|
+| Q91/92 | 발급 방법(SQL수동 vs 앱UI)·재사용 정책(1회용 vs 다회용+만료) — AskUserQuestion | 사용자 | ✅ B(앱UI)·A(다회용+만료) → D54·D55 |
+| M1 | 마이그레이션 `20260908000000_invite_codes.sql` — `invite_codes` 테이블·RLS(`is_team_owner()`)·`check_invite_code` RPC·`handle_new_user_invite` 트리거(auth.users, service role 불필요, D40 유지) | 리더 직접 | ✅ 커밋 대기 |
+| M2 | `project-core/inviteCode.ts`(`generateInviteCode`·`normalizeInviteCode`, 테스트 5건) | 리더 직접 | ✅ |
+| M3 | `session.tsx::signUp` — 사전검사(RPC)+가입+세션즉시반영/이메일확인분기, `describeSignUpError` | 리더 직접 | ✅ |
+| M4 | `Login.tsx` — 로그인/가입 모드 토글 + 초대코드 입력란 | 리더 직접 | ✅ |
+| M5 | `router.ts`(`TEAM`)·`TeamRoute.tsx`(발급/목록/취소, 팀장 전용 안내)·`App.tsx` 코너 링크 | 리더 직접 | ✅ |
+| MZ | 통합 판정 | 리더 | ✅ 타입 3워크스페이스 통과 · 테스트 420(project-core, 신규5)+477(canvas-core) · 프로덕션 빌드 311모듈 통과 · **실 Supabase 프로젝트 연동은 미검증**(이 세션엔 대시보드 접근 없음 — 사용자 실행 필요) |
