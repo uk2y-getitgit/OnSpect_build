@@ -1,6 +1,6 @@
 # 다음 작업 — 여기서부터 시작
 
-마지막 갱신: 2026-09-05 (개인 로그인+동기화 코드 완료 — 실사용 검증 대기)
+마지막 갱신: 2026-09-08 (초대코드 가입(B안) + 로그아웃 — 코드 완료, 사용자가 실사용 검증 진행 중)
 
 > **새 세션의 Claude는 이 문서를 먼저 읽어라.** 무엇이 되고, 무엇이 안 되고,
 > 다음에 뭘 할지가 여기 있다. 상세는 각 항목이 가리키는 문서에 있다.
@@ -39,6 +39,28 @@ npm run dev -- --host 0.0.0.0   →  PC: http://localhost:5173/  ·  태블릿(�
 
 테스트 **830개**(canvas-core 477 · project-core 353) · 타입 검사 · 프로덕션 빌드 전부 통과.
 GitHub: https://github.com/uk2y-getitgit/OnSpect_build (공개, `main`)
+
+### 2026-09-08 — 초대코드 가입(B안) + 로그아웃 — 코드 완료, 사용자가 SQL 적용 후 실사용 검증 진행 중
+
+D39(가입 화면 없음)를 뒤집었다. 팀장이 앱 안에서(`#/team`) 초대코드를 발급하고, 새 사용자가
+이메일+비밀번호+초대코드로 가입하면 `auth.users` INSERT 트리거(SECURITY DEFINER)가 코드를
+재검증해 해당 팀에 자동 합류시킨다 — **서버리스 함수·service role 키 없이**(D40 유지) RLS를
+우회하는 유일한 지점. 상세: D53~D56, `_workspace/89_leader_log_InviteSignup0908.md`.
+
+- `supabase/migrations/20260908000000_invite_codes.sql` — `invite_codes` 테이블·RLS·
+  `check_invite_code` RPC(사전검사)·`handle_new_user_invite` 트리거. **사용자가 실 프로젝트에
+  적용 완료(2026-09-08).**
+- `packages/project-core/src/inviteCode.ts` — 코드 생성/정규화.
+- `apps/web/src/routes/Login.tsx` — 로그인/가입 모드 토글 + 초대코드 입력란.
+- `apps/web/src/routes/TeamRoute.tsx`(`#/team`) — 팀장: 발급·목록·취소. 팀원: 안내 문구만
+  (실제 방어는 RLS `is_team_owner()`).
+- **로그아웃(D57 — D26 뒤집음)**: 메인 화면 우측 상단에 버튼 추가. `sb.auth.signOut()`은
+  안 부른다(auth-js가 내부적으로 세션 재조회 시 만료 토큰이면 네트워크 갱신을 시도해
+  오프라인에서 멎을 수 있음) — 로컬 세션(meta KV `sbSession:auth`)만 직접 지운다.
+  **로컬 용역 데이터는 안 지운다** — 계정 전환 시 이전 계정 캐시가 목록에 보일 수 있지만
+  서버 데이터는 RLS로 안 섞인다. 완전 초기화는 여전히 `[로컬 데이터 초기화]`.
+- 타입검사(3워크스페이스)·단위테스트(897건)·프로덕션 빌드 전부 통과. **실 Supabase
+  연동(가입→합류→로그아웃→재가입 흐름)은 사용자가 직접 검증 중** — 결과 나오면 여기 갱신.
 
 ### 2026-09-05 — 개인 로그인 + 동기화 (Phase 5 트랙1, 개인 테스트 단계) — 코드 완료, 실사용 검증 대기
 
