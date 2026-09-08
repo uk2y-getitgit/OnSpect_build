@@ -5,7 +5,8 @@
  *   · 세션이 **있으면** 로그인 화면을 건너뛴다. 토큰이 만료됐어도 앱은 전부 정상 동작한다
  *     (결함 입력 · 사진 · 캔버스 · 출력은 전부 로컬이라 토큰이 필요 없다)
  *   · 세션이 **아예 없을 때만** 로그인 화면을 띄운다
- *   · 로그아웃 버튼은 **만들지 않는다**(D26 — 계정 전환은 `[로컬 데이터 초기화]`로)
+ *   · 로그아웃은 **로컬 세션만 지운다**(D57 — D26 뒤집음. 초대코드로 한 기기를 여러 계정이
+ *     오가게 되면서 로그아웃이 필요해졌다). 저장된 용역 데이터는 안 지운다 — `signOut` 주석 참고
  *
  * D53 — **가입(초대코드)도 이 파일이 담당한다.** `signIn` 과 나란히 `signUp` 을 뒀다 —
  * 둘 다 "성공하면 세션을 즉시 채운다"는 같은 계약이라 화면(`Login.tsx`)이 결과를 똑같이 다룬다.
@@ -27,7 +28,13 @@ import {
   type ReactNode,
 } from 'react';
 import { normalizeInviteCode } from '@onspect/project-core';
-import { getSupabase, isSupabaseConfigured, readSessionItem, SB_STORAGE_KEY } from './supabaseClient.js';
+import {
+  getSupabase,
+  isSupabaseConfigured,
+  readSessionItem,
+  removeSessionItem,
+  SB_STORAGE_KEY,
+} from './supabaseClient.js';
 
 export type SessionStatus =
   /** meta KV 를 읽는 중. 아주 짧다 */
@@ -54,6 +61,8 @@ export type SessionValue = {
     password: string,
     inviteCode: string,
   ) => Promise<{ ok: true; needsEmailConfirm: boolean } | { ok: false; message: string }>;
+  /** D57 — 로그아웃. 로컬 용역 데이터는 지우지 않는다(그건 `[로컬 데이터 초기화]`의 몫) */
+  signOut: () => Promise<void>;
   /** 로그인·동기화 뒤 저장된 세션을 다시 읽는다 */
   refreshFromStorage: () => void;
 };
@@ -190,9 +199,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /**
+   * D57 — 로그아웃. `sb.auth.signOut()` 을 부르지 않는다 — §3-4 의 게이트와 같은 이유다.
+   * auth-js 의 `signOut()` 은 내부적으로 세션을 다시 읽는 경로(`_useSession`)를 타는데, 그
+   * 경로는 저장된 토큰이 만료돼 있으면 네트워크로 갱신을 시도한다(`readLocalSession` 위
+   * 주석 참고). 오프라인에서 로그아웃 버튼이 멎으면 안 되니, **로컬 저장소만 직접 지운다.**
+   * 서버 쪽 refresh token 은 만료될 때까지 살아 있지만, 어차피 이 앱은 그 토큰을 다시
+   * 쓰지 않는다(재로그인은 항상 새 `signInWithPassword`).
+   *
+   * ⚠️ **로컬 용역 데이터는 지우지 않는다.** 이 기기의 IndexedDB 는 계정별로 나뉘어 있지
+   * 않아서, 로그아웃 후 다른 계정으로 들어가면 이전 계정이 캐시해둔 용역이 목록에 그대로
+   * 보일 수 있다(다른 팀 소속이면 `[동기화]`가 권한 오류로 막힌다 — 서버 데이터가 섞이진
+   * 않는다, RLS). 완전히 갈아치우려면 여전히 `[로컬 데이터 초기화]`를 따로 눌러야 한다.
+   */
+  const signOut = useCallback(async () => {
+    await removeSessionItem(SB_STORAGE_KEY);
+    setUser(null);
+    setStatus('SIGNED_OUT');
+  }, []);
+
   const value = useMemo<SessionValue>(
-    () => ({ status, user, signIn, signUp, refreshFromStorage: () => setTick((v) => v + 1) }),
-    [status, user, signIn, signUp],
+    () => ({ status, user, signIn, signUp, signOut, refreshFromStorage: () => setTick((v) => v + 1) }),
+    [status, user, signIn, signUp, signOut],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

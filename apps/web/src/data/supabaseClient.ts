@@ -64,7 +64,7 @@ async function writeSessionItem(key: string, value: string): Promise<void> {
   }
 }
 
-async function removeSessionItem(key: string): Promise<void> {
+export async function removeSessionItem(key: string): Promise<void> {
   memoryFallback.delete(key);
   try {
     const r = await openDb();

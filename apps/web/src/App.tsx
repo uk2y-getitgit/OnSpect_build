@@ -19,7 +19,7 @@ import { ProjectSetup } from './routes/ProjectSetup';
 import { Login } from './routes/Login';
 import { Settings } from './routes/Settings';
 import { TeamRoute } from './routes/TeamRoute';
-import { ToastHost } from './ui/ToastHost';
+import { ToastHost, useToast } from './ui/ToastHost';
 import { useState } from 'react';
 import { ConfirmDialog } from './ui/Overlays';
 import { useUiMode } from './shell/useUiMode';
@@ -48,6 +48,7 @@ function Shell() {
   const { updateAvailable, applying, applyUpdate } = useServiceWorker();
   // 로그인 게이트 (Phase 5 §3-4). **네트워크를 타지 않는다** — meta KV 1건 읽기가 전부다
   const session = useSession();
+  const toast = useToast();
 
   // 인쇄 뷰는 **앱 셸 밖**이다 (§4-9) — 배너·초기화 버튼이 인쇄물에 섞이면 안 된다
   if (route.name === 'EXPORT_PRINT') {
@@ -130,10 +131,7 @@ function Shell() {
 
       {route.name === 'LIST' && (
         <div className="shell__corner">
-          {/*
-            D26 — **로그아웃 버튼을 만들지 않는다.** 1기기 = 1사용자이고, 계정 전환은
-            바로 옆 `[로컬 데이터 초기화]` 로 한다. 지금 누구인지만 보여준다.
-          */}
+          {/* D57 — D26 뒤집음: 초대코드로 여러 계정이 한 기기를 오가게 되면서 로그아웃이 필요해졌다 */}
           {session.user && <span className="shell__account">{session.user.email}</span>}
           {/* D55 — 팀장이 아니어도 링크는 보이고, 들어가면 화면이 안내한다(RLS 가 진짜 방어선) */}
           {session.status === 'SIGNED_IN' && (
@@ -144,6 +142,18 @@ function Shell() {
               onClick={() => navigate({ name: 'TEAM' })}
             >
               팀 관리
+            </button>
+          )}
+          {session.status === 'SIGNED_IN' && (
+            <button
+              type="button"
+              className="shell__theme"
+              title="이 기기에서 로그아웃합니다. 저장된 용역 데이터는 지워지지 않습니다"
+              onClick={() => {
+                void session.signOut().then(() => toast('로그아웃했습니다'));
+              }}
+            >
+              로그아웃
             </button>
           )}
           {tablet && (
