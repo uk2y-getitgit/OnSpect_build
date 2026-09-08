@@ -242,6 +242,33 @@ export async function clearConflicts(projectId: string): Promise<void> {
   await txDone(tx);
 }
 
+/**
+ * D51(Q89=B) — `[동기화]` 버튼을 누르지 않고도 "서버에 새 변경이 있다"만 가볍게 안다.
+ *
+ * ⭐ 규칙 0 을 깨지 않는다 — 네트워크는 열지만 **읽기 전용 조회 1건**뿐이고 로컬 데이터를
+ *    하나도 건드리지 않는다. 반영은 여전히 사용자가 `[동기화]` 버튼을 눌러야 한다
+ *    (§3-7 "자동 반영 없음"은 그대로다. 자동으로 여는 건 "확인" 뿐, "반영"이 아니다).
+ *
+ * `state.cursor` 는 지난 동기화가 관측한 서버 `updated_at` 최댓값이다(파일 상단 "왜
+ * `server_seq` 커서를 쓰지 않는가" 참조 — push/pull 정확성에는 안 쓰지만 이 배지 판정에는
+ * 충분한 근거다). 지금 서버 최댓값이 그보다 크면 다른 기기가 마지막 동기화 이후 뭔가 올린 것이다.
+ */
+export async function hasRemoteChanges(projectId: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const state = await readSyncState(projectId);
+  if (state.lastSyncedAt === 0) return false; // 한 번도 동기화 안 했으면 "새 변경"이라 부를 기준이 없다
+  const res = await sb
+    .from('records')
+    .select('updated_at')
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(1);
+  if (res.error) return false; // 조용히 실패한다 — 배지가 안 뜨는 정도는 무해하다(규칙 0 의 반대급부)
+  const top = res.data?.[0] as { updated_at: number } | undefined;
+  return (top?.updated_at ?? 0) > state.cursor;
+}
+
 // ── LWW 판정 (정본 1개) ────────────────────────────────────────────────────
 
 /** 서버 행(snake_case)을 LWW 판정이 쓰는 모양으로 옮긴다 */

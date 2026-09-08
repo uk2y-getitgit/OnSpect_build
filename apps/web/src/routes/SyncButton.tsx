@@ -1,20 +1,24 @@
 /**
  * 프로젝트별 `[동기화]` 버튼 — Phase 5 트랙1 L5 (스펙 §3-7 · 스코프 L5).
  *
- * ⭐ **네트워크는 이 버튼을 누른 순간에만 열린다**(규칙 0). 마운트 시 자동 pull 도,
- *    주기 동기화도 없다. `useEffect` 가 하는 일은 **로컬 `meta` KV 를 읽어 마지막 결과를
- *    보여주는 것**뿐이다 — 네트워크를 타지 않는다.
+ * ⭐ **반영(push/pull)은 이 버튼을 누른 순간에만 일어난다**(규칙 0). 자동 pull 도,
+ *    주기 동기화도, 자동 반영도 없다.
+ * ⭐ D51(Q89=B) — 예외 하나: 마운트 시 `hasRemoteChanges` 로 **읽기 전용 조회 1건**만 날려
+ *    "서버에 새 변경 있음" 배지를 켠다. **로컬 데이터를 하나도 건드리지 않고, 반영도 하지
+ *    않는다** — 규칙 0 이 막는 것은 "몰래 반영"이지 "몰래 확인"이 아니다. 그 외 `useEffect`
+ *    (마지막 결과 표시)는 여전히 로컬 `meta` KV 만 읽는다 — 네트워크를 타지 않는다.
  * ⭐ 실패해도 **자동 재시도하지 않는다**(지수 백오프 금지 — 현장에서 배터리를 태우지 않는다).
  *    `실패 · 다시 시도` 버튼 하나로 끝낸다.
  * ⭐ 충돌은 **조용히 덮지 않는다** — `충돌 {n}건 · 상대 값으로 덮였습니다 [보기]`.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { formatDateTime, formatRelative } from '@onspect/project-core';
+import { formatDateTime, formatRelative, isStaleSync } from '@onspect/project-core';
 import { useAppData } from '../data/appData';
 import { useSession } from '../data/session';
 import {
   clearConflicts,
   describe,
+  hasRemoteChanges,
   readConflicts,
   readSyncState,
   recordSyncFailure,
@@ -31,12 +35,25 @@ export function SyncButton({ projectId, projectName }: { projectId: string; proj
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
   const [viewing, setViewing] = useState<SyncConflict[] | null>(null);
+  /** D51(Q89=B) — "서버에 새 변경 있음" 배지. 읽기 전용, 반영은 여전히 버튼을 눌러야 한다 */
+  const [remoteChanged, setRemoteChanged] = useState(false);
 
   // 로컬 KV 읽기만 한다. **네트워크 없음**
   useEffect(() => {
     let alive = true;
     void readSyncState(projectId).then((s) => {
       if (alive) setState(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [projectId]);
+
+  // D51 — 마운트 시 딱 한 번, 읽기 전용 조회로 배지만 켠다(위 top 주석 참조)
+  useEffect(() => {
+    let alive = true;
+    void hasRemoteChanges(projectId).then((v) => {
+      if (alive) setRemoteChanged(v);
     });
     return () => {
       alive = false;
@@ -55,6 +72,7 @@ export function SyncButton({ projectId, projectName }: { projectId: string; proj
       setBusy(false);
       setStage('');
       setState(await readSyncState(projectId));
+      setRemoteChanged(await hasRemoteChanges(projectId)); // 방금 동기화했으니 보통 꺼진다
       // `sync.ts` 는 `repo`/`appData` 를 거치지 않고 IndexedDB 에 직접 쓴다. 이걸 부르지 않으면
       // `50건 반영` 이라고 표시되는데 목록의 `도면 n장 · 결함 n건` 은 그대로라
       // 사용자는 동기화가 실패했다고 오해한다(검수 보통4).
@@ -72,6 +90,9 @@ export function SyncButton({ projectId, projectName }: { projectId: string; proj
   const failed = state?.lastResult === 'ERROR';
   const partial = state?.lastResult === 'PARTIAL';
   const conflictCount = state?.lastConflictCount ?? 0;
+  // D51(Q89=B) — 마지막 동기화가 1시간 넘으면 색으로만 강조한다(새 문구를 더하지 않는다).
+  // 성공/실패 색(`error`)이 이미 있으면 그게 우선이다 — 오래됨은 그보다 급하지 않다
+  const stale = state ? isStaleSync(Date.now(), state.lastSyncedAt) : false;
 
   return (
     <div className="syncbox">
@@ -85,7 +106,10 @@ export function SyncButton({ projectId, projectName }: { projectId: string; proj
       </BusyButton>
 
       {!busy && state && state.lastResult !== null && (
-        <span className="syncbox__note" data-tone={failed ? 'error' : partial ? 'warn' : 'ok'}>
+        <span
+          className="syncbox__note"
+          data-tone={failed ? 'error' : partial || stale ? 'warn' : 'ok'}
+        >
           <span
             className="syncbox__msg"
             title={state.lastSyncedAt > 0 ? formatDateTime(state.lastSyncedAt) : undefined}
@@ -95,6 +119,13 @@ export function SyncButton({ projectId, projectName }: { projectId: string; proj
           {state.lastSyncedAt > 0 && (
             <span className="muted"> · {formatRelative(Date.now(), state.lastSyncedAt)}</span>
           )}
+        </span>
+      )}
+
+      {/* D51(Q89=B) — 다른 기기가 마지막 동기화 이후 뭔가 올렸다는 신호. 반영은 버튼을 눌러야 한다 */}
+      {!busy && remoteChanged && (
+        <span className="chip syncbox__remote" title="다른 기기가 이 용역을 서버에 올렸습니다. 눌러서 받아오세요">
+          서버에 새 변경 있음
         </span>
       )}
 

@@ -242,5 +242,8 @@ onspect-fix(오류 3건) + 정식 워크플로우(기능요청 2건, D45)로 분
 | # | 작업 | 담당 | 상태 |
 |---|---|---|---|
 | P80 | 현재 sync 설계 진단(`lww.ts`·`sync.ts`·`repo.ts` 직접 확인) + 스펙 작성 | 리더 직접(코드 근거 확보돼 있어 plan-reviewer 위임 생략) | ✅ `86_plan-reviewer_spec_SyncDataSafety0908.md`, Q88~Q90 기록 |
-| — | Q88~Q90 답변 대기 | 사용자 | ⬜ |
-| — | 답변에 따라 S-1~S-5 중 채택분 구현 | builder | ⬜ 대기 |
+| — | Q88~Q90 답변 — "추천대로 진행해줘"(B/B/A) | 사용자 | ✅ D50·D51·D52 기록 |
+| S-3 | 고아 결함 경고 배너 — `orphanDefect.ts::findOrphanDefects`(순수·테스트 6건) + `CanvasRoute.tsx` 로드 시 계산·배너 표시(지우지 않음) | 리더 직접(Agent 미사용 — "요청 없인 스폰하지 말라" 툴 지침) | ✅ 커밋 대기 |
+| S-2 | `sync.ts::hasRemoteChanges` + `SyncButton.tsx` "서버에 새 변경 있음" 배지(읽기전용 1건, 규칙0 주석 갱신) | 리더 직접 | ✅ 커밋 대기 |
+| S-1 | `relativeTime.ts::isStaleSync`(테스트 3건) + 마지막 동기화 1시간+ 색 강조(표시 자체는 기존 구현 재사용) | 리더 직접 | ✅ 커밋 대기 |
+| SZ | S-1~S-3 통합 판정 | 리더 | ✅ 타입3워크스페이스/테스트892(project415+canvas477)/빌드 통과 |

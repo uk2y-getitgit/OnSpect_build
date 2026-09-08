@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatDate, formatRelative } from '../src/relativeTime.js';
+import { formatBytes, formatDate, formatRelative, isStaleSync } from '../src/relativeTime.js';
 import {
   validateProjectForm,
   validateProjectName,
@@ -27,6 +27,24 @@ describe('formatRelative — §2-5 표', () => {
 
   it('formatDate 는 로컬 시간대 기준 YYYY-MM-DD', () => {
     expect(formatDate(new Date(2026, 0, 5).getTime())).toBe('2026-01-05');
+  });
+});
+
+describe('isStaleSync — D51(Q89=B)', () => {
+  it('한 번도 동기화 안 했으면(0 이하) 오래된 것이 아니다', () => {
+    expect(isStaleSync(NOW, 0)).toBe(false);
+    expect(isStaleSync(NOW, -1)).toBe(false);
+  });
+
+  it('기본 문턱(1시간) 미만이면 아니다, 이상이면 맞다', () => {
+    expect(isStaleSync(NOW, NOW - 59 * 60_000)).toBe(false);
+    expect(isStaleSync(NOW, NOW - 60 * 60_000)).toBe(true);
+    expect(isStaleSync(NOW, NOW - 3 * 3_600_000)).toBe(true);
+  });
+
+  it('문턱을 바꿀 수 있다', () => {
+    expect(isStaleSync(NOW, NOW - 10 * 60_000, 5 * 60_000)).toBe(true);
+    expect(isStaleSync(NOW, NOW - 3 * 60_000, 5 * 60_000)).toBe(false);
   });
 });
 

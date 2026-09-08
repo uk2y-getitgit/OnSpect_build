@@ -45,6 +45,18 @@ export function isoOf(ts: number): string {
   return new Date(ts).toISOString();
 }
 
+/**
+ * D51(Q89=B) — "마지막 동기화가 오래됐다" 판정. 각자 동기화 없이 오래 작업할수록
+ * `86_plan-reviewer_spec_SyncDataSafety0908.md` §2 시나리오 C(경합 창이 넓어짐)가 커진다 —
+ * 지우거나 막지 않고, 버튼 옆 표기에 강조만 준다.
+ *
+ * `lastSyncedAt <= 0` (아직 한 번도 동기화 안 함) 은 "오래됨"이 아니다 — 비교할 기준이 없다.
+ */
+export function isStaleSync(now: number, lastSyncedAt: number, thresholdMs = HOUR): boolean {
+  if (lastSyncedAt <= 0) return false;
+  return now - lastSyncedAt >= thresholdMs;
+}
+
 /** 용량 표기 — `약 48MB` 의 숫자 부분 (§2-9-d) */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;

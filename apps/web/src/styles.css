@@ -1345,6 +1345,12 @@ kbd {
   color: #8a6114;
 }
 
+/* D50 — 캔버스 상단, 헤더 바로 아래 고아 결함 경고. `.notice` 는 기본 margin:0 이라
+   헤더에 붙어버려서 여기서만 위아래 여백을 준다 */
+.canvas__orphan-notice {
+  margin: 8px 10px 0;
+}
+
 .kv {
   margin: 0;
   display: grid;
@@ -1930,6 +1936,14 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--error);
+}
+
+/* D51(Q89=B) — "서버에 새 변경 있음" 배지. 읽기전용 조회 결과일 뿐 반영 여부와 무관하다 */
+.syncbox__remote {
+  flex: 0 0 auto;
+  background: var(--accent-weak);
+  border-color: #cfe0fb;
+  color: var(--accent-ink);
 }
 
 /* 문장 안에 섞이는 링크형 버튼 */

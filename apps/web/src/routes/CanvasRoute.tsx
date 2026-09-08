@@ -36,6 +36,7 @@ import {
 } from '@onspect/canvas-core';
 import {
   DEFAULT_DRAWING_TITLE_BLOCK,
+  findOrphanDefects,
   projectDisplayName,
   promoteProjectDecor,
   seedAttrs,
@@ -44,6 +45,7 @@ import {
   type Drawing,
   type Floor,
   type ItemSettings,
+  type OrphanDefect,
   type Photo,
   type Project,
   type ProjectLegend,
@@ -163,6 +165,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [loadedPhotos, setLoadedPhotos] = useState<Photo[]>(EMPTY_PHOTOS);
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  /**
+   * D50(Q88=B) — 다른 기기가 만든 결함이 이 기기가 모르는 층을 가리키는 경우(삭제-추가 경합,
+   * `86_plan-reviewer_spec_SyncDataSafety0908.md` §2 시나리오 B). **탐지만 하고 지우지 않는다** —
+   * 로드 시점 한 번 계산한다(동기화는 용역 목록 화면에서만 하므로, 여기 들어올 때가 가장 최신).
+   */
+  const [orphanDefects, setOrphanDefects] = useState<OrphanDefect[]>([]);
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   /** F5-1·F5-2 — 도곽·범례 설정. 캔버스에서도 켜고 끌 수 있어야 한다는 사용자 지적(2026-08-24) —
@@ -344,6 +352,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
         // ⚠️ 이 값은 세션 내내 갱신되지 않는다 (D18 — D9 자동 이어받기 폐기)
         defaultAttrs: s ? seedAttrs(s, b.project) : {},
       });
+      setOrphanDefects(findOrphanDefects(b.floors, b.defects));
       setLoaded(true);
       void guard(() => storage.repo.touchProject(projectId, Date.now()));
     })();
@@ -1314,6 +1323,16 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           </button>
         </div>
       </header>
+
+      {orphanDefects.length > 0 && (
+        <p className="notice notice--warn canvas__orphan-notice">
+          다른 기기에서 동기화된 결함 <b>{orphanDefects.length}건</b>이 이 기기에 없는 층을
+          가리킵니다 — 같은 층을 한쪽은 삭제하고 한쪽은 그 위에 결함을 추가한 뒤 동기화한
+          경우일 수 있습니다. 결함은 지우지 않았습니다 — 층을 다시 만들지, 결함을 지울지
+          직접 확인해 주세요. (id: {orphanDefects.map((o) => o.defectId).slice(0, 10).join(', ')}
+          {orphanDefects.length > 10 ? ' 외' : ''})
+        </p>
+      )}
 
       <div className="body">
         {/*

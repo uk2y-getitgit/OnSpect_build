@@ -20,6 +20,7 @@ export * from './validate.js';
 export * from './repo.js';
 export * from './deletionLog.js';
 export * from './lww.js';
+export * from './orphanDefect.js';
 export * from './projectDecor.js';
 export * from './photo.js';
 export * from './photoExif.js';
