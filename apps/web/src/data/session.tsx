@@ -148,8 +148,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
    *   2) `auth.signUp` — `options.data.invite_code` 로 코드를 함께 보낸다. **최종 판정은
    *      서버의 `handle_new_user_invite` 트리거**다(1)과 2) 사이에 코드가 소진/만료되는
    *      드문 경합도 트리거가 막는다). 트리거가 예외를 던지면 가입 자체가 롤백된다 —
-   *      다만 Supabase/GoTrue 가 그 원문 메시지를 그대로 넘겨주는지는 버전마다 달라 믿지 않고,
-   *      이 단계 실패는 전부 일반화된 안내 문구로 보여준다(아래 `describeSignUpError`).
+   *      원문이 그대로 오는지 확신 못 해(U87) 한동안 전부 일반화된 안내 문구로 덮어버렸는데,
+   *      2026-09-09 실측(Supabase Auth API 직접 호출)으로 트리거의 한글 예외 메시지가
+   *      `error.message` 에 그대로 온다는 게 확인됐다 — 이미 사람이 읽을 문장이니
+   *      `describeSignUpError` 에서 그대로 보여준다. 진짜 뭉뚱그릴 대상은 그 외의 미분류 오류뿐.
    */
   const signUp = useCallback(
     async (
@@ -237,10 +239,16 @@ function describeAuthError(raw: string): string {
 /** 가입 전용 — 초대코드 트리거 예외까지 포함해 전부 사람이 읽을 말로 바꾼다 */
 function describeSignUpError(raw: string): string {
   if (/already registered|user already exists/i.test(raw)) return '이미 가입된 이메일입니다';
+  // Auth 레벨에서 이메일 자체를 거부한 경우(예: `email_address_invalid`) — 트리거와 무관하니
+  // 초대코드 탓으로 보이는 fallback 문구로 흡수되면 안 된다. 트리거보다 먼저 걸러낸다
+  if (/email.*invalid|invalid.*email/i.test(raw)) return '이메일 주소 형식을 확인해 주세요';
   if (/password/i.test(raw)) return '비밀번호가 너무 짧습니다(6자 이상)';
   if (/rate limit|too many/i.test(raw)) return '시도가 너무 잦습니다. 잠시 후 다시 시도해 주세요';
-  // 초대코드 트리거가 던진 예외는 대부분 여기로 온다 — 원문을 믿지 않는다(위 주석 참조)
-  return '가입에 실패했습니다. 초대코드를 다시 확인하거나 잠시 후 다시 시도해 주세요';
+  // `handle_new_user_invite` 트리거가 던진 예외 — 5종 전부 "초대코드"를 담은 한글 문장이라
+  // (20260908000000_invite_codes.sql) 원문 그대로 보여줘도 된다(실측 확인, 위 주석 참조)
+  if (/초대코드/.test(raw)) return raw;
+  // 그 외 미분류 오류만 여기로 온다 — 더는 "초대코드 탓"으로 단정하지 않는다
+  return '가입에 실패했습니다. 잠시 후 다시 시도해 주세요';
 }
 
 export function useSession(): SessionValue {
