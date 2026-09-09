@@ -132,7 +132,7 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
   }, [others, draft.name, editing, projectId]);
 
   const close = useCallback(() => {
-    if (editing && projectId) navigate({ name: 'SETUP', projectId });
+    if (editing && projectId) navigate({ name: 'BUILDINGS', projectId });
     else navigate({ name: 'LIST' });
   }, [editing, projectId]);
 
@@ -151,7 +151,7 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
       if (r === null) return;
       reload();
       toast('용역 정보를 저장했습니다');
-      navigate({ name: 'SETUP', projectId: current.id });
+      navigate({ name: 'BUILDINGS', projectId: current.id });
       return;
     }
 
@@ -194,7 +194,7 @@ export function ProjectForm({ projectId }: { projectId: string | null }) {
       toast(base + tail, { ttl: 6000 });
     }
     // 저장 직후는 P3 다. 목록으로 되돌아가지 않는다 — 다음 할 일이 동 구성이다 (§2-3)
-    navigate({ name: 'SETUP', projectId: p.id });
+    navigate({ name: 'BUILDINGS', projectId: p.id });
   }, [storage, canSave, draft, editing, current, guard, reload, toast]);
 
   const onSubmit = useCallback(() => {

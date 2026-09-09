@@ -101,7 +101,7 @@ export function DrawingUpload({ projectId, floorId }: { projectId: string; floor
     [],
   );
 
-  const close = useCallback(() => navigate({ name: 'SETUP', projectId }), [projectId]);
+  const close = useCallback(() => navigate({ name: 'BUILDINGS', projectId }), [projectId]);
 
   // ── 파생 ────────────────────────────────────────────────────────────────
   const orderedBuildings = useMemo(() => sortByOrder(buildings), [buildings]);

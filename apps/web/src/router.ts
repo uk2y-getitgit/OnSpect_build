@@ -12,7 +12,10 @@ export type Route =
   | { name: 'LIST' } //                       #/
   | { name: 'NEW' } //                        #/new
   | { name: 'EDIT'; projectId: string } //    #/p/:pid/edit
-  | { name: 'SETUP'; projectId: string } //   #/p/:pid
+  /** #/p/:pid — 동 선택(조직도). 동이 1개뿐이면 즉시 FLOORS 로 건너뛴다(D60) */
+  | { name: 'BUILDINGS'; projectId: string }
+  /** #/p/:pid/b/:bid — 한 동의 층 선택. "용역명→동→층→캔버스" 흐름의 3번째 화면(D58) */
+  | { name: 'FLOORS'; projectId: string; buildingId: string }
   | { name: 'UPLOAD'; projectId: string; floorId: string | null } // #/p/:pid/upload
   | { name: 'CANVAS'; projectId: string; floorId: string | null } // #/p/:pid/f/:fid
   /** #/p/:pid/settings?from=f/{floorId} — 캔버스에서 왔으면 그 층으로 되돌아간다 (F25) */
@@ -84,7 +87,10 @@ export function parseHash(hash: string): Route {
     if (seg[2] === 'f') {
       return { name: 'CANVAS', projectId, floorId: seg[3] ? decodeURIComponent(seg[3]) : null };
     }
-    return { name: 'SETUP', projectId };
+    if (seg[2] === 'b' && seg[3]) {
+      return { name: 'FLOORS', projectId, buildingId: decodeURIComponent(seg[3]) };
+    }
+    return { name: 'BUILDINGS', projectId };
   }
   return { name: 'LIST' };
 }
@@ -97,8 +103,10 @@ export function hrefOf(route: Route): string {
       return '#/new';
     case 'EDIT':
       return `#/p/${encodeURIComponent(route.projectId)}/edit`;
-    case 'SETUP':
+    case 'BUILDINGS':
       return `#/p/${encodeURIComponent(route.projectId)}`;
+    case 'FLOORS':
+      return `#/p/${encodeURIComponent(route.projectId)}/b/${encodeURIComponent(route.buildingId)}`;
     case 'UPLOAD':
       return route.floorId
         ? `#/p/${encodeURIComponent(route.projectId)}/upload?floor=${encodeURIComponent(route.floorId)}`

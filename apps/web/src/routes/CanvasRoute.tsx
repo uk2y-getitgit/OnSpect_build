@@ -1145,7 +1145,12 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             className="btn btn--ghost"
             onClick={() => {
               flush();
-              navigate({ name: 'SETUP', projectId });
+              // 이 층의 동을 알면 곧장 그 동의 층 화면으로 — 동 목록 화면을 한 번 더 거치지 않는다
+              navigate(
+                resolvedFloor
+                  ? { name: 'FLOORS', projectId, buildingId: resolvedFloor.buildingId }
+                  : { name: 'BUILDINGS', projectId },
+              );
             }}
             title="용역 구성으로 돌아갑니다"
           >

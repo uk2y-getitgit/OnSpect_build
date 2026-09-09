@@ -1,7 +1,7 @@
 /**
  * F5-3 · P-1 — 도면 이미지 배율 적용. **계산은 여기 한 벌뿐이다.**
  *
- * 진입점이 둘이다: 도면관리(`ProjectSetup`) 와 캔버스 상단바(`CanvasRoute`, P-1).
+ * 진입점이 둘이다: 도면관리(`FloorsRoute`) 와 캔버스 상단바(`CanvasRoute`, P-1).
  * 두 곳에서 각자 계산하면 `imgLayout` 스케일링(`scaledImgLayout`)이 갈라져
  * 같은 도면이 어디서 열었느냐에 따라 다른 크기로 합성된다.
  *

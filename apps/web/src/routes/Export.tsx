@@ -383,7 +383,7 @@ export function Export({ projectId }: { projectId: string }) {
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => navigate({ name: 'SETUP', projectId })}
+            onClick={() => navigate({ name: 'BUILDINGS', projectId })}
           >
             ← 용역 구성
           </button>

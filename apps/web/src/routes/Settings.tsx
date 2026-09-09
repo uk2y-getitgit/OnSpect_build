@@ -190,7 +190,7 @@ export function Settings({
   const close = () => {
     flush();
     if (fromFloorId) navigate({ name: 'CANVAS', projectId, floorId: fromFloorId });
-    else navigate({ name: 'SETUP', projectId });
+    else navigate({ name: 'BUILDINGS', projectId });
   };
 
   const reloadSeed = () => {

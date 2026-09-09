@@ -87,7 +87,7 @@ export function ProjectList() {
   const openProject = useCallback(
     (id: string) => {
       if (storage.phase === 'READY') void guard(() => storage.repo.touchProject(id, Date.now()));
-      navigate({ name: 'SETUP', projectId: id });
+      navigate({ name: 'BUILDINGS', projectId: id });
     },
     [storage, guard],
   );
@@ -142,7 +142,7 @@ export function ProjectList() {
     if (!r) return;
     reload();
     toast(`샘플 용역을 만들었습니다 — ${SAMPLE_SUMMARY}`);
-    navigate({ name: 'SETUP', projectId: r.project.id });
+    navigate({ name: 'BUILDINGS', projectId: r.project.id });
   }, [storage, seeding, guard, reload, toast]);
 
   // ── D38(Q74) — 로그인 없이 기기 간 이동: 파일로 내보내기/가져오기 ─────────────
@@ -195,7 +195,7 @@ export function ProjectList() {
             ? `'${r.projectName}'을(를) 파일 내용으로 덮어썼습니다`
             : `'${r.projectName}'을(를) 새 용역으로 가져왔습니다`,
         );
-        navigate({ name: 'SETUP', projectId: r.projectId });
+        navigate({ name: 'BUILDINGS', projectId: r.projectId });
       } catch (err) {
         toast(err instanceof Error ? err.message : '가져오기에 실패했습니다', { kind: 'warn' });
       } finally {

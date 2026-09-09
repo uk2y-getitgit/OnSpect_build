@@ -278,3 +278,25 @@ onspect-fix(오류 3건) + 정식 워크플로우(기능요청 2건, D45)로 분
 | L4 | 타입검사·단위테스트·빌드 | 리더 직접 | ✅ 통과(897 테스트) |
 
 Agent 미스폰 — 좁은 변경("요청 없인 스폰하지 말라" 지침 계속 적용).
+
+# 라운드: 가입 오류 신고 대응 + 메인화면 용역명 잘림 + 캔버스 진입 구조변경 2026-09-09
+
+요청: "신규가입시 에러 문구" 신고(onspect-fix) → "메인화면 용역명 잘려보이는 문제" +
+"캔버스 진입 구조변경(용역명→동→층→캔버스, 동은 조직도 모양)" (onspect-orchestrator,
+Agent 미스폰 — 계속 같은 이유).
+
+| # | 작업 | 담당 | 상태 |
+|---|---|---|---|
+| F1 | 가입 실패 원인 진단 — Supabase 로그 + Auth API 직접 호출로 재현. `email_address_invalid`(일시적 Auth 오류) 확인 + 트리거 원문 메시지가 실제로 온다는 것 실측 확인 | 리더 직접(브라우저·API 직접 호출 — 사용자가 "브라우저로 확인해줘" 명시 요청) | ✅ 커밋 `0867a1d` |
+| F2 | `session.tsx::describeSignUpError` — 이메일 형식 거부 분류 추가 + 트리거 원문 메시지 그대로 노출로 전환 | 리더 직접 | ✅ 배포(main 푸시) |
+| Q93/94/95 | 캔버스 진입 구조변경 — 관리기능 범위·동 화면 형태·동1개 처리 (AskUserQuestion, 전부 추천안 채택) | 사용자 | ✅ → D58·D59·D60 |
+| B1 | `router.ts` — `SETUP`→`BUILDINGS` 개명, `FLOORS`(`#/p/:pid/b/:bid`) 신설 | 리더 직접 | ✅ |
+| B2 | `BuildingsRoute.tsx` 신설 — 동 조직도(세로 트리) + 동 CRUD + 동1개 자동건너뛰기(D60) + 프로젝트 헤더 액션 | 리더 직접 | ✅ |
+| B3 | `FloorsRoute.tsx` 신설 — 예전 `ProjectSetup` 오른쪽 패널(층·도면 CRUD·A4맞추기·도곽설정·크기조절) 이식 | 리더 직접 | ✅ |
+| B4 | `ProjectSetup.tsx` 삭제, `App.tsx`·8개 호출부(`ProjectList`·`ProjectForm`·`Settings`·`Export`·`DrawingUpload`·`CanvasRoute`) 라우트 갱신 | 리더 직접 | ✅ |
+| B5 | CSS — `.btree*` 조직도 트리 신설, `.setup`/`.setup__buildings` 죽은 규칙 정리 | 리더 직접 | ✅ |
+| B6 | 메인화면(`ProjectList`) 용역명 잘림 개선 — `.plist__name` 1줄강제→2줄까지 허용+말줄임, 컬럼 상한 560→760px | 리더 직접 | ✅ |
+| BZ | 통합 판정 | 리더 | ✅ 타입 3워크스페이스 · 테스트 897(project420+canvas477) · 프로덕션 빌드 312모듈 전부 통과. **실사용 검증은 사용자 몫**(비주얼 트리 연결선 모양, 화면 전환 흐름) |
+
+Agent 미스폰 — "요청 없인 스폰하지 말라" 지침 계속 적용. `_workspace/ASSUMPTIONS.md` U91~U93 참고
+(뒤로가기 조건·이전용역복사 버튼 위치·업로드 배경화면 3건, 전부 비차단·뒤집기 쉬움).

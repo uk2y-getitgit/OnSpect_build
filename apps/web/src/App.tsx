@@ -15,7 +15,8 @@ import { DrawingUpload } from './routes/DrawingUpload';
 import { Export } from './routes/Export';
 import { ProjectForm } from './routes/ProjectForm';
 import { ProjectList } from './routes/ProjectList';
-import { ProjectSetup } from './routes/ProjectSetup';
+import { BuildingsRoute } from './routes/BuildingsRoute';
+import { FloorsRoute } from './routes/FloorsRoute';
 import { Login } from './routes/Login';
 import { Settings } from './routes/Settings';
 import { TeamRoute } from './routes/TeamRoute';
@@ -112,10 +113,15 @@ function Shell() {
         {route.name === 'LIST' && <ProjectList />}
         {route.name === 'NEW' && <ProjectForm projectId={null} />}
         {route.name === 'EDIT' && <ProjectForm projectId={route.projectId} />}
-        {route.name === 'SETUP' && <ProjectSetup projectId={route.projectId} />}
+        {route.name === 'BUILDINGS' && <BuildingsRoute projectId={route.projectId} />}
+        {route.name === 'FLOORS' && (
+          <FloorsRoute projectId={route.projectId} buildingId={route.buildingId} />
+        )}
         {route.name === 'UPLOAD' && (
           <>
-            <ProjectSetup projectId={route.projectId} />
+            {/* 배경 화면. standalone=false — 동 1개 자동 건너뛰기(D60)로 이 라우트를
+                바꿔치기하면 안 된다, 모달이 얹혀 있는 라우트가 UPLOAD 여야 한다 */}
+            <BuildingsRoute projectId={route.projectId} standalone={false} />
             <DrawingUpload projectId={route.projectId} floorId={route.floorId} />
           </>
         )}
