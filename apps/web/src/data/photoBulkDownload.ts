@@ -6,24 +6,23 @@
  * 파일명으로 시스템 Downloads 폴더에 내려받게 하고, 그 뒤는 사용자가 쓰는 외부
  * "폴더 감시 자동 리네임" 앱이 이어받는다.
  *
- * **파일명 = `{동이름-}{층 접두어}{그 층 안에서의 사진순번 2자리}.jpg`**(2026-09-10 실사용 확정,
- * Q93 최초안의 `동-층-결함번호` 구조를 대체) — 예: 지상1층 1번째 사진 `101` · 지하1층 2번째 `B102`
- * · 옥상층 3번째 `RF03` · 외부 2번째 `W02`.
+ * **파일명 = `{동이름-}{층 접두어}{층 안 결함번호 2자리}{_사진순번(그 결함에 2장 이상일 때만,
+ * 2번째부터)}.jpg`**(2026-09-10 2차 확정) — 예: 지상1층 1번결함 사진 1장 `101`,
+ * 2장이면 `101`·`101_2`. 지하1층 2번째 `B102` · 옥상층 3번째 `RF03` · 외부 2번째 `W02`.
+ * · **결함번호는 `assignNumbers(mode: 'PER_FLOOR')`** — `store.ts` 가 캔버스 번호풍선에 쓰는
+ *   것과 **같은 함수·같은 모드**다. 그래서 이 파일명의 번호가 도면 위 번호풍선·결함정보 패널에
+ *   보이는 번호와 **항상 일치**한다 — 별도 카운터를 만들지 않는다.
  * · **층 접두어는 `Floor.code`를 그대로 쓴다** — 이름에서 자동으로 만들어내지 않는다. D19/D20 이
  *   이미 "층 접두어는 사용자 직접 입력 옵트인, 자동 파생 금지"로 못박아 뒀다(`floorCodeOf` 의
  *   파생값은 입력칸 placeholder 제안일 뿐). `code` 가 비어 있으면(옵트인 안 한 층) 층 이름으로
  *   대신한다.
- * · **사진번호는 결함번호가 아니다** — 그 층에 있는 **모든 결함의 사진을 전부 한 줄로 펼쳐 놓고**
- *   매기는 순번이다(결함 정렬은 기존 출력물과 같은 규칙 — 입력순번→도면→id, 결함 안에서는
- *   대표사진 우선 순서). 결함 하나에 사진이 여러 장이어도 그냥 다음 번호로 이어진다.
  * · 동 이름은 동이 1개뿐이면 생략한다 — `locationMapFloors()` 의 기존 관례(D45 B-3) 그대로.
  * · 결함 상태(REPAIRED·전회차 등)로 거르지 않는다 — 보고서용 산출물이 아니라 원본 백업/정리
  *   목적이라 "이유가 있어 빠지는 사진"이 있으면 안 된다.
  * · 원본(`sourceBlobKey`) 대신 렌더본(`renderBlobKey`, 장변 2048 JPEG)을 내려받는다 — 용량을
  *   줄이면서도 다른 산출물과 동일한 화질이다(V7 과 같은 선택).
  */
-import type { Defect } from '@onspect/canvas-core';
-import { groupPhotosByDefect } from '@onspect/project-core';
+import { assignNumbers, groupPhotosByDefect, type NumberingParams } from '@onspect/project-core';
 import type { ProjectBundle } from './idb/repo';
 import { exportFloors, locationMapFloors } from '../export/exportModel';
 import { downloadSequential, sanitizeFileName, type DownloadItem } from '../export/download';
@@ -36,13 +35,6 @@ export type PhotoDownloadPlan = {
   total: number;
 };
 
-/** 결함 정렬 — `numbering.ts::compareForOutput` 과 같은 규칙(입력순번→도면→id). 결정론 유지 */
-function compareDefectsForFloor(a: Defect, b: Defect): number {
-  if (a.seq !== b.seq) return a.seq - b.seq;
-  if (a.drawingId !== b.drawingId) return a.drawingId < b.drawingId ? -1 : 1;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-}
-
 /**
  * 용역의 사진 전부를 내려받을 (blob, 파일명) 목록을 만든다. **다운로드까지는 하지 않는다** —
  * 순수 조회 + blob 읽기만 하는 함수라 미리보기·개수 확인에도 그대로 쓸 수 있다.
@@ -51,25 +43,29 @@ export async function buildProjectPhotoDownloads(
   repo: { readBlob(key: string): Promise<Blob | null> },
   bundle: ProjectBundle,
 ): Promise<PhotoDownloadPlan> {
+  const floors = exportFloors(bundle);
   const floorInfo = new Map(locationMapFloors(bundle).map((f) => [f.id, f]));
   const rawFloorById = new Map(bundle.floors.map((f) => [f.id, f]));
   const photosByDefect = groupPhotosByDefect(bundle.photos);
 
-  const defectsByFloor = new Map<string, Defect[]>();
-  for (const d of bundle.defects) {
-    const arr = defectsByFloor.get(d.floorId);
-    if (arr) arr.push(d);
-    else defectsByFloor.set(d.floorId, [d]);
-  }
+  // PER_FLOOR — `store.ts` 의 캔버스 번호풍선 계산과 같은 모드. 층이 바뀌면 결함번호가 1부터
+  // 다시 시작한다(결함번호는 도면 번호풍선과 일치, 사진번호는 뒤에서 결함 안에서만 따로 붙는다).
+  const params: NumberingParams = {
+    floorIds: floors.map((f) => f.id),
+    mode: 'PER_FLOOR',
+    surveyKinds: null,
+    // 백업 목적 — 상태·조사구분으로 빠지는 사진이 없게 전부 켠다 (위 파일 설명 참고)
+    includeRepaired: true,
+    includePrevPending: true,
+    includeIncomplete: true,
+  };
+  const result = assignNumbers(bundle.defects, params);
 
   const items: DownloadItem[] = [];
   const missing: PhotoDownloadPlan['missing'] = [];
   let total = 0;
 
-  for (const floor of exportFloors(bundle)) {
-    const defects = (defectsByFloor.get(floor.id) ?? []).slice().sort(compareDefectsForFloor);
-    if (defects.length === 0) continue;
-
+  for (const floor of floors) {
     const info = floorInfo.get(floor.id);
     const code = rawFloorById.get(floor.id)?.code;
     const prefix = sanitizeFileName(
@@ -79,20 +75,22 @@ export async function buildProjectPhotoDownloads(
     );
 
     const usedNames = new Set<string>();
-    let photoNo = 0;
 
-    for (const defect of defects) {
-      const photos = photosByDefect.get(defect.id);
+    for (const row of result.rows) {
+      if (row.floorId !== floor.id) continue;
+      const photos = photosByDefect.get(row.defectId);
       if (!photos || photos.length === 0) continue;
 
-      for (const photo of photos) {
-        photoNo += 1;
+      const base = `${prefix}${String(row.no).padStart(2, '0')}`;
+
+      for (let i = 0; i < photos.length; i += 1) {
+        const photo = photos[i]!;
         total += 1;
-        const stem = `${prefix}${String(photoNo).padStart(2, '0')}`;
+        const stem = i === 0 ? base : `${base}_${i + 1}`;
         let fileName = `${stem}.jpg`;
         let dedupe = 2;
         while (usedNames.has(fileName)) {
-          fileName = `${stem}_${dedupe}.jpg`;
+          fileName = `${stem}(${dedupe}).jpg`;
           dedupe += 1;
         }
         usedNames.add(fileName);
