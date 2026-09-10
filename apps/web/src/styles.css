@@ -1671,14 +1671,26 @@ kbd {
 .banner__spacer { flex: 1; }
 
 /* 화면 우하단 고정 — 초기화(항상) + 테마 전환(태블릿에서만, 2026-09-03) */
+/*
+ * 실사용테스트(2026-09-10) — 좁은/분할화면 보정.
+ * 계정 표시 + 팀 관리 + 로그아웃 + 테마 전환 + 초기화, 최대 5개가 한 줄에 들어가면
+ * 좁은 화면에서 자리가 모자라 `flex-wrap` 없이는 버튼 글자가 한 단어씩 줄바꿈되며
+ * 뭉개진다. `flex-wrap` 으로 **버튼 단위**로 다음 줄에 내려가게 하고,
+ * `max-width` 로 뷰포트 밖까지 늘어나지 않게 막는다.
+ */
 .shell__corner {
   position: fixed;
   right: 14px;
   bottom: 12px;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 6px 10px;
+  /* 오른쪽 정렬 유지하면서 뷰포트 밖으로 안 늘어나게 — `left` 는 안 준다:
+     그러면 박스가 화면 하단 전체 폭으로 넓어져 빈 부분이 그 아래 콘텐츠 클릭을 먹는다 */
+  max-width: calc(100vw - 28px);
 }
 
 .shell__reset,
@@ -1688,6 +1700,7 @@ kbd {
   color: var(--text-dim);
   font: inherit;
   font-size: 11.5px;
+  white-space: nowrap;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -3014,11 +3027,18 @@ select.input { cursor: pointer; }
 .set-col__star { color: #e3a535; }
 
 /*
- * ⚠️ 여기(그리고 .set-col)에 overflow 를 걸지 않는다 —
- * 행의 `⋯` 메뉴가 absolute 라서 목록 아래쪽 행에서 잘린다.
- * 목록이 길면 컬럼이 길어지고 페이지가 스크롤된다.
+ * 실사용테스트(2026-09-10) — 컬럼별 독립 스크롤.
+ * ⚠️ 예전엔 여기 overflow 를 걸지 않았다 — 행의 `⋯` 메뉴가 absolute 라서 목록 아래쪽
+ * 행에서 잘렸기 때문(목록이 길면 컬럼이 길어지고 페이지 전체가 스크롤되는 구조였다).
+ * `07e8bfd`(설정 메뉴 뷰포트 잘림 수정)로 `MoreMenu` 가 `position:fixed` 포털로 바뀌면서
+ * 그 제약은 없어졌는데 이 규칙만 남아 있었다 — 3컬럼 높이가 서로 달라(`align-items:start`)
+ * 짧은 컬럼 옆에 빈 공간이 크게 남고, 작은 화면·분할화면에서 페이지가 과도하게 길어졌다.
  */
-.set-col__body { min-height: 0; }
+.set-col__body {
+  min-height: 0;
+  max-height: min(56vh, 600px);
+  overflow-y: auto;
+}
 
 /* ── 추가 입력 ────────────────────────────────────────────────────────── */
 .set-add { padding: 8px 10px; border-bottom: 1px solid var(--border-2); }

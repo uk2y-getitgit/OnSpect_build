@@ -17,6 +17,7 @@ import {
 } from '@onspect/project-core';
 import { useAppData } from '../data/appData';
 import { estimateStorage } from '../data/idb/db';
+import { buildProjectPhotoDownloads, downloadAllProjectPhotos } from '../data/photoBulkDownload';
 import {
   exportProjectToZip,
   importParsedProject,
@@ -171,6 +172,47 @@ export function ProjectList() {
       }
     },
     [storage, exportingId, toast],
+  );
+
+  // ── 실사용테스트(2026-09-10, Q93) — 사진 일괄 다운로드 ────────────────────
+  // 태블릿 PWA 는 촬영 사진을 기기 갤러리에 코드로 저장할 수 없다(브라우저 샌드박스).
+  // 대신 체계적인 파일명(`data/photoBulkDownload.ts` 참고)으로 시스템 Downloads 폴더에
+  // 일괄 내려받게 하고, 그 뒤는 외부 "폴더 감시 자동 리네임" 앱이 이어받는다.
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadPhotos = useCallback(
+    async (s: ProjectSummary) => {
+      if (storage.phase !== 'READY' || downloadingId) return;
+      const name = projectDisplayName(s.project);
+      setDownloadingId(s.project.id);
+      try {
+        const bundle = await storage.repo.loadBundle(s.project.id);
+        if (!bundle) {
+          toast(`'${name}'을 찾을 수 없습니다`, { kind: 'warn' });
+          return;
+        }
+        const plan = await buildProjectPhotoDownloads(storage.repo, bundle);
+        if (plan.total === 0) {
+          toast(`'${name}'에 저장된 사진이 없습니다`, { kind: 'warn' });
+          return;
+        }
+        await downloadAllProjectPhotos(plan);
+        const okCount = plan.items.length;
+        if (plan.missing.length > 0) {
+          toast(
+            `'${name}' 사진 ${okCount}장을 내려받았습니다 — ${plan.missing.length}장은 이 기기에 없어 건너뛰었습니다`,
+            { kind: 'warn' },
+          );
+        } else {
+          toast(`'${name}' 사진 ${okCount}장을 내려받았습니다`);
+        }
+      } catch (err) {
+        toast(err instanceof Error ? err.message : '사진 다운로드에 실패했습니다', { kind: 'warn' });
+      } finally {
+        setDownloadingId(null);
+      }
+    },
+    [storage, downloadingId, toast],
   );
 
   /**
@@ -400,6 +442,11 @@ export function ProjectList() {
                       // D38(Q74) — 로그인 없이 기기 간 이동. 다른 기기의 [파일에서 가져오기]로 이어진다
                       label: exportingId === s.project.id ? '내보내는 중…' : '파일로 내보내기',
                       onSelect: () => void exportProject(s),
+                    },
+                    {
+                      // Q93 — 촬영 사진을 기기 갤러리에 코드로 저장할 수 없어 대신 만든 일괄 다운로드
+                      label: downloadingId === s.project.id ? '다운로드 중…' : '사진 일괄 다운로드',
+                      onSelect: () => void downloadPhotos(s),
                     },
                     {
                       label: '삭제',
