@@ -2834,10 +2834,12 @@ select.input { cursor: pointer; }
    * 실사용테스트(2026-09-10) — 이 폭에서는 `.set-nav` 가 본문과 나란히 있지 않고
    * **위로 쌓인다**(스택). `position:sticky` 는 "본문 옆에 나란히 있을 때 같이 스크롤하며
    * 붙어있기"용 설계라, 쌓인 구조에서는 스크롤하면 내비가 화면 상단에 뜬 채 그 아래로
-   * 밀려 올라온 본문 목록(부재·결함유형 등, `…` 메뉴 포함)을 위에서 덮어버린다.
-   * 넓은 화면(내비가 본문과 나란함)에서는 그대로 고정 유지 — 거긴 문제 없다.
+   * 밀려 올라온 본문 목록 위에 얹힌 것처럼 보여 혼란을 준다 — sticky 를 끈다.
+   * `position: relative`(= `static` 과 시각적으로 동일, 그냥 제자리에 흐름대로 있음)를 쓰는
+   * 이유는 **z-index 는 `static` 이 아닌 포지션에서만 먹기 때문** — 아래 `.set-nav`(넓은 화면
+   * sticky) 와 같은 겹침 방지 z-index 를 이 폭에서도 유지하려면 `static` 을 쓰면 안 된다.
    */
-  .set-nav { position: static; }
+  .set-nav { position: relative; }
 }
 
 /* ── 좌측 내비 ────────────────────────────────────────────────────────── */
@@ -2851,6 +2853,14 @@ select.input { cursor: pointer; }
   background: var(--surface);
   position: sticky;
   top: 0;
+  /*
+   * 실사용테스트(2026-09-10) 3차 — 넓은 화면(내비+본문 나란히)에서도 스크롤하면 본문 목록의
+   * `⋯` 버튼이 이 박스 위로 겹쳐 보이고 클릭까지 됐다. `.set-main` 이 DOM 순서상 이 뒤에 오므로,
+   * 배경은 불투명해도(`--surface`) z-index 가 없으면 겹칠 때 나중에 오는 쪽(본문)이 위에
+   * 그려진다. 명시적으로 앞에 오게 고정한다 — `background` 가 불투명하므로 이러면 뒤 콘텐츠는
+   * 완전히 가려지고(안 보임), 클릭도 이 박스(내비 버튼)가 받는다.
+   */
+  z-index: 2;
 }
 
 .set-nav__group { display: flex; flex-direction: column; gap: 2px; }
