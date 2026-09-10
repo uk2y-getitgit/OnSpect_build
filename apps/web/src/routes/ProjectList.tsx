@@ -196,15 +196,15 @@ export function ProjectList() {
           toast(`'${name}'에 저장된 사진이 없습니다`, { kind: 'warn' });
           return;
         }
-        await downloadAllProjectPhotos(plan);
+        await downloadAllProjectPhotos(plan, name);
         const okCount = plan.items.length;
         if (plan.missing.length > 0) {
           toast(
-            `'${name}' 사진 ${okCount}장을 내려받았습니다 — ${plan.missing.length}장은 이 기기에 없어 건너뛰었습니다`,
+            `'${name}' 사진 ${okCount}장을 zip으로 내려받았습니다 — ${plan.missing.length}장은 이 기기에 없어 건너뛰었습니다`,
             { kind: 'warn' },
           );
         } else {
-          toast(`'${name}' 사진 ${okCount}장을 내려받았습니다`);
+          toast(`'${name}' 사진 ${okCount}장을 zip으로 내려받았습니다`);
         }
       } catch (err) {
         toast(err instanceof Error ? err.message : '사진 다운로드에 실패했습니다', { kind: 'warn' });
