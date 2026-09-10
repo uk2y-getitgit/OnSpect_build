@@ -6,24 +6,24 @@
  * 파일명으로 시스템 Downloads 폴더에 내려받게 하고, 그 뒤는 사용자가 쓰는 외부
  * "폴더 감시 자동 리네임" 앱이 이어받는다.
  *
- * 파일명 = `{동이름-}{층이름}-{결함번호 2자리}{-사진순번(그 결함에 2장 이상일 때만)}.jpg`
- * · 결함번호는 기존 출력물(`assignNumbers`)과 같은 체계 — "사진번호" 개념을 새로 만들지 않는다
- *   (`photoNo` 는 대표사진 있는 결함만 세는 별도 카운터이고 2026-09-04 양식개정으로 이미
- *   사진첩 캡션에서도 결함번호로 대체됐다 — 폐기 수순이라 쓰지 않는다).
+ * **파일명 = `{동이름-}{층 접두어}{그 층 안에서의 사진순번 2자리}.jpg`**(2026-09-10 실사용 확정,
+ * Q93 최초안의 `동-층-결함번호` 구조를 대체) — 예: 지상1층 1번째 사진 `101` · 지하1층 2번째 `B102`
+ * · 옥상층 3번째 `RF03` · 외부 2번째 `W02`.
+ * · **층 접두어는 `Floor.code`를 그대로 쓴다** — 이름에서 자동으로 만들어내지 않는다. D19/D20 이
+ *   이미 "층 접두어는 사용자 직접 입력 옵트인, 자동 파생 금지"로 못박아 뒀다(`floorCodeOf` 의
+ *   파생값은 입력칸 placeholder 제안일 뿐). `code` 가 비어 있으면(옵트인 안 한 층) 층 이름으로
+ *   대신한다.
+ * · **사진번호는 결함번호가 아니다** — 그 층에 있는 **모든 결함의 사진을 전부 한 줄로 펼쳐 놓고**
+ *   매기는 순번이다(결함 정렬은 기존 출력물과 같은 규칙 — 입력순번→도면→id, 결함 안에서는
+ *   대표사진 우선 순서). 결함 하나에 사진이 여러 장이어도 그냥 다음 번호로 이어진다.
  * · 동 이름은 동이 1개뿐이면 생략한다 — `locationMapFloors()` 의 기존 관례(D45 B-3) 그대로.
- * · REPAIRED·전회차 등 출력 스코프 필터는 걸지 않는다(`defaultNumberingParams` 를 그대로
- *   쓰지 않고 전부 켠다) — 이건 보고서용 산출물이 아니라 원본 백업/정리 목적이라
- *   "이유가 있어 빠지는 사진"이 있으면 안 된다.
- * · 원본(`sourceBlobKey`) 대신 렌더본(`renderBlobKey`, 장변 2048 JPEG)을 내려받는다 —
- *   용량을 줄이면서도 다른 산출물과 동일한 화질이다(V7 과 같은 선택).
+ * · 결함 상태(REPAIRED·전회차 등)로 거르지 않는다 — 보고서용 산출물이 아니라 원본 백업/정리
+ *   목적이라 "이유가 있어 빠지는 사진"이 있으면 안 된다.
+ * · 원본(`sourceBlobKey`) 대신 렌더본(`renderBlobKey`, 장변 2048 JPEG)을 내려받는다 — 용량을
+ *   줄이면서도 다른 산출물과 동일한 화질이다(V7 과 같은 선택).
  */
-import {
-  assignNumbers,
-  defaultNumberingParams,
-  defectIdsWithPrimaryPhoto,
-  groupPhotosByDefect,
-} from '@onspect/project-core';
-import { isIncomplete } from '@onspect/canvas-core';
+import type { Defect } from '@onspect/canvas-core';
+import { groupPhotosByDefect } from '@onspect/project-core';
 import type { ProjectBundle } from './idb/repo';
 import { exportFloors, locationMapFloors } from '../export/exportModel';
 import { downloadSequential, sanitizeFileName, type DownloadItem } from '../export/download';
@@ -36,6 +36,13 @@ export type PhotoDownloadPlan = {
   total: number;
 };
 
+/** 결함 정렬 — `numbering.ts::compareForOutput` 과 같은 규칙(입력순번→도면→id). 결정론 유지 */
+function compareDefectsForFloor(a: Defect, b: Defect): number {
+  if (a.seq !== b.seq) return a.seq - b.seq;
+  if (a.drawingId !== b.drawingId) return a.drawingId < b.drawingId ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 /**
  * 용역의 사진 전부를 내려받을 (blob, 파일명) 목록을 만든다. **다운로드까지는 하지 않는다** —
  * 순수 조회 + blob 읽기만 하는 함수라 미리보기·개수 확인에도 그대로 쓸 수 있다.
@@ -44,55 +51,59 @@ export async function buildProjectPhotoDownloads(
   repo: { readBlob(key: string): Promise<Blob | null> },
   bundle: ProjectBundle,
 ): Promise<PhotoDownloadPlan> {
-  const floorIds = exportFloors(bundle).map((f) => f.id);
-  const params = {
-    ...defaultNumberingParams(floorIds),
-    // 백업 목적 — 상태·조사구분으로 빠지는 사진이 없게 전부 켠다 (위 파일 설명 참고)
-    includeRepaired: true,
-  };
-  const hasPhoto = defectIdsWithPrimaryPhoto(bundle.photos);
-  const incomplete = new Set(bundle.defects.filter(isIncomplete).map((d) => d.id));
-  const result = assignNumbers(bundle.defects, params, { hasPhoto, incomplete });
-
   const floorInfo = new Map(locationMapFloors(bundle).map((f) => [f.id, f]));
+  const rawFloorById = new Map(bundle.floors.map((f) => [f.id, f]));
   const photosByDefect = groupPhotosByDefect(bundle.photos);
-  const defectById = new Map(bundle.defects.map((d) => [d.id, d]));
+
+  const defectsByFloor = new Map<string, Defect[]>();
+  for (const d of bundle.defects) {
+    const arr = defectsByFloor.get(d.floorId);
+    if (arr) arr.push(d);
+    else defectsByFloor.set(d.floorId, [d]);
+  }
 
   const items: DownloadItem[] = [];
   const missing: PhotoDownloadPlan['missing'] = [];
-  const usedNames = new Set<string>();
   let total = 0;
 
-  for (const [defectId, assigned] of Object.entries(result.byDefect)) {
-    const defect = defectById.get(defectId);
-    const photos = photosByDefect.get(defectId);
-    if (!defect || !photos || photos.length === 0) continue;
+  for (const floor of exportFloors(bundle)) {
+    const defects = (defectsByFloor.get(floor.id) ?? []).slice().sort(compareDefectsForFloor);
+    if (defects.length === 0) continue;
 
-    const floor = floorInfo.get(defect.floorId);
-    const base = sanitizeFileName(
-      [floor?.buildingName ?? null, floor?.name ?? '', String(assigned.no).padStart(2, '0')]
+    const info = floorInfo.get(floor.id);
+    const code = rawFloorById.get(floor.id)?.code;
+    const prefix = sanitizeFileName(
+      [info?.buildingName ?? null, code?.trim() || floor.name]
         .filter((p): p is string => p !== null && p !== '')
         .join('-'),
     );
 
-    for (let i = 0; i < photos.length; i += 1) {
-      const photo = photos[i]!;
-      total += 1;
-      const stem = photos.length > 1 ? `${base}-${i + 1}` : base;
-      let fileName = `${stem}.jpg`;
-      let dedupe = 2;
-      while (usedNames.has(fileName)) {
-        fileName = `${stem}_${dedupe}.jpg`;
-        dedupe += 1;
-      }
-      usedNames.add(fileName);
+    const usedNames = new Set<string>();
+    let photoNo = 0;
 
-      const blob = await repo.readBlob(photo.renderBlobKey);
-      if (!blob) {
-        missing.push({ photoId: photo.id, fileName });
-        continue;
+    for (const defect of defects) {
+      const photos = photosByDefect.get(defect.id);
+      if (!photos || photos.length === 0) continue;
+
+      for (const photo of photos) {
+        photoNo += 1;
+        total += 1;
+        const stem = `${prefix}${String(photoNo).padStart(2, '0')}`;
+        let fileName = `${stem}.jpg`;
+        let dedupe = 2;
+        while (usedNames.has(fileName)) {
+          fileName = `${stem}_${dedupe}.jpg`;
+          dedupe += 1;
+        }
+        usedNames.add(fileName);
+
+        const blob = await repo.readBlob(photo.renderBlobKey);
+        if (!blob) {
+          missing.push({ photoId: photo.id, fileName });
+          continue;
+        }
+        items.push({ blob, fileName });
       }
-      items.push({ blob, fileName });
     }
   }
   return { items, missing, total };
