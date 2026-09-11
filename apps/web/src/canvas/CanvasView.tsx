@@ -217,18 +217,28 @@ export function CanvasView({
 
     // 실사용 신고(2026-09-11) — 태블릿 분할화면 진입 시 캔버스가 분할 이전 크기로
     // 멎어 새로 비게 된 쪽이 잘려 보이는(도면은 안 잘리고 `.canvas-host{overflow:hidden}`
-    // 바깥으로 나가 안 보이는) 증상. Android WebView 가 OS 창 크기 변경(멀티윈도 진입)
-    // 시점에 `ResizeObserver` 콜백을 놓치거나 늦게 보내는 사례가 있어, `window`의
-    // `resize` 를 보조 신호로 두고 실측값을 한 번 더 보낸다. `ResizeObserver` 가 이미
-    // 정확히 잡은 경우엔 같은 크기를 다시 보내는 것뿐이라 부작용이 없다(RESIZE 리듀서는
-    // 같은 크기를 받아도 같은 뷰포트로 clamp 된다).
+    // 바깥으로 나가 안 보이는) 증상. `window resize` 보조 신호를 추가해도 재현돼,
+    // 임시 디버그 배지로 실측한 결과 **Samsung Internet 분할화면에서는 `ResizeObserver`도
+    // `window resize`도 창 크기 변경 시 아예 발화하지 않는다**(캔버스가 최초 마운트 시점의
+    // 잘못된 크기(우연히 `--sidebar-w`와 같은 값)에 계속 멎어 있음을 확인) — 이벤트에 기대는
+    // 대신 폴링으로 강제한다. `getBoundingClientRect()`는 이벤트 발화 여부와 무관하게 항상
+    // 현재 값을 돌려주므로, 값이 바뀌었을 때만 RESIZE 를 보내면 이벤트가 안 오는 브라우저에서도
+    // 늦어도 한 틱(`POLL_MS`) 안에 따라잡는다. 비용은 좌표 4개 읽기 1회/주기 — 무시할 수준.
+    let lastW = -1;
+    let lastH = -1;
     const measureSize = () => {
       const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) {
-        send({ k: 'RESIZE', size: { w: Math.round(r.width), h: Math.round(r.height) } });
-      }
+      if (r.width <= 0 || r.height <= 0) return;
+      const w = Math.round(r.width);
+      const h = Math.round(r.height);
+      if (w === lastW && h === lastH) return;
+      lastW = w;
+      lastH = h;
+      send({ k: 'RESIZE', size: { w, h } });
     };
     window.addEventListener('resize', measureSize);
+    const POLL_MS = 500;
+    const pollId = window.setInterval(measureSize, POLL_MS);
 
     // 떠 있는 UI 가 늦게 붙거나(도구 팔레트 활성화) 사라질 때를 따라간다
     const mo = new MutationObserver(() => measureInsets());
@@ -239,6 +249,7 @@ export function CanvasView({
       cancelAnimationFrame(raf);
       ro.disconnect();
       mo.disconnect();
+      window.clearInterval(pollId);
       window.removeEventListener('resize', measureSize);
     };
   }, [send]);
