@@ -215,6 +215,21 @@ export function CanvasView({
     const stage = el.parentElement;
     if (stage) ro.observe(stage);
 
+    // 실사용 신고(2026-09-11) — 태블릿 분할화면 진입 시 캔버스가 분할 이전 크기로
+    // 멎어 새로 비게 된 쪽이 잘려 보이는(도면은 안 잘리고 `.canvas-host{overflow:hidden}`
+    // 바깥으로 나가 안 보이는) 증상. Android WebView 가 OS 창 크기 변경(멀티윈도 진입)
+    // 시점에 `ResizeObserver` 콜백을 놓치거나 늦게 보내는 사례가 있어, `window`의
+    // `resize` 를 보조 신호로 두고 실측값을 한 번 더 보낸다. `ResizeObserver` 가 이미
+    // 정확히 잡은 경우엔 같은 크기를 다시 보내는 것뿐이라 부작용이 없다(RESIZE 리듀서는
+    // 같은 크기를 받아도 같은 뷰포트로 clamp 된다).
+    const measureSize = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        send({ k: 'RESIZE', size: { w: Math.round(r.width), h: Math.round(r.height) } });
+      }
+    };
+    window.addEventListener('resize', measureSize);
+
     // 떠 있는 UI 가 늦게 붙거나(도구 팔레트 활성화) 사라질 때를 따라간다
     const mo = new MutationObserver(() => measureInsets());
     if (stage) mo.observe(stage, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
@@ -224,6 +239,7 @@ export function CanvasView({
       cancelAnimationFrame(raf);
       ro.disconnect();
       mo.disconnect();
+      window.removeEventListener('resize', measureSize);
     };
   }, [send]);
 

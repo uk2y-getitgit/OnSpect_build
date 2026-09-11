@@ -289,10 +289,16 @@ kbd {
 }
 
 /* ── 상단 바 ──────────────────────────────────────────────────────────── */
-/* 명시적 2열 그리드. `space-between` 으로 양끝에 미는 방식을 쓰지 않는다 (R-2-2) */
+/* 명시적 2열 그리드. `space-between` 으로 양끝에 미는 방식을 쓰지 않는다 (R-2-2)
+ * 우측 열은 `auto` 가 아니라 `minmax(0, auto)` 다 — 실사용 신고(2026-09-11, 태블릿
+ * 분할화면): `auto` 트랙은 내용(버튼 여러 그룹) 의 max-content 폭만큼 무조건 확보하려
+ * 해서, 남는 폭이 모자라면 트랙 자체가 `.topbar` 밖으로 밀려나 `.app{overflow:hidden}`
+ * 에 잘려 되돌리기 등 뒷쪽 버튼이 화면에 아예 안 나오고 눌리지도 않았다. `minmax(0, …)`
+ * 로 바꾸면 트랙이 0까지 줄어들 수 있어, 대신 `.topbar__right` 자체의 가로 스크롤(아래)로
+ * 넘친 버튼에 닿을 수 있게 한다. */
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: center;
   gap: 12px;
   padding: 0 10px;
@@ -307,6 +313,16 @@ kbd {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+/* 좌측 열은 트랙 자체가 이미 `minmax(0, 1fr)`라 0까지 줄어드는 데는 문제가 없었지만,
+ * 안의 버튼들(← 용역구성·설정·도곽·출력)이 줄어든 폭보다 넓으면 이번엔 `overflow`
+ * 기본값(visible)이라 우측 열 쪽으로 겹쳐 보이거나 화면 밖으로 잘렸다 — 우측과 같은
+ * 이유로 같은 처방(가로 스크롤)을 준다 */
+.topbar__left,
+.topbar__right {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .brand {
