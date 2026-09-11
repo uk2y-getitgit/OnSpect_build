@@ -204,6 +204,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   const [debugWin, setDebugWin] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   const [debugSidebarW, setDebugSidebarW] = useState<number | null>(null);
   const [debugStageW, setDebugStageW] = useState<number | null>(null);
+  const [debugGrid, setDebugGrid] = useState('');
   useEffect(() => {
     const onResize = () => {
       setDebugWin({ w: window.innerWidth, h: window.innerHeight });
@@ -212,6 +213,16 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
       setDebugSidebarW(sb ? Math.round(sb.getBoundingClientRect().width) : null);
       const stage = document.querySelector('.stage');
       setDebugStageW(stage ? Math.round(stage.getBoundingClientRect().width) : null);
+      // 브라우저가 실제로 계산한 그리드 값 자체 — CSS 추론을 걷어내고 진짜 값을 읽는다
+      const body = document.querySelector('.body');
+      const cols = body ? getComputedStyle(body).gridTemplateColumns : 'body없음';
+      const sbCss = sb
+        ? `w=${getComputedStyle(sb).width} disp=${getComputedStyle(sb).display} col=${getComputedStyle(sb).gridColumn}`
+        : 'sidebar DOM없음';
+      const stCss = stage
+        ? `w=${getComputedStyle(stage).width} disp=${getComputedStyle(stage).display} col=${getComputedStyle(stage).gridColumn}`
+        : 'stage DOM없음';
+      setDebugGrid(`cols=[${cols}] | sidebar{${sbCss}} | stage{${stCss}}`);
     };
     onResize();
     window.addEventListener('resize', onResize);
@@ -1156,6 +1167,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             position: 'fixed',
             left: 4,
             bottom: 4,
+            right: 4,
             zIndex: 99999,
             background: 'rgba(220, 0, 0, 0.92)',
             color: '#fff',
@@ -1163,10 +1175,11 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             padding: '4px 8px',
             borderRadius: 4,
             pointerEvents: 'none',
-            whiteSpace: 'pre',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
           }}
         >
-          {`DEBUG win ${debugWin.w}x${debugWin.h} | .sidebar실측=${debugSidebarW ?? '없음'} | .stage실측=${debugStageW ?? '없음'} | canvas상태값 ${state.canvas.canvas.w}x${state.canvas.canvas.h} | shell=${shell} sidebar=${sidebarOpen ? 'open' : 'closed'}`}
+          {`DEBUG win ${debugWin.w}x${debugWin.h} | .sidebar실측=${debugSidebarW ?? '없음'} | .stage실측=${debugStageW ?? '없음'} | canvas상태값 ${state.canvas.canvas.w}x${state.canvas.canvas.h} | shell=${shell} sidebar=${sidebarOpen ? 'open' : 'closed'}\n${debugGrid}`}
         </div>
       )}
       <header className="topbar">
