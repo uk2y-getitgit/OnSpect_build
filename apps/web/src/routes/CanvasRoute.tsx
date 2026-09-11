@@ -198,40 +198,6 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   /** 세로 태블릿에서만 결함정보가 바텀시트로 간다 (D10 · 스펙 §5-1) */
   const sheetMode = shell === 'tablet-portrait';
 
-  // ⚠️ TEMP DEBUG (2026-09-11) — 태블릿 분할화면 캔버스 우측 죽은 화면 진단용.
-  // 원인 확인되는 대로 이 블록 통째로 지운다. 실기기 값을 눈으로 볼 방법이 없어
-  // 화면 한 구석에 숫자로 띄운다 — 브라우저를 직접 못 띄우는 하네스 제약의 임시 우회.
-  const [debugWin, setDebugWin] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  const [debugSidebarW, setDebugSidebarW] = useState<number | null>(null);
-  const [debugStageW, setDebugStageW] = useState<number | null>(null);
-  const [debugGrid, setDebugGrid] = useState('');
-  useEffect(() => {
-    const onResize = () => {
-      setDebugWin({ w: window.innerWidth, h: window.innerHeight });
-      // 사이드바가 실제로 몇 px 을 받는지 — 캔버스와 나란히 비교하려고 직접 잰다
-      const sb = document.querySelector('.sidebar');
-      setDebugSidebarW(sb ? Math.round(sb.getBoundingClientRect().width) : null);
-      const stage = document.querySelector('.stage');
-      setDebugStageW(stage ? Math.round(stage.getBoundingClientRect().width) : null);
-      // 브라우저가 실제로 계산한 그리드 값 자체 — CSS 추론을 걷어내고 진짜 값을 읽는다
-      const body = document.querySelector('.body');
-      const cols = body ? getComputedStyle(body).gridTemplateColumns : 'body없음';
-      const sbCss = sb
-        ? `w=${getComputedStyle(sb).width} disp=${getComputedStyle(sb).display} col=${getComputedStyle(sb).gridColumn}`
-        : 'sidebar DOM없음';
-      const stCss = stage
-        ? `w=${getComputedStyle(stage).width} disp=${getComputedStyle(stage).display} col=${getComputedStyle(stage).gridColumn}`
-        : 'stage DOM없음';
-      setDebugGrid(`cols=[${cols}] | sidebar{${sbCss}} | stage{${stCss}}`);
-    };
-    onResize();
-    window.addEventListener('resize', onResize);
-    const id = window.setInterval(onResize, 1000);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.clearInterval(id);
-    };
-  }, []);
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('PEEK');
 
   /**
@@ -1160,28 +1126,6 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
           : undefined
       }
     >
-      {/* ⚠️ TEMP DEBUG — 위 useState 선언부와 함께 지운다 */}
-      {tablet && (
-        <div
-          style={{
-            position: 'fixed',
-            left: 4,
-            bottom: 4,
-            right: 4,
-            zIndex: 99999,
-            background: 'rgba(220, 0, 0, 0.92)',
-            color: '#fff',
-            font: '11px/1.4 monospace',
-            padding: '4px 8px',
-            borderRadius: 4,
-            pointerEvents: 'none',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-all',
-          }}
-        >
-          {`DEBUG win ${debugWin.w}x${debugWin.h} | .sidebar실측=${debugSidebarW ?? '없음'} | .stage실측=${debugStageW ?? '없음'} | canvas상태값 ${state.canvas.canvas.w}x${state.canvas.canvas.h} | shell=${shell} sidebar=${sidebarOpen ? 'open' : 'closed'}\n${debugGrid}`}
-        </div>
-      )}
       <header className="topbar">
         <div className="topbar__left">
           <button

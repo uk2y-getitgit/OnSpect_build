@@ -276,14 +276,23 @@ kbd {
   }
 }
 
-/* 아주 좁은 폭에서는 좌측 패널을 접는다. 캔버스가 먼저다 */
+/* 아주 좁은 폭에서는 좌측 패널을 접는다. 캔버스가 먼저다 — **PC 전용**이다.
+ * 실사용 신고(2026-09-11, 태블릿 분할화면): `.app .sidebar` 에 셸 조건이 없어서
+ * `data-shell='tablet-portrait'` 에서도 폭이 820px 이하로만 내려가면 무조건
+ * `display:none` 이 걸렸다. 태블릿 세로는 이미 `data-sidebar` 로 여닫는 자기
+ * 그리드 규칙(아래 T2-1 절, `[data-shell='tablet-portrait']`)이 따로 있는데, 이 규칙이
+ * 그 위에 덮어써서: 사이드바를 "열어도" DOM엔 있지만 시각적으로 사라지고(`display:none`
+ * 이라 `getBoundingClientRect`도 0), 그리드에서도 빠지면서 `.stage`가 사이드바 몫이던
+ * 첫 번째 열(`--sidebar-w`, 204px)로 떠밀려 들어가 버렸다 — 원래 `.stage`가 받아야 할
+ * 두 번째 열(남는 폭 전부)은 아무도 안 쓰는 채 검게 비었다. PC 는 폭 기반 자동 접힘이
+ * 맞지만, 태블릿 세로는 사용자가 직접 여닫는 토글이 이미 있으니 이 규칙이 끼어들면 안 된다. */
 @media (max-width: 820px) {
   .body,
   .app[data-sidebar='closed'] .body {
     grid-template-columns: minmax(0, 1fr) var(--inspector-w);
   }
   /* .sidebar 기본 규칙(display:flex)이 아래에 있으므로 특이도를 올린다 */
-  .app .sidebar {
+  .app[data-shell='pc'] .sidebar {
     display: none;
   }
 }
