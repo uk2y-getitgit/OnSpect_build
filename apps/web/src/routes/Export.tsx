@@ -79,7 +79,9 @@ const KIND_HINT: Record<ExportArtifactKind, string> = {
     `[파일 받기]·[손상결함표 PDF] 중 원하는 것을 누르세요. ${REPEAT_ROW_NOTICE}`,
   DEFECT_LIST:
     '엑셀(9열 축약) 또는 PDF — 만든 뒤 아래 이력의 [파일 받기]·[결함리스트 PDF] 중 원하는 것을 누르세요',
-  PHOTO_BOOK: '파일이 아니라 인쇄 뷰로 냅니다 — 만든 뒤 아래 이력의 [사진첩 PDF] 를 누르세요',
+  PHOTO_BOOK:
+    '엑셀(사진 1장당 1행, 썸네일 포함 — 일회성 출력물, 엑셀에서 고쳐도 앱 데이터는 안 바뀝니다) ' +
+    '또는 PDF — 만든 뒤 아래 이력의 [파일 받기]·[사진첩 PDF] 중 원하는 것을 누르세요',
   LOCATION_MAP:
     '층별 PNG 또는 PDF — 만든 뒤 아래 이력의 [파일 받기]·[조사위치도 PDF] 중 원하는 것을 누르세요',
 };
@@ -235,12 +237,11 @@ export function Export({ projectId }: { projectId: string }) {
           )
         : new Set([...kindSet].filter((k) => FILE_ARTIFACTS.includes(k)));
 
+      // 2026-09-11 — 사진첩이 FILE_ARTIFACTS 에 들어오면서(엑셀도 낸다) 이 분기에 걸리는
+      // 경우는 "아무것도 안 골랐다" 뿐이다(사진첩만 골라도 이제 useKinds 가 비지 않는다)
       if (useKinds.size === 0 && !opts.existing) {
-        // 사진첩만 골랐다 — 파일이 없으므로 이력만 남기고 인쇄 뷰로 안내한다
-        if (!kindSet.has('PHOTO_BOOK')) {
-          toast('출력할 산출물을 하나 이상 선택해 주세요', { kind: 'warn' });
-          return;
-        }
+        toast('출력할 산출물을 하나 이상 선택해 주세요', { kind: 'warn' });
+        return;
       }
 
       setBusy(label);
@@ -299,8 +300,14 @@ export function Export({ projectId }: { projectId: string }) {
         }
         if (out.csvFallback.length > 0) parts.push(CSV_FALLBACK_NOTICE);
         for (const w of out.mapWarnings) parts.push(w.detail);
+        if (out.photoBookWarnings > 0) {
+          parts.push(`사진첩 엑셀에서 사진 ${out.photoBookWarnings}장을 못 불러왔습니다`);
+        }
         toast(parts.join(' · ') || '출력할 것이 없습니다', {
-          kind: out.mapWarnings.length > 0 || out.csvFallback.length > 0 ? 'warn' : 'info',
+          kind:
+            out.mapWarnings.length > 0 || out.csvFallback.length > 0 || out.photoBookWarnings > 0
+              ? 'warn'
+              : 'info',
           ttl: 12000,
         });
       } catch (e) {

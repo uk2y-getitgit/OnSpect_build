@@ -6,7 +6,8 @@
  *    서로 어긋날 수 없다. 재다운로드도 같은 함수를 `planFromRun()` 결과로 부른다.
  *
  * ⭐ **PDF 는 여기서 만들지 않는다** (K1 · Q32). 인쇄 뷰가 맡는다.
- *    파일로 나가는 것은 **엑셀 2종 + PNG(조사위치도)** 뿐이다 (M3).
+ *    파일로 나가는 것은 **엑셀 3종 + PNG(조사위치도)** 뿐이다(M3 — 사진첩은 2026-09-11부터
+ *    엑셀도 낸다. 인쇄 뷰 PDF는 그대로 유지 — 둘 다 된다).
  */
 import {
   ARTIFACT_LABEL,
@@ -22,6 +23,7 @@ import {
   displayNumbersOf,
   floorCodesFor,
   locationMapFloors,
+  photoBookModel,
   type ExportPlan,
   type ExportSource,
 } from './exportModel';
@@ -31,12 +33,15 @@ import {
   renderLocationMaps,
   type LocationMapWarning,
 } from './locationMap';
+import { releasePhotoBookImages, renderPhotoBookImages } from './photoBookImages';
+import { buildPhotoBookXlsxSheet } from './photoBookXlsx';
 import { writeWorkbook } from './xlsx';
 
-/** `[생성]` 이 실제로 **파일**을 내는 산출물. 사진첩은 인쇄 뷰 전용이다 (M3) */
+/** `[생성]` 이 실제로 **파일**을 내는 산출물 */
 export const FILE_ARTIFACTS: readonly ExportArtifactKind[] = [
   'DAMAGE_TABLE',
   'DEFECT_LIST',
+  'PHOTO_BOOK',
   'LOCATION_MAP',
 ];
 
@@ -62,6 +67,8 @@ export type ProduceResult = {
   mapWarnings: LocationMapWarning[];
   /** 엑셀 라이브러리가 막혀 CSV 로 나간 산출물 */
   csvFallback: ExportArtifactKind[];
+  /** 사진첩 엑셀에서 못 불러온/리사이즈 실패한 사진 수 — 0이면 안내 안 함 */
+  photoBookWarnings: number;
 };
 
 export async function produceArtifacts(input: ProduceInput): Promise<ProduceResult> {
@@ -69,6 +76,7 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
   const artifacts: ExportArtifact[] = [];
   const csvFallback: ExportArtifactKind[] = [];
   let mapWarnings: LocationMapWarning[] = [];
+  let photoBookWarnings = 0;
 
   const push = (kind: ExportArtifactKind, blob: Blob, fileName: string) => {
     items.push({ blob, fileName });
@@ -107,6 +115,39 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
         at: input.at,
       }),
     );
+  }
+
+  // ── 사진첩 (엑셀, 사진 1장 = 1행 — 일회성 출력물, 2026-09-11 사용자 요청) ──
+  if (input.kinds.has('PHOTO_BOOK')) {
+    const pages = photoBookModel(input.source, input.plan, input.params);
+    const rendered = await renderPhotoBookImages({
+      pages,
+      objectUrl: (key) => input.repo.objectUrl(key, input.projectId),
+    });
+    try {
+      const { sheet, warnings } = await buildPhotoBookXlsxSheet(
+        pages,
+        rendered,
+        ARTIFACT_LABEL.PHOTO_BOOK,
+      );
+      photoBookWarnings = warnings.length;
+      const wb = await writeWorkbook([sheet]);
+      if (wb.fellBack) csvFallback.push('PHOTO_BOOK');
+      push(
+        'PHOTO_BOOK',
+        wb.blob,
+        buildFileName({
+          displayName: input.displayName,
+          kind: 'PHOTO_BOOK',
+          ext: wb.ext,
+          at: input.at,
+        }),
+      );
+    } finally {
+      // Blob 은 `sheet.images`/`items` 가 들고 있다. objectURL 만 해제한다 —
+      // 안 하면 사진 한 장당 수 MB 가 샌다 (photoBookImages.ts 와 같은 이유)
+      releasePhotoBookImages(rendered);
+    }
   }
 
   // ── 조사위치도 (층당 PNG 1장) ──────────────────────────────────────────
@@ -148,5 +189,5 @@ export async function produceArtifacts(input: ProduceInput): Promise<ProduceResu
     releaseLocationMaps(r.pages);
   }
 
-  return { items, artifacts, mapWarnings, csvFallback };
+  return { items, artifacts, mapWarnings, csvFallback, photoBookWarnings };
 }

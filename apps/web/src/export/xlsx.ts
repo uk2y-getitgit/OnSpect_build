@@ -30,6 +30,23 @@ export type SheetCell = {
   numFmt?: string;
   /** 배경색 `#eef2f7` */
   bg?: string;
+  /** 이 칸이 속한 행의 높이(포인트). 이미지를 앉힌 행에서 쓴다(사진첩 엑셀) */
+  height?: number;
+};
+
+/**
+ * 셀 위에 얹는 이미지 — 사진첩 엑셀 내보내기(2026-09-11) 전용으로 추가.
+ * `row`/`column` 은 **0-based**(`SheetSpec.rows` 인덱스 그대로) — 라이브러리가 요구하는
+ * 1-based 로의 변환은 `writeXlsx` 안에서 한다. 호출부가 라이브러리 좌표 규칙을 몰라도 되게.
+ */
+export type SheetImage = {
+  content: Blob;
+  contentType: string;
+  /** 픽셀 */
+  width: number;
+  height: number;
+  row: number;
+  column: number;
 };
 
 export type SheetSpec = {
@@ -40,6 +57,8 @@ export type SheetSpec = {
   rows: (SheetCell | null)[][];
   /** 13열짜리 손상결함표처럼 가로가 긴 표 */
   landscape?: boolean;
+  /** 이 시트에 얹을 이미지들. CSV 폴백에서는 무시된다 — CSV는 이미지를 못 담는다 */
+  images?: SheetImage[];
 };
 
 export type WorkbookResult = {
@@ -69,6 +88,19 @@ export async function writeXlsx(sheets: readonly SheetSpec[]): Promise<Blob> {
     sheet: s.name,
     columns: s.cols.map((w) => ({ width: w })),
     ...(s.landscape ? { orientation: 'landscape' as const } : {}),
+    // 라이브러리의 anchor 는 1-based 다(README §Images) — 여기서만 변환한다
+    ...(s.images && s.images.length > 0
+      ? {
+          images: s.images.map((im) => ({
+            content: im.content,
+            contentType: im.contentType,
+            width: im.width,
+            height: im.height,
+            dpi: IMAGE_DPI,
+            anchor: { row: im.row + 1, column: im.column + 1 },
+          })),
+        }
+      : {}),
   }));
   return mod.default(payload, { fontFamily: SHEET_FONT, fontSize: SHEET_FONT_SIZE }).toBlob();
 }
@@ -76,6 +108,16 @@ export async function writeXlsx(sheets: readonly SheetSpec[]): Promise<Blob> {
 /** 한글이 있는 통합문서의 기본 글꼴. 없는 PC 에서는 엑셀이 대체 글꼴을 쓴다 */
 const SHEET_FONT = '맑은 고딕';
 const SHEET_FONT_SIZE = 10;
+
+/**
+ * 이미지 크기를 셀 단위(포인트)로 환산할 때 쓰는 기준 DPI. 72/96 중 라이브러리 문서가
+ * "의미 없는 값, 아무거나 고르라"고 명시한 것 중 96을 골랐다.
+ *
+ * **export 하는 이유:** 이미지를 앉히는 호출부(`photoBookXlsx.ts`)가 행 높이(포인트)를
+ * `px * 72 / IMAGE_DPI` 로 직접 계산해야 이미지가 행 안에 딱 들어맞는다 — 상수를 여기
+ * 하나로 묶지 않으면 두 파일이 각자 값을 들고 있다가 한쪽만 바뀌어 어긋나는 사고가 난다.
+ */
+export const IMAGE_DPI = 96;
 
 /**
  * 엑셀을 먼저 시도하고, 막히면 **CSV(UTF-8 BOM)** 로 낸다.
@@ -126,6 +168,7 @@ function toLibCell(c: SheetCell | null): LibCell | null {
   if (c.bold) out.fontWeight = 'bold';
   if (c.numFmt) out.format = c.numFmt;
   if (c.bg) out.backgroundColor = c.bg;
+  if (c.height) out.height = c.height;
   if (c.border) {
     out.borderStyle = BORDER_STYLE;
     out.borderColor = BORDER_COLOR;

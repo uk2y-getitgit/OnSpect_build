@@ -286,15 +286,20 @@ export function decodeImage(file: Blob): Promise<Decoded> {
   });
 }
 
-/** 장변을 `edge` 로 맞춘다. **키우지 않는다** — 원본이 작으면 그대로 */
-function fitEdge(w: number, h: number, edge: number): { w: number; h: number } {
+/**
+ * 장변을 `edge` 로 맞춘다. **키우지 않는다** — 원본이 작으면 그대로
+ *
+ * 2026-09-11 — 사진첩 엑셀 내보내기(`photoBookXlsx.ts`)가 재사용한다. 리사이즈
+ * 로직을 세 번째로 새로 만들지 않는다 — 여기서만 export 한다.
+ */
+export function fitEdge(w: number, h: number, edge: number): { w: number; h: number } {
   const long = Math.max(w, h);
   if (long <= 0) return { w: 1, h: 1 };
   const s = Math.min(1, edge / long);
   return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
 }
 
-async function toJpegBlob(
+export async function toJpegBlob(
   source: CanvasImageSource,
   w: number,
   h: number,
