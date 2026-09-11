@@ -202,8 +202,18 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
   // 원인 확인되는 대로 이 블록 통째로 지운다. 실기기 값을 눈으로 볼 방법이 없어
   // 화면 한 구석에 숫자로 띄운다 — 브라우저를 직접 못 띄우는 하네스 제약의 임시 우회.
   const [debugWin, setDebugWin] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  const [debugSidebarW, setDebugSidebarW] = useState<number | null>(null);
+  const [debugStageW, setDebugStageW] = useState<number | null>(null);
   useEffect(() => {
-    const onResize = () => setDebugWin({ w: window.innerWidth, h: window.innerHeight });
+    const onResize = () => {
+      setDebugWin({ w: window.innerWidth, h: window.innerHeight });
+      // 사이드바가 실제로 몇 px 을 받는지 — 캔버스와 나란히 비교하려고 직접 잰다
+      const sb = document.querySelector('.sidebar');
+      setDebugSidebarW(sb ? Math.round(sb.getBoundingClientRect().width) : null);
+      const stage = document.querySelector('.stage');
+      setDebugStageW(stage ? Math.round(stage.getBoundingClientRect().width) : null);
+    };
+    onResize();
     window.addEventListener('resize', onResize);
     const id = window.setInterval(onResize, 1000);
     return () => {
@@ -1156,7 +1166,7 @@ export function CanvasRoute({ projectId, floorId }: { projectId: string; floorId
             whiteSpace: 'pre',
           }}
         >
-          {`DEBUG win ${debugWin.w}x${debugWin.h} | canvas ${state.canvas.canvas.w}x${state.canvas.canvas.h} | shell=${shell} sidebar=${sidebarOpen ? 'open' : 'closed'}`}
+          {`DEBUG win ${debugWin.w}x${debugWin.h} | .sidebar실측=${debugSidebarW ?? '없음'} | .stage실측=${debugStageW ?? '없음'} | canvas상태값 ${state.canvas.canvas.w}x${state.canvas.canvas.h} | shell=${shell} sidebar=${sidebarOpen ? 'open' : 'closed'}`}
         </div>
       )}
       <header className="topbar">
